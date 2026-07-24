@@ -8,8 +8,8 @@ import { useLibraryStore } from "@/stores/library-store";
  * reader never asked for this move visually) and scrolls to the saved
  * passage within that slide. The saved position itself (which section
  * narration/audio considers "current") lives in library-store and needs no
- * separate seeding here — useReaderNarration reads the same per-book
- * position directly.
+ * separate seeding here — the global narration engine (lib/audio/
+ * NarrationEngine.tsx) reads the same per-book position directly.
  */
 export function useResumeScroll({
   book,

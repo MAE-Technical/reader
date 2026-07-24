@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, BookOpen, Moon, Pause, Play, Search, Sun, Users } from "lucide-react";
+import { ArrowLeft, BookOpen, Moon, Play, Search, Sun, Users } from "lucide-react";
 import { READING_NOW_PLACEHOLDER } from "@/lib/reader/constants";
 import type { Theme } from "@/stores/reader-store";
 
@@ -17,10 +17,14 @@ type Props = {
   /** No listen button at all when the book has no narrator — not even a
    * disabled one, per product decision: there's nothing for it to do. */
   hasNarration: boolean;
+  /** While true, the button below is hidden entirely rather than turned
+   * into a play/pause toggle — the persistent player (NowPlayingBar) is
+   * the only place play/pause lives once listening has started, so
+   * there's exactly one control per action and no way for the two to
+   * drift out of sync. This button's only job is *starting* listen mode;
+   * closing the player (its own X) is what brings it back. */
   isListen: boolean;
-  audioPlaying: boolean;
-  onToggleMode: () => void;
-  onDoubleClickPlay: () => void;
+  onListen: () => void;
   onToggleSearch: () => void;
   theme: Theme;
   onToggleTheme: () => void;
@@ -45,9 +49,7 @@ export default function ReaderHeader({
   onToggleChapters,
   hasNarration,
   isListen,
-  audioPlaying,
-  onToggleMode,
-  onDoubleClickPlay,
+  onListen,
   onToggleSearch,
   theme,
   onToggleTheme,
@@ -96,16 +98,13 @@ export default function ReaderHeader({
         {READING_NOW_PLACEHOLDER} reading now
       </div> */}
 
-      {hasNarration && (
+      {hasNarration && !isListen && (
         <button
-          onClick={onToggleMode}
-          onDoubleClick={onDoubleClickPlay}
-          title={isListen ? "Listening — tap to switch to reading" : "Listen to this book"}
-          className={`w-9 h-9 rounded-full border-none cursor-pointer flex items-center justify-center flex-none ${
-            isListen && audioPlaying ? "bg-brand-500" : "bg-transparent text-[var(--reader-text)]"
-          }`}
+          onClick={onListen}
+          title="Listen to this book"
+          className="w-9 h-9 rounded-full border-none bg-transparent cursor-pointer flex items-center justify-center flex-none text-[var(--reader-text)]"
         >
-          {isListen && audioPlaying ? <Pause size={18} className="text-white" /> : <Play size={18} />}
+          <Play size={18} />
         </button>
       )}
 

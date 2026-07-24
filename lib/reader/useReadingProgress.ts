@@ -9,7 +9,7 @@ import { useLibraryStore } from "@/stores/library-store";
 const SETTLE_MS = 600;
 
 /**
- * Plain-reading counterpart to useReaderNarration's position tracking.
+ * Plain-reading counterpart to the narration engine's position tracking.
  * Listen mode always knew exactly where the reader was (the playback
  * clock); reading mode previously only recorded which *section* was
  * active, resetting to its first passage on every navigation — so
@@ -27,7 +27,7 @@ const SETTLE_MS = 600;
  *  - While remaining in one section, scroll position refines passageIndex
  *    further: "whichever passage is still visible at the very top of the
  *    viewport" is treated as the resume point, committed (debounced) the
- *    same way useReaderNarration commits `audioTimeMs` as playback
+ *    same way the narration engine commits `audioTimeMs` as playback
  *    advances.
  *
  * Deliberately never writes from an effect's *cleanup* — only from its

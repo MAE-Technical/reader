@@ -11,17 +11,20 @@ type CaptionedSpeechResponse = {
   timestamps?: { word: string; start_time: number; end_time: number }[];
 };
 
-export type SynthesisResult = { audio: Buffer; durationMs: number };
+export type SynthesizedWord = { word: string; startMs: number; endMs: number };
+export type SynthesisResult = { audio: Buffer; durationMs: number; words: SynthesizedWord[] };
 
 /**
  * Calls /dev/captioned_speech rather than the plain OpenAI-compatible
  * /v1/audio/speech — same request shape, but the response also carries
- * word-level timestamps, whose last entry's end_time doubles as the clip's
- * own duration. That means no ffprobe/ffmpeg dependency just to measure
- * what we generated (the per-word data itself goes unused for now — see
- * SectionAudio.words, deferred until generation moves to per-passage calls).
+ * word-level timestamps: the last entry's end_time doubles as the clip's own
+ * duration (no ffprobe/ffmpeg dependency just to measure what we generated),
+ * and the full list lets callers build SectionAudio.words for karaoke
+ * highlighting. One call is one chunk of narration text — generate.ts calls
+ * this per passage, not per section, to keep individual requests well clear
+ * of Kokoro's processing-time limits on long text.
  */
-export async function synthesizeSection(text: string): Promise<SynthesisResult> {
+export async function synthesizeChunk(text: string): Promise<SynthesisResult> {
   const res = await fetch(`${BASE_URL}/dev/captioned_speech`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -41,7 +44,11 @@ export async function synthesizeSection(text: string): Promise<SynthesisResult> 
 
   const body: CaptionedSpeechResponse = await res.json();
   const audio = Buffer.from(body.audio, "base64");
-  const lastTimestamp = body.timestamps?.at(-1);
-  const durationMs = lastTimestamp ? Math.round(lastTimestamp.end_time * 1000) : 0;
-  return { audio, durationMs };
+  const words = (body.timestamps ?? []).map((t) => ({
+    word: t.word,
+    startMs: Math.round(t.start_time * 1000),
+    endMs: Math.round(t.end_time * 1000),
+  }));
+  const durationMs = words.at(-1)?.endMs ?? 0;
+  return { audio, durationMs, words };
 }

@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import AudioPlayer from "./AudioPlayer";
 import NotesSidebar from "./NotesSidebar";
 import SearchModal from "./SearchModal";
 import FootnotePopover from "./FootnotePopover";
@@ -21,8 +20,9 @@ import {
 } from "@/stores/reader-store";
 import { useLibraryStore } from "@/stores/library-store";
 import { useAudioStore } from "@/stores/audio-store";
+import { useNarrationStore } from "@/stores/narration-store";
 import { useReaderIdentityStore } from "@/stores/reader-identity-store";
-import { useReaderNarration } from "@/lib/reader/useReaderNarration";
+import { buildSectionsById } from "@/lib/reader/sections";
 import { useSectionCarousel } from "@/lib/reader/useSectionCarousel";
 import { useResumeScroll } from "@/lib/reader/useResumeScroll";
 import { useReadingProgress } from "@/lib/reader/useReadingProgress";
@@ -36,7 +36,6 @@ export default function Reader({ book }: { book: BookDocument }) {
   const [noteOpen, setNoteOpen] = useState<{ note: NoteLookup; top: number; left: number } | null>(
     null
   );
-  const playerContainerRef = useRef<HTMLDivElement>(null);
 
   const {
     getForPassage: getAnnotations,
@@ -52,9 +51,6 @@ export default function Reader({ book }: { book: BookDocument }) {
     closeNotesPanel,
   } = useTextAnnotations(book.id);
 
-  const mode = useLibraryStore((s) => s.books[book.id]?.mode ?? "read");
-  const setLibraryMode = useLibraryStore((s) => s.setMode);
-  const setMode = useCallback((m: "read" | "listen") => setLibraryMode(book.id, m), [setLibraryMode, book.id]);
   const theme = useReaderStore((s) => s.theme);
   const setTheme = useReaderStore((s) => s.setTheme);
   const fontSizeScale = useReaderStore((s) => s.fontSizeScale);
@@ -62,9 +58,25 @@ export default function Reader({ book }: { book: BookDocument }) {
   const lineSpacingScale = useReaderStore((s) => s.lineSpacingScale);
   const contentWidthScale = useReaderStore((s) => s.contentWidthScale);
 
-  const audioPlaying = useAudioStore((s) => s.isPlaying);
-  const audioToggle = useAudioStore((s) => s.toggle);
-  const audioPause = useAudioStore((s) => s.pause);
+  // "Now playing" is a single global slot (audio-store), not a per-book
+  // flag — this book is in listen mode exactly when it's the one loaded
+  // there. That's what makes the player survive navigation to another
+  // page (reader-issues: permanence): closing it is the only thing that
+  // clears the slot, never just navigating away from this book's page.
+  const audioStoreBook = useAudioStore((s) => s.book);
+  const openBook = useAudioStore((s) => s.openBook);
+  const playerHeight = useAudioStore((s) => s.playerHeight);
+  const anyPlayerActive = audioStoreBook !== null;
+  const hasNarration = book.narrators.length > 0;
+  const isListen = audioStoreBook?.id === book.id;
+
+  const setPosition = useLibraryStore((s) => s.setPosition);
+
+  const narrationAudioIndex = useNarrationStore((s) => s.audioIndex);
+  const narrationAudioSection = useNarrationStore((s) => s.audioSection);
+  const currentPlayingPassageId = useNarrationStore((s) => s.currentPlayingPassageId);
+  const seekToPassageForListening = useNarrationStore((s) => s.seekToPassageForListening);
+  const handleWordClick = useNarrationStore((s) => s.handleWordClick);
 
   // These stores skip automatic persist hydration (see their own comments)
   // specifically so the server and the client's first paint render
@@ -84,20 +96,7 @@ export default function Reader({ book }: { book: BookDocument }) {
   const contentWidth = contentWidthPxFromScale(contentWidthScale);
   const fontFamilyVar = FONT_FAMILY_VARS[fontFamily];
 
-  // Flat lookup over the content tree (arbitrary depth — see ingestion.md's
-  // "content-first, chapter-agnostic" design) so sections can be resolved by
-  // stable id instead of array position.
-  const sectionsById = useMemo(() => {
-    const map = new Map<string, Section>();
-    const walk = (sections: Section[]) => {
-      for (const s of sections) {
-        map.set(s.id, s);
-        walk(s.children);
-      }
-    };
-    walk(book.sections);
-    return map;
-  }, [book.sections]);
+  const sectionsById = useMemo(() => buildSectionsById(book.sections), [book.sections]);
 
   // book.spine is already the whole book's reading order (front matter,
   // part dividers, and chapters alike) — the same order the sidebar and
@@ -209,45 +208,95 @@ export default function Reader({ book }: { book: BookDocument }) {
   });
 
   // Plain reading (no audio) had no position-save path at all — only
-  // useReaderNarration's listen-mode effects ever called setPosition, so
-  // leaving a book mid-chapter while just reading never persisted anything
-  // finer than "which section," and resuming always dropped the reader
-  // back at the chapter's first passage. This tracks scroll position
-  // within the active section instead (skipping entirely while isListen,
-  // which keeps owning its own audio-offset-aware writes).
+  // listen-mode's own effects (now in NarrationEngine) ever called
+  // setPosition, so leaving a book mid-chapter while just reading never
+  // persisted anything finer than "which section," and resuming always
+  // dropped the reader back at the chapter's first passage. This tracks
+  // scroll position within the active section instead (skipping entirely
+  // while isListen, which keeps owning its own audio-offset-aware writes).
   useReadingProgress({
     book,
-    mode,
+    mode: isListen ? "listen" : "read",
     activeSectionId,
     activeSection: sectionsById.get(activeSectionId),
     getSlideEl,
   });
 
-  const {
-    isListen,
-    hasNarration,
-    audioSection,
-    audioSectionTrack,
-    narratorOptions,
-    currentPlayingPassageId,
-    currentWordIndex,
-    seekToPassageForListening,
-    handleWordClick,
-    handleSeek,
-    awayFromNarration,
-    nudgeDirection,
-    jumpToNarration,
-    playerHeight,
-  } = useReaderNarration({
-    book,
-    sectionsById,
-    passageLookup,
-    mode,
-    activeIndex,
-    goTo,
-    getSlideEl,
-    playerContainerRef,
-  });
+  // Podcast-style auto-advance (spec.md): the narration engine (global,
+  // book-agnostic) owns the actual position/audio-clock advance — this
+  // only decides whether *this page's* carousel should also turn, which is
+  // a page-local concern the engine can't know about. Comparing against
+  // the *previous* audioIndex (not the current one) is what distinguishes
+  // "the reader was following along when it advanced" from "the reader had
+  // already turned away" — isFollowingNarration below is a plain snapshot
+  // of the current relationship, but by the time audioIndex has already
+  // moved, comparing against it directly would always read "away".
+  const prevAudioIndexRef = useRef(narrationAudioIndex);
+  useEffect(() => {
+    if (
+      isListen &&
+      narrationAudioIndex !== prevAudioIndexRef.current &&
+      activeIndex === prevAudioIndexRef.current
+    ) {
+      goTo(narrationAudioIndex, { animate: true });
+    }
+    prevAudioIndexRef.current = narrationAudioIndex;
+  }, [narrationAudioIndex, isListen, activeIndex, goTo]);
+
+  // Which spine position audio is on, vs which slide the reader is
+  // actually looking at (activeIndex, from the carousel) — deliberately
+  // independent (manual navigation never forces one to match the other),
+  // but when they DO match, that's "the reader is following narration".
+  const isFollowingNarration = isListen && activeIndex === narrationAudioIndex;
+
+  // Keeps the currently-narrated passage in view as playback advances —
+  // only while the reader is actually following along. If they've
+  // manually turned elsewhere, narration must never reach into an
+  // off-screen slide and change its scroll position out from under them.
+  useEffect(() => {
+    if (!isFollowingNarration || !currentPlayingPassageId || !narrationAudioSection) return;
+    const el = getSlideEl(narrationAudioSection.id)?.querySelector(
+      `[data-passage-id="${currentPlayingPassageId}"]`
+    );
+    el?.scrollIntoView({ behavior: "smooth", block: "center" });
+  }, [currentPlayingPassageId, isFollowingNarration, narrationAudioSection, getSlideEl]);
+
+  // "Back to narration" — the nudge that appears once the reader has
+  // manually turned away from whichever section is actually playing. Only
+  // makes sense while listening: audio playing somewhere is a plain fact
+  // to navigate back to, unlike plain reading (no playback, just a
+  // resume-position guess) where the same nudge would read as the app
+  // second-guessing a reader who may have turned away on purpose.
+  const awayFromNarration = isListen && !isFollowingNarration;
+  const nudgeDirection: "up" | "down" = narrationAudioIndex < activeIndex ? "up" : "down";
+  const jumpToNarration = useCallback(() => {
+    goTo(narrationAudioIndex, { animate: false });
+    if (!currentPlayingPassageId || !narrationAudioSection) return;
+    requestAnimationFrame(() => {
+      getSlideEl(narrationAudioSection.id)
+        ?.querySelector(`[data-passage-id="${currentPlayingPassageId}"]`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }, [goTo, narrationAudioIndex, currentPlayingPassageId, narrationAudioSection, getSlideEl]);
+
+  // Starts listen mode from a specific passage, whether or not this book
+  // is already the one playing — sets the resume target first, then opens
+  // the book; NarrationEngine's own resume-to-stored-position effect (see
+  // its comment) picks that exact spot up on the very next render, rather
+  // than this needing to reach into the audio element itself.
+  const startListeningFromPassage = useCallback(
+    (sectionId: string, passageId: string) => {
+      const targetSection = sectionsById.get(sectionId);
+      const narratorId = book.narrators[0]?.id;
+      const targetTrack = targetSection?.audio?.narratorTracks.find((t) => t.narratorId === narratorId);
+      if (!targetSection || !targetTrack) return;
+      const passageIndex = targetSection.passages.findIndex((p) => p.id === passageId);
+      const word = (targetSection.audio?.words ?? []).find((w) => w.passageId === passageId);
+      if (passageIndex >= 0) setPosition(book.id, { sectionId, passageIndex, audioTimeMs: word?.startMs ?? 0 });
+      openBook(book);
+    },
+    [sectionsById, book, setPosition, openBook]
+  );
 
   const activeSectionForSidebar = activeSectionId ?? book.spine[0];
   const currentSection = orderedSections[activeIndex];
@@ -283,8 +332,15 @@ export default function Reader({ book }: { book: BookDocument }) {
   // fixed overlay that can reappear over the content at any moment on
   // upward scroll, so the scroll area always reserves their space instead
   // of the content reflowing underneath them when they're hidden.
-  const contentPad = isMobile ? `px-5 pb-16` : `px-10 pb-20`;
+  const contentPad = isMobile ? "px-5" : "px-10";
   const contentTopPad = topBarHeightPx + (isMobile ? 28 : 48);
+  // The player is a fixed overlay now (rendered once at the root, not in
+  // this page's own flex flow — see NowPlayingBar), so its height has to
+  // be reserved by hand rather than falling out of normal layout. Applies
+  // whenever *any* book is playing, not just this one — the bar still
+  // floats over this page even while listening to something else.
+  const baseBottomPad = isMobile ? 64 : 80;
+  const contentBottomPad = baseBottomPad + (anyPlayerActive ? playerHeight + 16 : 0);
 
   return (
     <div
@@ -303,9 +359,7 @@ export default function Reader({ book }: { book: BookDocument }) {
           onToggleChapters={() => setChaptersOpen((o) => !o)}
           hasNarration={hasNarration}
           isListen={isListen}
-          audioPlaying={audioPlaying}
-          onToggleMode={() => setMode(mode === "read" ? "listen" : "read")}
-          onDoubleClickPlay={audioToggle}
+          onListen={() => openBook(book)}
           onToggleSearch={() => setSearchOpen((o) => !o)}
           theme={theme}
           onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
@@ -336,13 +390,12 @@ export default function Reader({ book }: { book: BookDocument }) {
             contentPad={contentPad}
             contentWidth={contentWidth}
             contentTopPad={contentTopPad}
+            contentBottomPad={contentBottomPad}
             orderedSections={orderedSections}
             notesIndexSectionId={notesIndexSectionId}
             notesIndexGroups={notesIndexGroups}
             getAnnotations={getAnnotations}
             isListen={isListen}
-            currentPlayingPassageId={currentPlayingPassageId}
-            currentWordIndex={currentWordIndex}
             fontSize={fontSize}
             lineHeight={lineHeight}
             fontFamilyVar={fontFamilyVar}
@@ -372,10 +425,7 @@ export default function Reader({ book }: { book: BookDocument }) {
                   ? () => {
                       const passageId = selection.ranges[0].passageId;
                       const sectionId = passageLookup.sectionOf.get(passageId);
-                      if (sectionId) {
-                        setMode("listen");
-                        seekToPassageForListening(sectionId, passageId);
-                      }
+                      if (sectionId) startListeningFromPassage(sectionId, passageId);
                       dismissSelection();
                     }
                   : undefined
@@ -447,24 +497,6 @@ export default function Reader({ book }: { book: BookDocument }) {
           )}
         </div>
       </div>
-
-      {isListen && (
-        <div ref={playerContainerRef} className="flex-none w-full">
-          <AudioPlayer
-            variant="full"
-            bookTitle={book.metadata.title}
-            chapterLabel={audioSection.title ?? book.metadata.title}
-            coverSrc={book.metadata.cover}
-            narrators={narratorOptions}
-            durationMs={audioSectionTrack?.durationMs ?? 0}
-            onSeek={handleSeek}
-            onClose={() => {
-              audioPause();
-              setMode("read");
-            }}
-          />
-        </div>
-      )}
 
       {currentPlayingPassageId && awayFromNarration && (
         <BackToCurrentButton bottom={playerHeight + 16} direction={nudgeDirection} onClick={jumpToNarration} />

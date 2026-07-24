@@ -1,47 +1,63 @@
 import { create } from "zustand";
+import type { BookDocument } from "@/lib/book/schema";
 
 /**
  * Playback state lives outside the Reader component tree on purpose: the
- * product spec requires narration to keep playing across navigation and
- * while backgrounded, podcast-style. There's only one route today, so the
- * <AudioPlayer/> that reads this store still happens to mount inside
- * Reader — but nothing here assumes that, so lifting it to the root layout
- * later (once there's a second route to navigate to) is a pure move, no
- * state redesign.
+ * product spec requires narration to keep playing across navigation
+ * (including back to the library), podcast-style. `book` is the single
+ * "now playing" slot — the full document, not just an id/slug, since the
+ * global narration engine (lib/audio/NarrationEngine.tsx, mounted once in
+ * the root layout) needs spine/sections/audio tracks regardless of which
+ * route is currently mounted. Opening a new book always replaces whatever
+ * was playing — there's only ever one now-playing slot, same as any other
+ * single-player audio app.
  */
 type AudioState = {
   isPlaying: boolean;
   currentTimeMs: number;
   narratorId: string;
   speed: number;
+  /** Real rendered height of the root-level player bar, in px — Reader
+   * reads this to reserve bottom space and to position the "back to
+   * narration" nudge, without owning the player's DOM itself anymore. */
+  playerHeight: number;
+  book: BookDocument | null;
 
   play: () => void;
   pause: () => void;
   toggle: () => void;
   seekTo: (ms: number) => void;
-  tick: (deltaMs: number) => void;
   setNarratorId: (id: string) => void;
   setSpeed: (speed: number) => void;
+  setPlayerHeight: (px: number) => void;
+  /** Starts (or switches) listen mode to this book and begins playback —
+   * the engine's own resume-position effect immediately reconciles
+   * currentTimeMs against whatever was last saved for it. */
+  openBook: (book: BookDocument) => void;
+  /** Exits listen mode entirely — resume position is left untouched in
+   * library-store, so reopening the book later picks up where playback
+   * left off instead of restarting. */
+  closePlayer: () => void;
 };
 
-// Empty until useReaderNarration seeds it with the loaded book's first
-// narrator — there's no default/fallback voice: a book with no narrators
-// has no listen mode at all, so an unmatched id is a fine idle state.
 export const useAudioStore = create<AudioState>((set) => ({
   isPlaying: false,
   currentTimeMs: 0,
   narratorId: "",
   speed: 1,
+  playerHeight: 0,
+  book: null,
 
   play: () => set({ isPlaying: true }),
   pause: () => set({ isPlaying: false }),
   toggle: () => set((s) => ({ isPlaying: !s.isPlaying })),
   seekTo: (ms) => set({ currentTimeMs: Math.max(0, ms) }),
-  tick: (deltaMs) =>
-    set((s) => (s.isPlaying ? { currentTimeMs: s.currentTimeMs + deltaMs * s.speed } : {})),
   // Switching narrator switches timelines entirely (a different recording,
   // or the live TTS engine) — the old currentTimeMs has no meaning on the
   // new one, so reset it rather than leaving playback looking corrupted.
   setNarratorId: (narratorId) => set({ narratorId, currentTimeMs: 0 }),
   setSpeed: (speed) => set({ speed }),
+  setPlayerHeight: (playerHeight) => set({ playerHeight }),
+  openBook: (book) => set({ book, currentTimeMs: 0, isPlaying: true }),
+  closePlayer: () => set({ book: null, isPlaying: false }),
 }));

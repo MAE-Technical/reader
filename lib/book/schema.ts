@@ -15,6 +15,7 @@ export type Mark = NonNullable<Passage["marks"]>[number];
 export type Narrator = BookDocument["narrators"][number];
 export type BookMetadata = BookDocument["metadata"];
 export type Note = BookDocument["notes"][number];
+export type WordTiming = NonNullable<NonNullable<Section["audio"]>["words"]>[number];
 
 export type ParseBookDocumentResult =
   | { ok: true; data: BookDocument }

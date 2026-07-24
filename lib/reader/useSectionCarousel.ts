@@ -85,7 +85,7 @@ export function useSectionCarousel({
   // once it's active. Only ever holds one entry at a time now, but stays a
   // Map keyed by id rather than a single ref — every caller already
   // navigates first and looks the element up a frame later (see
-  // useResumeScroll, useReaderNarration), so this shape didn't need to
+  // useResumeScroll, NarrationEngine), so this shape didn't need to
   // change when rendering did.
   const slideEls = useRef(new Map<string, HTMLDivElement>());
   const registerCallbacks = useRef(new Map<string, (el: HTMLDivElement | null) => void>());

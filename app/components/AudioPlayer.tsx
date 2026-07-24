@@ -1,10 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Pause, Play, RotateCcw, RotateCw, User, X } from "lucide-react";
+import { Check, Pause, Play, RotateCcw, RotateCw, SkipBack, SkipForward, User, X } from "lucide-react";
 import { useAudioStore } from "@/stores/audio-store";
 import { formatDuration } from "@/utils/text";
-import type { NarratorOption } from "@/lib/reader/useReaderNarration";
+import type { Narrator } from "@/lib/book/schema";
 
 const SPEEDS = [0.75, 1, 1.25, 1.5, 1.75, 2];
 
@@ -17,7 +17,7 @@ type Props = {
    * narration per book for now); kept as an array rather than a single
    * value since `book.narrators`/`narratorTracks` stay array-shaped in the
    * schema for when multi-narrator selection is re-enabled. */
-  narrators: NarratorOption[];
+  narrators: Narrator[];
   durationMs: number;
   /** Routes through the caller instead of the store's seekTo directly — for
    * TTS-driven playback there's no real audio timeline to scrub, so Reader
@@ -25,10 +25,22 @@ type Props = {
    * one thing that must vary by audio source, and it lives in the caller so
    * this component never has to branch on where the audio is coming from. */
   onSeek: (ms: number) => void;
+  /** Jump narration to the adjacent spine section (from its first word),
+   * independent of whatever's currently on screen — distinct from the ±15s
+   * seek buttons. No-op when that neighbor has no track, which is what
+   * canSkipPrev/canSkipNext disable for. */
+  onSkipPrev: () => void;
+  onSkipNext: () => void;
+  canSkipPrev: boolean;
+  canSkipNext: boolean;
   /** Exits listen mode entirely (distinct from pause) — resume position is
    * left untouched in library-store, so reopening the player later picks
    * up where playback left off instead of restarting. */
   onClose?: () => void;
+  /** Cover/title doubles as the "now playing" affordance — jumps to the
+   * book's reader page. Optional since not every embedding wants this
+   * (e.g. an admin preview). */
+  onTitleClick?: () => void;
 };
 
 export default function AudioPlayer({
@@ -39,7 +51,12 @@ export default function AudioPlayer({
   narrators,
   durationMs,
   onSeek,
+  onSkipPrev,
+  onSkipNext,
+  canSkipPrev,
+  canSkipNext,
   onClose,
+  onTitleClick,
 }: Props) {
   const isMini = variant === "mini";
   const isPlaying = useAudioStore((s) => s.isPlaying);
@@ -108,7 +125,13 @@ export default function AudioPlayer({
       {/* Controls row */}
       <div className={`flex items-center box-border gap-3 ${controlsPad}`}>
         {!isMobile ? (
-          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+          <button
+            onClick={onTitleClick}
+            disabled={!onTitleClick}
+            title={onTitleClick ? "Back to book" : undefined}
+            className="flex items-center gap-2.5 min-w-0 flex-1 border-none bg-transparent p-0 text-left disabled:cursor-default"
+            style={{ cursor: onTitleClick ? "pointer" : "default" }}
+          >
             <img src={coverSrc} alt="cover" className={`${coverSize} object-cover rounded-xs flex-none`} />
             <div className="min-w-0">
               <div className="text-sm font-semibold text-[var(--reader-text)] whitespace-nowrap overflow-hidden text-ellipsis">
@@ -118,12 +141,20 @@ export default function AudioPlayer({
                 {chapterLabel}
               </div>
             </div>
-          </div>
+          </button>
         ) : (
           <div className="flex-1" />
         )}
 
         <div className="flex items-center gap-1.5 flex-none">
+          <button
+            onClick={onSkipPrev}
+            disabled={!canSkipPrev}
+            title="Previous chapter"
+            className="bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center disabled:opacity-25 disabled:cursor-default"
+          >
+            <SkipBack size={17} />
+          </button>
           <button
             onClick={() => onSeek(currentTimeMs - 15_000)}
             className="relative bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center"
@@ -144,6 +175,14 @@ export default function AudioPlayer({
             <RotateCw size={19} />
             <span className="absolute text-[7px] font-bold">15</span>
           </button>
+          <button
+            onClick={onSkipNext}
+            disabled={!canSkipNext}
+            title="Next chapter"
+            className="bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center disabled:opacity-25 disabled:cursor-default"
+          >
+            <SkipForward size={17} />
+          </button>
           {!isMobile && (
             <button
               onClick={() => setSpeedMenuOpen((o) => !o)}
@@ -156,7 +195,7 @@ export default function AudioPlayer({
 
         {!isMobile && (
           <div className="flex items-center justify-end min-w-0 flex-1">
-            <div className="flex items-center gap-2 min-w-0">
+            {/* <div className="flex items-center gap-2 min-w-0">
               <span className="text-xs text-[var(--reader-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis">
                 Read by{" "}
                 <span className="font-semibold text-[var(--reader-text)]">
@@ -175,7 +214,7 @@ export default function AudioPlayer({
                   <User size={14} className="text-[var(--reader-text-muted)]" />
                 )}
               </div>
-            </div>
+            </div> */}
           </div>
         )}
 

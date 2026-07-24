@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Source_Serif_4, Manrope, Literata } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
+import NowPlayingBar from "./components/NowPlayingBar";
+import NarrationEngine from "@/lib/audio/NarrationEngine";
 
 // The wider reader font picker (app/fonts.ts) is defined but not loaded here
 // right now — only Literata (the current single reading-font default) is
@@ -67,6 +69,8 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col font-sans">
         {children}
         <ServiceWorkerRegistration />
+        <NarrationEngine />
+        <NowPlayingBar />
       </body>
     </html>
   );

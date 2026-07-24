@@ -67,8 +67,6 @@ export type Annotation = {
   savedAt: number;
 };
 
-export type ReaderMode = "read" | "listen";
-
 /** Resume position within a book. `audioTimeMs` is only meaningful in
  * "listen" mode and only set once a recorded track has actually played;
  * absent it, listen-mode resume falls back to the passage's first word. */
@@ -165,14 +163,16 @@ function buildAnnotationsForPassage(highlights: Highlight[], notes: NoteEntry[])
 }
 
 /**
- * Everything this reader has done with one book — mode, resume position,
- * and private highlights/notes — nested under a single `books[bookId]`
- * entry rather than split across parallel stores, so a future sync layer
- * has exactly one per-book blob to ship (tagged with `readerId` from
- * reader-identity-store) instead of stitching several together.
+ * Everything this reader has done with one book — resume position and
+ * private highlights/notes — nested under a single `books[bookId]` entry
+ * rather than split across parallel stores, so a future sync layer has
+ * exactly one per-book blob to ship (tagged with `readerId` from
+ * reader-identity-store) instead of stitching several together. Whether
+ * the reader is currently *listening* to a book isn't part of this at all
+ * — that's audio-store's single global "now playing" slot, not a per-book
+ * flag, which is what lets it survive navigating off this book's page.
  */
 type BookState = {
-  mode: ReaderMode;
   position: Position | undefined;
   highlights: RowIndex<Highlight>;
   notes: RowIndex<NoteEntry>;
@@ -190,7 +190,6 @@ type BookState = {
 
 function emptyBookState(): BookState {
   return {
-    mode: "read",
     position: undefined,
     highlights: emptyRowIndex(),
     notes: emptyRowIndex(),
@@ -218,9 +217,6 @@ function recomputePassages(book: BookState, passageIds: Iterable<string>): Recor
 
 type LibraryState = {
   books: Record<string, BookState>;
-
-  getMode: (bookId: string) => ReaderMode;
-  setMode: (bookId: string, mode: ReaderMode) => void;
 
   getPosition: (bookId: string) => Position | undefined;
   setPosition: (bookId: string, position: Position) => void;
@@ -261,13 +257,6 @@ export const useLibraryStore = create<LibraryState>()(
   persist(
     (set, get) => ({
       books: {},
-
-      getMode: (bookId) => get().books[bookId]?.mode ?? "read",
-      setMode: (bookId, mode) =>
-        set((s) => {
-          const book = s.books[bookId] ?? emptyBookState();
-          return { books: { ...s.books, [bookId]: { ...book, mode, updatedAt: Date.now() } } };
-        }),
 
       getPosition: (bookId) => get().books[bookId]?.position,
       setPosition: (bookId, position) =>
@@ -365,7 +354,6 @@ export const useLibraryStore = create<LibraryState>()(
             return [
               bookId,
               {
-                mode: book.mode,
                 position: book.position,
                 highlights: book.highlights,
                 notes: { byId: noteById, byPassage: noteByPassage },

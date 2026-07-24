@@ -27,13 +27,12 @@ type BookContentProps = {
   contentPad: string;
   contentWidth: number;
   contentTopPad: number;
+  contentBottomPad: number;
   orderedSections: Section[];
   notesIndexSectionId: string | null;
   notesIndexGroups: { heading: Passage; notes: BookDocument["notes"] }[] | null;
   getAnnotations: (passageId: string) => Annotation[];
   isListen: boolean;
-  currentPlayingPassageId: string | undefined;
-  currentWordIndex: number | undefined;
   fontSize: number;
   lineHeight: number;
   fontFamilyVar: string;
@@ -79,13 +78,12 @@ const BookContent = memo(function BookContent({
   contentPad,
   contentWidth,
   contentTopPad,
+  contentBottomPad,
   orderedSections,
   notesIndexSectionId,
   notesIndexGroups,
   getAnnotations,
   isListen,
-  currentPlayingPassageId,
-  currentWordIndex,
   fontSize,
   lineHeight,
   fontFamilyVar,
@@ -126,7 +124,7 @@ const BookContent = memo(function BookContent({
       >
         <div
           className={`mx-auto box-border ${contentPad}`}
-          style={{ maxWidth: contentWidth, paddingTop: contentTopPad }}
+          style={{ maxWidth: contentWidth, paddingTop: contentTopPad, paddingBottom: contentBottomPad }}
         >
           {section.id === firstSectionId && (
             // Inline byline — book title/author live in the scrolling
@@ -214,7 +212,20 @@ const BookContent = memo(function BookContent({
                       onNoteClick={onNoteClick}
                       annotations={annotations}
                       onNoteMarkerClick={(annotationId) => onNoteMarkerClick(raw.id, annotationId)}
-                      activeWordIndex={raw.id === currentPlayingPassageId ? currentWordIndex : undefined}
+                      // Word-level karaoke highlighting is disabled for now:
+                      // audio is generated as one Kokoro call per passage,
+                      // concatenated into a section-length mp3 (lib/audio/
+                      // mp3.ts) with each chunk's own reported duration used
+                      // to offset the next — real decoded playback drifts
+                      // from that cumulative estimate (mp3 encoder padding/
+                      // delay per chunk), so a highlighted word gets
+                      // increasingly out of step with what's actually
+                      // playing the further into a section you are. Passing
+                      // currentWordIndex through here again is the whole
+                      // fix once audio generation moves to one gapless
+                      // synthesis per section (or timestamps are corrected
+                      // against real decoded chunk durations).
+                      activeWordIndex={undefined}
                       onWordClick={isListen ? onWordClick : undefined}
                     />
                   </p>
