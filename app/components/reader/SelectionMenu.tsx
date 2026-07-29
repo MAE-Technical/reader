@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { Copy, Highlighter, PenLine, Play } from "lucide-react";
+import { Copy, Highlighter, PenLine, Play, Trash2 } from "lucide-react";
 import type { Theme } from "@/stores/reader-store";
 
 type Props = {
@@ -18,10 +18,20 @@ type Props = {
   onHighlight: () => void;
   onNote: () => void;
   onCopy: () => void;
+  /** Only present when this selection exactly matches an existing
+   * highlight/note — removes the whole thing (highlight wash + every note
+   * in its thread) in one action, discoverable via the pill itself rather
+   * than relying on re-selecting the same range and hitting Highlight. */
+  onDelete?: () => void;
   onDismiss: () => void;
 };
 
-type Item = { key: string; icon: ReactNode; label: string; onClick: () => void };
+type Item = { key: string; icon: ReactNode; label: string; onClick: () => void; danger?: boolean };
+
+// A consistent, theme-independent danger red — the inverted pill already
+// guarantees contrast against the page behind it, so this just needs to
+// read as "destructive" against the pill's own near-black/near-white fill.
+const DANGER_COLOR = "#f26b6b";
 
 /**
  * Selection menu (Play/Highlight/Note/Copy) shown on text selection. A
@@ -43,6 +53,7 @@ export default function SelectionMenu({
   onHighlight,
   onNote,
   onCopy,
+  onDelete,
   onDismiss,
 }: Props) {
   const inverted = theme === "light";
@@ -58,6 +69,9 @@ export default function SelectionMenu({
     { key: "highlight", icon: <Highlighter size={14} />, label: "Highlight", onClick: onHighlight },
     { key: "note", icon: <PenLine size={14} />, label: "Note", onClick: onNote },
     { key: "copy", icon: <Copy size={14} />, label: copyLabel, onClick: onCopy },
+    ...(onDelete
+      ? [{ key: "delete", icon: <Trash2 size={14} />, label: "Delete", onClick: onDelete, danger: true }]
+      : []),
   ];
 
   return (
@@ -69,7 +83,7 @@ export default function SelectionMenu({
       <div onClick={onDismiss} className="fixed inset-0 z-29" />
       <div
         style={{ top, left, background: bg, boxShadow: shadow }}
-        className="reader-menu-in fixed flex items-center gap-px rounded-full p-1.25 z-30"
+        className="reader-menu-in fixed flex items-center gap-px rounded-md p-1 z-30"
       >
         <div style={{ background: bg }} className="absolute -bottom-1 left-5 w-2 h-2 rotate-45 rounded-xs" />
         {items.map((item, i) => (
@@ -77,7 +91,7 @@ export default function SelectionMenu({
             {i > 0 && <div style={{ background: divider }} className="w-px h-4 mx-0.5 flex-none" />}
             <button
               onClick={item.onClick}
-              style={{ color: fg }}
+              style={{ color: item.danger ? DANGER_COLOR : fg }}
               className="flex items-center gap-1.5 bg-transparent border-none py-1.75 px-3 rounded-full cursor-pointer text-xs font-semibold whitespace-nowrap"
             >
               {item.icon}

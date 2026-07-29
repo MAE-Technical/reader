@@ -112,22 +112,42 @@ export function useSectionCarousel({
 
   const [chromeHidden, setChromeHidden] = useState(false);
   const [scrollPct, setScrollPct] = useState(0);
+  // Whether the active slide is scrolled to (or has no further to go past)
+  // its own bottom — drives ChapterNavFooter's visibility (Reader.tsx): it
+  // only surfaces once the reader has actually reached the end of the
+  // current section, same "unobtrusive until needed" idea as the header.
+  const [atBottom, setAtBottom] = useState(true);
   const lastScrollTopRef = useRef(0);
   const activeSectionId = sectionIds[activeIndex];
 
   useEffect(() => {
     const el = activeSectionId ? slideEls.current.get(activeSectionId) : undefined;
     if (!el) return;
+    // A fast fling/scrollbar-drag toward either end of a long section fires
+    // native `scroll` events far more often than the screen can paint —
+    // each one was driving three separate setState calls (chrome
+    // visibility, scroll%, atBottom) plus onScroll, so the resulting
+    // render churn was what made that fast scroll feel janky rather than
+    // smooth. Coalescing to one update per animation frame (the standard
+    // scroll-throttle pattern) keeps the state in sync without doing more
+    // work than the display can actually show.
+    let ticking = false;
     const handleScroll = () => {
-      const top = el.scrollTop;
-      const last = lastScrollTopRef.current;
-      if (top <= 0 || top < last - 4) setChromeHidden(false);
-      else if (top > last + 4) setChromeHidden(true);
-      lastScrollTopRef.current = top;
-      const max = el.scrollHeight - el.clientHeight;
-      const intraFraction = max > 0 ? Math.min(1, Math.max(0, top / max)) : 0;
-      setScrollPct(total > 0 ? (activeIndex + intraFraction) / total : 0);
-      onScroll?.();
+      if (ticking) return;
+      ticking = true;
+      requestAnimationFrame(() => {
+        ticking = false;
+        const top = el.scrollTop;
+        const last = lastScrollTopRef.current;
+        if (top <= 0 || top < last - 4) setChromeHidden(false);
+        else if (top > last + 4) setChromeHidden(true);
+        lastScrollTopRef.current = top;
+        const max = el.scrollHeight - el.clientHeight;
+        const intraFraction = max > 0 ? Math.min(1, Math.max(0, top / max)) : 0;
+        setScrollPct(total > 0 ? (activeIndex + intraFraction) / total : 0);
+        setAtBottom(max <= 0 || top >= max - 4);
+        onScroll?.();
+      });
     };
     // Reset the baseline to this slide's own current position — otherwise
     // the first delta after a page turn compares two unrelated slides'
@@ -142,6 +162,7 @@ export function useSectionCarousel({
     const max = el.scrollHeight - el.clientHeight;
     const intraFraction = max > 0 ? Math.min(1, Math.max(0, el.scrollTop / max)) : 0;
     setScrollPct(total > 0 ? (activeIndex + intraFraction) / total : 0);
+    setAtBottom(max <= 0 || el.scrollTop >= max - 4);
     el.addEventListener("scroll", handleScroll, { passive: true });
     return () => el.removeEventListener("scroll", handleScroll);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -206,6 +227,7 @@ export function useSectionCarousel({
     chromeHidden,
     setChromeHidden,
     scrollPct,
+    atBottom,
     onPointerDown,
     onPointerUp,
   };

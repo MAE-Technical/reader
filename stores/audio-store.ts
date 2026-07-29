@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import type { BookDocument } from "@/lib/book/schema";
 
 /**
@@ -40,24 +41,37 @@ type AudioState = {
   closePlayer: () => void;
 };
 
-export const useAudioStore = create<AudioState>((set) => ({
-  isPlaying: false,
-  currentTimeMs: 0,
-  narratorId: "",
-  speed: 1,
-  playerHeight: 0,
-  book: null,
+// Only `speed` is persisted — every other field is session/playback state
+// (the "now playing" slot itself, current position, etc.) that should never
+// survive a reload. Playback speed is the one preference a reader expects to
+// stick until they change it again, defaulting back to 1x otherwise.
+export const useAudioStore = create<AudioState>()(
+  persist(
+    (set) => ({
+      isPlaying: false,
+      currentTimeMs: 0,
+      narratorId: "",
+      speed: 1,
+      playerHeight: 0,
+      book: null,
 
-  play: () => set({ isPlaying: true }),
-  pause: () => set({ isPlaying: false }),
-  toggle: () => set((s) => ({ isPlaying: !s.isPlaying })),
-  seekTo: (ms) => set({ currentTimeMs: Math.max(0, ms) }),
-  // Switching narrator switches timelines entirely (a different recording,
-  // or the live TTS engine) — the old currentTimeMs has no meaning on the
-  // new one, so reset it rather than leaving playback looking corrupted.
-  setNarratorId: (narratorId) => set({ narratorId, currentTimeMs: 0 }),
-  setSpeed: (speed) => set({ speed }),
-  setPlayerHeight: (playerHeight) => set({ playerHeight }),
-  openBook: (book) => set({ book, currentTimeMs: 0, isPlaying: true }),
-  closePlayer: () => set({ book: null, isPlaying: false }),
-}));
+      play: () => set({ isPlaying: true }),
+      pause: () => set({ isPlaying: false }),
+      toggle: () => set((s) => ({ isPlaying: !s.isPlaying })),
+      seekTo: (ms) => set({ currentTimeMs: Math.max(0, ms) }),
+      // Switching narrator switches timelines entirely (a different
+      // recording, or the live TTS engine) — the old currentTimeMs has no
+      // meaning on the new one, so reset it rather than leaving playback
+      // looking corrupted.
+      setNarratorId: (narratorId) => set({ narratorId, currentTimeMs: 0 }),
+      setSpeed: (speed) => set({ speed }),
+      setPlayerHeight: (playerHeight) => set({ playerHeight }),
+      openBook: (book) => set({ book, currentTimeMs: 0, isPlaying: true }),
+      closePlayer: () => set({ book: null, isPlaying: false }),
+    }),
+    {
+      name: "ominira-audio-prefs",
+      partialize: (state) => ({ speed: state.speed }),
+    }
+  )
+);

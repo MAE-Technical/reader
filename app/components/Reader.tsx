@@ -8,6 +8,7 @@ import type { NoteLookup } from "./PassageContent";
 import BookContent from "./reader/BookContent";
 import ReaderHeader from "./reader/ReaderHeader";
 import ChaptersDrawer from "./reader/ChaptersDrawer";
+import ChapterNavFooter from "./reader/ChapterNavFooter";
 import SelectionMenu from "./reader/SelectionMenu";
 import BackToCurrentButton from "./reader/BackToCurrentButton";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
@@ -45,6 +46,8 @@ export default function Reader({ book }: { book: BookDocument }) {
     dismissSelection,
     highlightSelection,
     noteFromSelection,
+    hasExistingAnnotation,
+    deleteSelection,
     onNoteMarkerClick,
     onOpenPassageNotes,
     onEditAnnotation,
@@ -167,9 +170,11 @@ export default function Reader({ book }: { book: BookDocument }) {
 
   // Any open modal/panel (or an active selection menu) suspends the
   // carousel's own keyboard/swipe handling, so typing in search or
-  // arrow-keying through a picker never turns the page underneath.
-  const navDisabled =
-    searchOpen || chaptersOpen || Boolean(notesPanel) || Boolean(noteOpen) || Boolean(selection);
+  // arrow-keying through a picker never turns the page underneath. The
+  // chapters drawer is deliberately excluded — it's a persistent push-
+  // drawer now, not a blocking overlay, so the reader stays fully
+  // navigable (swipe/keyboard) while it's open.
+  const navDisabled = searchOpen || Boolean(notesPanel) || Boolean(noteOpen) || Boolean(selection);
 
   const {
     activeIndex,
@@ -184,6 +189,7 @@ export default function Reader({ book }: { book: BookDocument }) {
     chromeHidden,
     setChromeHidden,
     scrollPct,
+    atBottom,
     onPointerDown,
     onPointerUp,
   } = useSectionCarousel({
@@ -301,6 +307,8 @@ export default function Reader({ book }: { book: BookDocument }) {
   const activeSectionForSidebar = activeSectionId ?? book.spine[0];
   const currentSection = orderedSections[activeIndex];
   const currentSectionLabel = currentSection ? sectionLabel(currentSection) : null;
+  const prevSection = orderedSections[activeIndex - 1];
+  const nextSection = orderedSections[activeIndex + 1];
   const getPassageText = useCallback(
     (passageId: string) => passageLookup.byId.get(passageId)?.text ?? "",
     [passageLookup]
@@ -323,7 +331,13 @@ export default function Reader({ book }: { book: BookDocument }) {
     }, 800);
   };
 
-  const chromeVisible = !chromeHidden;
+  // The outline forces the header away for as long as it's open (rather
+  // than the drawer trying to reserve/track the header's own scroll-driven
+  // show/hide, which left a dead gap when the two states disagreed) — the
+  // underlying chromeHidden scroll tracking keeps running regardless, so
+  // closing the drawer returns to whatever visibility plain scrolling
+  // would already have produced.
+  const chromeVisible = !chromeHidden && !chaptersOpen;
   const railInsetPx = isMobile ? 12 : 16;
   // Bumped from the old single-line top bar to fit a book-title +
   // current-section subtitle now that the icon rail has merged into it.
@@ -334,13 +348,11 @@ export default function Reader({ book }: { book: BookDocument }) {
   // of the content reflowing underneath them when they're hidden.
   const contentPad = isMobile ? "px-5" : "px-10";
   const contentTopPad = topBarHeightPx + (isMobile ? 28 : 48);
-  // The player is a fixed overlay now (rendered once at the root, not in
-  // this page's own flex flow — see NowPlayingBar), so its height has to
-  // be reserved by hand rather than falling out of normal layout. Applies
-  // whenever *any* book is playing, not just this one — the bar still
-  // floats over this page even while listening to something else.
-  const baseBottomPad = isMobile ? 64 : 80;
-  const contentBottomPad = baseBottomPad + (anyPlayerActive ? playerHeight + 16 : 0);
+  // Reserves room for the docked ChapterNavFooter — a floating overlay
+  // (like the header) that only surfaces once the reader reaches the
+  // bottom of the section, so the last bit of text isn't covered when it
+  // slides into view.
+  const contentBottomPad = isMobile ? 88 : 96;
 
   return (
     <div
@@ -354,7 +366,6 @@ export default function Reader({ book }: { book: BookDocument }) {
           railInsetPx={railInsetPx}
           bookTitle={book.metadata.title}
           bookAuthor={book.metadata.author}
-          currentSectionLabel={currentSectionLabel}
           chaptersOpen={chaptersOpen}
           onToggleChapters={() => setChaptersOpen((o) => !o)}
           hasNarration={hasNarration}
@@ -363,138 +374,160 @@ export default function Reader({ book }: { book: BookDocument }) {
           onToggleSearch={() => setSearchOpen((o) => !o)}
           theme={theme}
           onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
+          scrollPct={scrollPct}
         />
 
-        {chaptersOpen && (
+        {/* Drawer + content column live side by side — the drawer is a
+            persistent push-drawer (a flex sibling with an animated width),
+            not a scrim overlay, so opening it narrows the reading column
+            instead of blocking it. */}
+        <div className="w-full h-full flex overflow-hidden">
           <ChaptersDrawer
             book={book}
             scrollPct={scrollPct}
             activeSectionId={activeSectionForSidebar}
             isMobile={isMobile}
+            open={chaptersOpen}
             onNavigate={(id) => goToSection(id, { animate: false })}
             onClose={() => setChaptersOpen(false)}
           />
-        )}
 
-        {/* Main column */}
-        <div className="w-full h-full flex flex-col relative" style={{ background: "var(--reader-bg)" }}>
-          <BookContent
-            book={book}
-            activeIndex={activeIndex}
-            registerSlide={registerSlide}
-            onPointerDown={onPointerDown}
-            onPointerUp={onPointerUp}
-            onAnyClick={() => setChromeHidden(false)}
-            onPrev={prev}
-            onNext={next}
-            contentPad={contentPad}
-            contentWidth={contentWidth}
-            contentTopPad={contentTopPad}
-            contentBottomPad={contentBottomPad}
-            orderedSections={orderedSections}
-            notesIndexSectionId={notesIndexSectionId}
-            notesIndexGroups={notesIndexGroups}
-            getAnnotations={getAnnotations}
-            isListen={isListen}
-            fontSize={fontSize}
-            lineHeight={lineHeight}
-            fontFamilyVar={fontFamilyVar}
-            notesById={notesById}
-            onNoteClick={onNoteClick}
-            onWordClick={handleWordClick}
-            seekToPassageForListening={seekToPassageForListening}
-            onTextSelect={onTextSelect}
-            onNoteMarkerClick={onNoteMarkerClick}
-            onOpenPassageNotes={onOpenPassageNotes}
-          />
-
-          {/* Selection menu is a fixed-position overlay, so it doesn't need
-              to live inside BookContent's scrollable tree; keeping it here
-              means selecting text never forces the (memoized) book content
-              to re-render. Selecting text is the *only* way to start a
-              highlight/note/copy (per product decision) — there's no
-              separate click-based menu on already-marked text. */}
-          {selection && (
-            <SelectionMenu
-              top={selection.top}
-              left={selection.left}
-              theme={theme}
-              copyLabel={copyLabel}
-              onPlay={
-                hasNarration
-                  ? () => {
-                      const passageId = selection.ranges[0].passageId;
-                      const sectionId = passageLookup.sectionOf.get(passageId);
-                      if (sectionId) startListeningFromPassage(sectionId, passageId);
-                      dismissSelection();
-                    }
-                  : undefined
-              }
-              onHighlight={highlightSelection}
-              onNote={noteFromSelection}
-              onCopy={menuCopy}
-              onDismiss={dismissSelection}
+          {/* Content column */}
+          <div
+            className={`flex-1 min-w-0 h-full flex flex-col relative transition-opacity duration-300 ${
+              isMobile && chaptersOpen ? "opacity-50" : "opacity-100"
+            }`}
+            style={{ background: "var(--reader-bg)" }}
+          >
+            <BookContent
+              book={book}
+              activeIndex={activeIndex}
+              registerSlide={registerSlide}
+              onPointerDown={onPointerDown}
+              onPointerUp={onPointerUp}
+              onAnyClick={() => setChromeHidden((hidden) => !hidden)}
+              contentPad={contentPad}
+              contentWidth={contentWidth}
+              contentTopPad={contentTopPad}
+              contentBottomPad={contentBottomPad}
+              orderedSections={orderedSections}
+              notesIndexSectionId={notesIndexSectionId}
+              notesIndexGroups={notesIndexGroups}
+              getAnnotations={getAnnotations}
+              isListen={isListen}
+              fontSize={fontSize}
+              lineHeight={lineHeight}
+              fontFamilyVar={fontFamilyVar}
+              notesById={notesById}
+              onNoteClick={onNoteClick}
+              onWordClick={handleWordClick}
+              seekToPassageForListening={seekToPassageForListening}
+              onTextSelect={onTextSelect}
+              onNoteMarkerClick={onNoteMarkerClick}
+              onOpenPassageNotes={onOpenPassageNotes}
             />
-          )}
 
-          {notesPanel && (
-            <>
-              <div
-                onClick={closeNotesPanel}
-                className={`absolute inset-0 z-39 ${isMobile ? "bg-black/45" : "bg-black/25"}`}
+            <ChapterNavFooter
+              prevSection={prevSection}
+              nextSection={nextSection}
+              onPrev={prev}
+              onNext={next}
+              visible={atBottom}
+              bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
+            />
+
+            {/* Selection menu is a fixed-position overlay, so it doesn't need
+                to live inside BookContent's scrollable tree; keeping it here
+                means selecting text never forces the (memoized) book content
+                to re-render. Selecting text is the *only* way to start a
+                highlight/note/copy (per product decision) — there's no
+                separate click-based menu on already-marked text. */}
+            {selection && (
+              <SelectionMenu
+                top={selection.top}
+                left={selection.left}
+                theme={theme}
+                copyLabel={copyLabel}
+                onPlay={
+                  hasNarration
+                    ? () => {
+                        const passageId = selection.ranges[0].passageId;
+                        const sectionId = passageLookup.sectionOf.get(passageId);
+                        if (sectionId) startListeningFromPassage(sectionId, passageId);
+                        dismissSelection();
+                      }
+                    : undefined
+                }
+                onHighlight={highlightSelection}
+                onNote={noteFromSelection}
+                onDelete={hasExistingAnnotation ? deleteSelection : undefined}
+                onCopy={menuCopy}
+                onDismiss={dismissSelection}
               />
-              <div
-                className={`absolute top-0 bottom-0 z-40 ${isMobile ? "left-0 w-full" : "right-0 w-95"}`}
-              >
-                <NotesSidebar
-                  bookId={book.id}
-                  passageId={notesPanel.passageId}
-                  getPassageText={getPassageText}
-                  mode={notesPanel.mode}
-                  annotationId={notesPanel.mode === "edit" ? notesPanel.annotationId : undefined}
-                  pendingRanges={notesPanel.mode === "edit" ? notesPanel.ranges : undefined}
-                  editingNoteId={notesPanel.mode === "edit" ? notesPanel.editingNoteId : undefined}
-                  panelType={isMobile ? "sheet" : "side"}
-                  citation={
-                    currentSectionLabel
-                      ? `${book.metadata.title} · ${currentSectionLabel}`
-                      : book.metadata.title
-                  }
-                  onEditAnnotation={(annotationId, noteId) =>
-                    onEditAnnotation(notesPanel.passageId, annotationId, noteId)
-                  }
-                  onClose={closeNotesPanel}
+            )}
+
+            {notesPanel && (
+              <>
+                <div
+                  onClick={closeNotesPanel}
+                  // z-[65]/z-[70] (not z-40/z-50) so this panel — and its
+                  // scrim — sit above the fixed "now playing" bar (z-50)
+                  // rather than being cut off behind it while audio plays.
+                  className={`absolute inset-0 z-[65] ${isMobile ? "bg-black/45" : "bg-black/25"}`}
+                />
+                <div
+                  className={`absolute top-0 bottom-0 z-[70] ${isMobile ? "left-0 w-full" : "right-0 w-95"}`}
+                >
+                  <NotesSidebar
+                    bookId={book.id}
+                    passageId={notesPanel.passageId}
+                    getPassageText={getPassageText}
+                    mode={notesPanel.mode}
+                    annotationId={notesPanel.mode === "edit" ? notesPanel.annotationId : undefined}
+                    pendingRanges={notesPanel.mode === "edit" ? notesPanel.ranges : undefined}
+                    editingNoteId={notesPanel.mode === "edit" ? notesPanel.editingNoteId : undefined}
+                    panelType={isMobile ? "sheet" : "side"}
+                    citation={
+                      currentSectionLabel
+                        ? `${book.metadata.title} · ${currentSectionLabel}`
+                        : book.metadata.title
+                    }
+                    onEditAnnotation={(annotationId, noteId) =>
+                      onEditAnnotation(notesPanel.passageId, annotationId, noteId)
+                    }
+                    onClose={closeNotesPanel}
+                  />
+                </div>
+              </>
+            )}
+
+            {searchOpen && (
+              <div className="absolute inset-0 z-50">
+                <SearchModal
+                  book={book}
+                  currentSectionId={activeSectionForSidebar}
+                  onNavigate={(sectionId, passageId) => {
+                    goToSection(sectionId, { animate: false });
+                    requestAnimationFrame(() => {
+                      getSlideEl(sectionId)
+                        ?.querySelector(`[data-passage-id="${passageId}"]`)
+                        ?.scrollIntoView({ behavior: "auto", block: "center" });
+                    });
+                  }}
+                  onClose={() => setSearchOpen(false)}
                 />
               </div>
-            </>
-          )}
+            )}
 
-          {searchOpen && (
-            <div className="absolute inset-0 z-50">
-              <SearchModal
-                book={book}
-                currentSectionId={activeSectionForSidebar}
-                onNavigate={(sectionId, passageId) => {
-                  goToSection(sectionId, { animate: false });
-                  requestAnimationFrame(() => {
-                    getSlideEl(sectionId)
-                      ?.querySelector(`[data-passage-id="${passageId}"]`)
-                      ?.scrollIntoView({ behavior: "auto", block: "center" });
-                  });
-                }}
-                onClose={() => setSearchOpen(false)}
+            {noteOpen && (
+              <FootnotePopover
+                note={noteOpen.note}
+                top={noteOpen.top}
+                left={noteOpen.left}
+                onClose={() => setNoteOpen(null)}
               />
-            </div>
-          )}
-
-          {noteOpen && (
-            <FootnotePopover
-              note={noteOpen.note}
-              top={noteOpen.top}
-              left={noteOpen.left}
-              onClose={() => setNoteOpen(null)}
-            />
-          )}
+            )}
+          </div>
         </div>
       </div>
 

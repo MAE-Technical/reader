@@ -101,12 +101,37 @@ export default function NarrationEngine() {
     if (src === audioSrcRef.current) return;
     audioSrcRef.current = src;
     audio.src = src ?? "";
+    // Assigning `.src` runs the element through the browser's media load
+    // algorithm, which resets playbackRate back to 1 in Safari (and can on
+    // other engines too) — reapply immediately so a chapter auto-advance or
+    // skip doesn't silently drop the reader back to 1x.
+    audio.playbackRate = useAudioStore.getState().speed;
     if (src && useAudioStore.getState().isPlaying) audio.play().catch(() => {});
   }, [audioSectionTrack?.src]);
 
   useEffect(() => {
     if (audioElRef.current) audioElRef.current.playbackRate = audioSpeed;
   }, [audioSpeed]);
+
+  // Belt-and-suspenders: Safari has also been observed silently resetting
+  // playbackRate to 1 once a freshly-loaded source actually starts playing,
+  // independent of the `.src` assignment above — so the single source of
+  // truth for "what speed should this element be at" is always
+  // audio-store's `speed`, reasserted at both points the browser is known to
+  // clobber it, rather than trusting whatever the element already has.
+  useEffect(() => {
+    const audio = audioElRef.current;
+    if (!audio) return;
+    const applyRate = () => {
+      audio.playbackRate = useAudioStore.getState().speed;
+    };
+    audio.addEventListener("loadedmetadata", applyRate);
+    audio.addEventListener("playing", applyRate);
+    return () => {
+      audio.removeEventListener("loadedmetadata", applyRate);
+      audio.removeEventListener("playing", applyRate);
+    };
+  }, []);
 
   useEffect(() => {
     const audio = audioElRef.current;

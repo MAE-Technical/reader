@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Pause, Play, RotateCcw, RotateCw, SkipBack, SkipForward, User, X } from "lucide-react";
+import { Check, ChevronDown, Pause, Play, RotateCcw, RotateCw, SkipBack, SkipForward, X } from "lucide-react";
 import { useAudioStore } from "@/stores/audio-store";
+import Tooltip from "./reader/Tooltip";
 import { formatDuration } from "@/utils/text";
 import type { Narrator } from "@/lib/book/schema";
 
@@ -43,12 +44,70 @@ type Props = {
   onTitleClick?: () => void;
 };
 
+function SpeedMenu({
+  speed,
+  isMobile,
+  onSelect,
+  onClose,
+}: {
+  speed: number;
+  isMobile: boolean;
+  onSelect: (s: number) => void;
+  onClose: () => void;
+}) {
+  return (
+    <>
+      <div onClick={onClose} className="fixed inset-0 z-19" />
+      {isMobile ? (
+        <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-1 rounded-full bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-lg z-20 whitespace-nowrap">
+          {SPEEDS.map((s) => {
+            const active = s === speed;
+            return (
+              <button
+                key={s}
+                onClick={() => onSelect(s)}
+                className={`border-none cursor-pointer rounded-full py-1.5 px-2.5 text-[11px] font-semibold ${
+                  active ? "bg-brand-500 text-white" : "bg-transparent text-[var(--reader-text-muted)]"
+                }`}
+              >
+                {s}×
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="absolute bottom-[calc(100%+14px)] left-1/2 -translate-x-1/2 min-w-34 p-2.5 rounded-lg bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-lg z-20">
+          <div className="text-[10px] font-bold tracking-wide uppercase text-[var(--reader-text-muted)] px-2.5 pt-0.5 pb-2">
+            Speed
+          </div>
+          <div className="flex flex-col gap-0.5">
+            {SPEEDS.map((s) => {
+              const active = s === speed;
+              return (
+                <button
+                  key={s}
+                  onClick={() => onSelect(s)}
+                  className={`flex items-center justify-between border-none cursor-pointer rounded-sm py-2 px-3.5 text-[13px] font-medium ${
+                    active ? "bg-brand-500/10 text-brand-500 font-semibold" : "bg-transparent text-[var(--reader-text)]"
+                  }`}
+                >
+                  {s}×
+                  {active && <Check size={13} className="flex-none" />}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export default function AudioPlayer({
   variant = "full",
   bookTitle,
   chapterLabel,
   coverSrc,
-  narrators,
   durationMs,
   onSeek,
   onSkipPrev,
@@ -80,32 +139,122 @@ export default function AudioPlayer({
   const progress = duration > 0 ? time / duration : 0;
   const withHours = duration >= 3600;
 
-  const selectedNarrator = narrators[0];
-
   const onScrub = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
     const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
     onSeek(Math.round(pct * duration * 1000));
   };
 
-  const coverSize = isMini ? "w-8 h-8" : isMobile ? "w-9 h-9" : "w-10 h-10";
-  const trackPad = isMini ? "px-4 pt-2" : isMobile ? "px-3.5 pt-2" : "px-6 pt-2.5";
-  const controlsPad = isMini ? "px-4 pb-2" : isMobile ? "px-3.5 pb-2.5" : "px-6 pb-3";
-  const playSize = isMini ? "w-8.5 h-8.5" : "w-10.5 h-10.5";
+  const coverSize = isMini ? "w-8 h-8" : isMobile ? "w-9 h-9" : "w-9.5 h-9.5";
+  const playSize = isMini ? "w-8.5 h-8.5" : "w-11 h-11";
+
+  const speedTrigger = (
+    <Tooltip label="Playback speed" side="top">
+      <button
+        onClick={() => setSpeedMenuOpen((o) => !o)}
+        className="flex items-center gap-0.5 border-none cursor-pointer rounded-full py-1.25 px-2.5 text-xs font-semibold bg-[var(--reader-surface-hover)] text-[var(--reader-text-muted)] flex-none"
+      >
+        {speed}×
+        <ChevronDown size={12} />
+      </button>
+    </Tooltip>
+  );
+
+  const skipPrevBtn = (
+    <Tooltip label="Previous chapter" side="top" align="start">
+      <button
+        onClick={onSkipPrev}
+        disabled={!canSkipPrev}
+        aria-label="Previous chapter"
+        className="bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center disabled:opacity-25 disabled:cursor-default"
+      >
+        <SkipBack size={17} />
+      </button>
+    </Tooltip>
+  );
+  const back15Btn = (
+    <Tooltip label="Back 15 seconds" side="top">
+      <button
+        onClick={() => onSeek(currentTimeMs - 15_000)}
+        aria-label="Back 15 seconds"
+        className="relative bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center"
+      >
+        <RotateCcw size={19} />
+        <span className="absolute text-[7px] font-bold">15</span>
+      </button>
+    </Tooltip>
+  );
+  const playBtn = (
+    <button
+      onClick={toggle}
+      aria-label={isPlaying ? "Pause" : "Play"}
+      className={`${playSize} rounded-full bg-brand-500 border-none cursor-pointer flex items-center justify-center flex-none text-sand-25 shadow-sm`}
+    >
+      {isPlaying ? <Pause size={isMini ? 15 : 19} /> : <Play size={isMini ? 15 : 19} />}
+    </button>
+  );
+  const forward15Btn = (
+    <Tooltip label="Forward 15 seconds" side="top">
+      <button
+        onClick={() => onSeek(currentTimeMs + 15_000)}
+        aria-label="Forward 15 seconds"
+        className="relative bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center"
+      >
+        <RotateCw size={19} />
+        <span className="absolute text-[7px] font-bold">15</span>
+      </button>
+    </Tooltip>
+  );
+  const skipNextBtn = (
+    <Tooltip label="Next chapter" side="top">
+      <button
+        onClick={onSkipNext}
+        disabled={!canSkipNext}
+        aria-label="Next chapter"
+        className="bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center disabled:opacity-25 disabled:cursor-default"
+      >
+        <SkipForward size={17} />
+      </button>
+    </Tooltip>
+  );
+  const closeBtn = onClose && (
+    <Tooltip label="Close player" side="top" align="end">
+      <button
+        onClick={onClose}
+        aria-label="Close player"
+        className="w-8 h-8 rounded-full flex-none flex items-center justify-center border-none cursor-pointer bg-transparent text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
+      >
+        <X size={16} />
+      </button>
+    </Tooltip>
+  );
+
+  const coverAndMeta = (
+    <button
+      onClick={onTitleClick}
+      disabled={!onTitleClick}
+      title={onTitleClick ? "Back to book" : undefined}
+      className="flex items-center gap-2.5 min-w-0 flex-1 border-none bg-transparent p-0 text-left disabled:cursor-default"
+      style={{ cursor: onTitleClick ? "pointer" : "default" }}
+    >
+      <img src={coverSrc} alt="cover" className={`${coverSize} object-cover rounded-xs flex-none`} />
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-[var(--reader-text)] whitespace-nowrap overflow-hidden text-ellipsis">
+          {bookTitle}
+        </div>
+        <div className="text-xs font-medium text-[var(--reader-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis">
+          {chapterLabel}
+        </div>
+      </div>
+    </button>
+  );
 
   return (
-    <div className="w-full h-full box-border relative flex flex-col justify-center bg-[var(--reader-surface)] border-t border-[var(--reader-border)] pb-[env(safe-area-inset-bottom)]">
-      {onClose && (
-        <button
-          onClick={onClose}
-          title="Close player"
-          className="absolute -top-3 right-3 z-10 w-7 h-7 rounded-full bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-sm cursor-pointer flex items-center justify-center text-[var(--reader-text-muted)]"
-        >
-          <X size={14} />
-        </button>
-      )}
+    <div
+      className="w-full h-full box-border relative flex flex-col justify-center bg-[var(--reader-surface)] border-t border-[var(--reader-border)] pb-[env(safe-area-inset-bottom)]"
+    >
       {/* Progress track */}
-      <div className={`flex items-center gap-2.5 ${trackPad}`}>
+      <div className={`flex items-center gap-2.5 ${isMini ? "px-4 pt-2" : isMobile ? "px-3.5 pt-2.5" : "px-6 pt-3"}`}>
         <span className="text-[11px] font-medium text-[var(--reader-text-muted)] flex-none tabular-nums">
           {formatDuration(time, withHours)}
         </span>
@@ -122,142 +271,61 @@ export default function AudioPlayer({
         </span>
       </div>
 
-      {/* Controls row */}
-      <div className={`flex items-center box-border gap-3 ${controlsPad}`}>
-        {!isMobile ? (
-          <button
-            onClick={onTitleClick}
-            disabled={!onTitleClick}
-            title={onTitleClick ? "Back to book" : undefined}
-            className="flex items-center gap-2.5 min-w-0 flex-1 border-none bg-transparent p-0 text-left disabled:cursor-default"
-            style={{ cursor: onTitleClick ? "pointer" : "default" }}
-          >
-            <img src={coverSrc} alt="cover" className={`${coverSize} object-cover rounded-xs flex-none`} />
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-[var(--reader-text)] whitespace-nowrap overflow-hidden text-ellipsis">
-                {bookTitle}
-              </div>
-              <div className="text-xs font-medium text-[var(--reader-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis">
-                {chapterLabel}
-              </div>
-            </div>
-          </button>
-        ) : (
-          <div className="flex-1" />
-        )}
-
-        <div className="flex items-center gap-1.5 flex-none">
-          <button
-            onClick={onSkipPrev}
-            disabled={!canSkipPrev}
-            title="Previous chapter"
-            className="bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center disabled:opacity-25 disabled:cursor-default"
-          >
-            <SkipBack size={17} />
-          </button>
-          <button
-            onClick={() => onSeek(currentTimeMs - 15_000)}
-            className="relative bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center"
-          >
-            <RotateCcw size={19} />
-            <span className="absolute text-[7px] font-bold">15</span>
-          </button>
-          <button
-            onClick={toggle}
-            className={`${playSize} rounded-full bg-brand-500 border-none cursor-pointer flex items-center justify-center flex-none text-sand-25`}
-          >
-            {isPlaying ? <Pause size={isMini ? 15 : 18} /> : <Play size={isMini ? 15 : 18} />}
-          </button>
-          <button
-            onClick={() => onSeek(currentTimeMs + 15_000)}
-            className="relative bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center"
-          >
-            <RotateCw size={19} />
-            <span className="absolute text-[7px] font-bold">15</span>
-          </button>
-          <button
-            onClick={onSkipNext}
-            disabled={!canSkipNext}
-            title="Next chapter"
-            className="bg-transparent border-none cursor-pointer text-[var(--reader-text)] w-8 h-8 flex items-center justify-center disabled:opacity-25 disabled:cursor-default"
-          >
-            <SkipForward size={17} />
-          </button>
-          {!isMobile && (
-            <button
-              onClick={() => setSpeedMenuOpen((o) => !o)}
-              className="bg-transparent border-none cursor-pointer text-sm font-medium text-[var(--reader-text)] flex-none ml-1"
-            >
-              {speed}x
-            </button>
-          )}
-        </div>
-
-        {!isMobile && (
-          <div className="flex items-center justify-end min-w-0 flex-1">
-            {/* <div className="flex items-center gap-2 min-w-0">
-              <span className="text-xs text-[var(--reader-text-muted)] whitespace-nowrap overflow-hidden text-ellipsis">
-                Read by{" "}
-                <span className="font-semibold text-[var(--reader-text)]">
-                  {selectedNarrator?.name}
-                </span>
-              </span>
-              <div className="w-7 h-7 rounded-full bg-[var(--reader-surface-hover)] flex items-center justify-center flex-none overflow-hidden">
-                {selectedNarrator?.avatar ? (
-                  // eslint-disable-next-line @next/next/no-img-element -- narrator avatar, not an app asset
-                  <img
-                    src={selectedNarrator.avatar}
-                    alt={selectedNarrator.name}
-                    className="w-full h-full object-cover rounded-full"
-                  />
-                ) : (
-                  <User size={14} className="text-[var(--reader-text-muted)]" />
-                )}
-              </div>
-            </div> */}
+      {isMobile ? (
+        <>
+          <div className="flex items-center gap-2.5 px-3.5 pt-2.5 pb-3">
+            {coverAndMeta}
+            {closeBtn}
           </div>
-        )}
-
-        {speedMenuOpen && (
-          <>
-            <div
-              onClick={() => setSpeedMenuOpen(false)}
-              className="fixed inset-0 bg-black/20 z-19"
-            />
-            <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 w-36 bg-[var(--reader-surface)] border border-[var(--reader-border)] rounded-md shadow-lg p-3.5 z-20">
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-sm font-semibold text-[var(--reader-text)]">Speed</span>
-                <span
-                  onClick={() => setSpeedMenuOpen(false)}
-                  className="cursor-pointer text-[var(--reader-text-muted)]"
-                >
-                  <X size={16} />
-                </span>
-              </div>
-              <div className="flex flex-col gap-0.5">
-                {SPEEDS.map((s) => {
-                  const active = s === speed;
-                  return (
-                    <div
-                      key={s}
-                      onClick={() => {
-                        setSpeed(s);
-                        setSpeedMenuOpen(false);
-                      }}
-                      className={`flex items-center justify-between py-2 px-2.5 rounded-sm cursor-pointer ${
-                        active ? "bg-[var(--reader-surface-hover)]" : ""
-                      }`}
-                    >
-                      <span className="text-sm text-[var(--reader-text)]">{s}x</span>
-                      {active && <Check size={16} className="text-brand-500 flex-none" />}
-                    </div>
-                  );
-                })}
-              </div>
+          <div className="flex items-center justify-between px-3.5 pb-2.5">
+            {skipPrevBtn}
+            {back15Btn}
+            {playBtn}
+            {forward15Btn}
+            {skipNextBtn}
+          </div>
+          <div className="flex justify-center pb-3 relative">
+            {speedTrigger}
+            {speedMenuOpen && (
+              <SpeedMenu
+                speed={speed}
+                isMobile
+                onSelect={(s) => {
+                  setSpeed(s);
+                  setSpeedMenuOpen(false);
+                }}
+                onClose={() => setSpeedMenuOpen(false)}
+              />
+            )}
+          </div>
+        </>
+      ) : (
+        <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-4 px-6 pb-3.5 pt-1">
+          {coverAndMeta}
+          <div className="flex items-center gap-3">
+            {skipPrevBtn}
+            {back15Btn}
+            {playBtn}
+            {forward15Btn}
+            {skipNextBtn}
+            <div className="relative ml-1">
+              {speedTrigger}
+              {speedMenuOpen && (
+                <SpeedMenu
+                  speed={speed}
+                  isMobile={false}
+                  onSelect={(s) => {
+                    setSpeed(s);
+                    setSpeedMenuOpen(false);
+                  }}
+                  onClose={() => setSpeedMenuOpen(false)}
+                />
+              )}
             </div>
-          </>
-        )}
-      </div>
+          </div>
+          <div className="flex items-center justify-end">{closeBtn}</div>
+        </div>
+      )}
     </div>
   );
 }

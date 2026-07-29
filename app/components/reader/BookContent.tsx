@@ -1,11 +1,10 @@
 "use client";
 
 import { memo } from "react";
-import { ChevronLeft, ChevronRight, Highlighter, MessageSquare } from "lucide-react";
+import { Highlighter, MessageSquare } from "lucide-react";
 import { ImagePassageBlock, PassageText, type NoteLookup } from "../PassageContent";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
 import type { Annotation } from "@/stores/library-store";
-import { sectionLabel } from "@/lib/reader/sectionHeading";
 
 // How much larger than body text each heading level renders — h1 down to
 // h6/unleveled, so a chapter's own subheadings stay visually distinct from
@@ -22,8 +21,6 @@ type BookContentProps = {
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
   onAnyClick: () => void;
-  onPrev: () => void;
-  onNext: () => void;
   contentPad: string;
   contentWidth: number;
   contentTopPad: number;
@@ -73,8 +70,6 @@ const BookContent = memo(function BookContent({
   onPointerDown,
   onPointerUp,
   onAnyClick,
-  onPrev,
-  onNext,
   contentPad,
   contentWidth,
   contentTopPad,
@@ -104,8 +99,6 @@ const BookContent = memo(function BookContent({
 
   const isPartDivider = section.children.length > 0;
   const isNotesIndex = section.id === notesIndexSectionId && notesIndexGroups;
-  const prevSection = orderedSections[activeIndex - 1];
-  const nextSection = orderedSections[activeIndex + 1];
 
   return (
     <div
@@ -119,6 +112,16 @@ const BookContent = memo(function BookContent({
         data-section-id={section.id}
         onClick={onAnyClick}
         onMouseUp={(e) => onTextSelect(e.currentTarget)}
+        // Mirrors onMouseUp exactly (same handler, same call shape) — a
+        // touch-based long-press-to-select on Safari/iPhone ends in a
+        // `touchend` rather than a `mouseup`, so without this the pill
+        // never appeared there. Deliberately just this, not a
+        // `selectionchange` listener: that fires continuously throughout
+        // an in-progress drag (mouse or touch) and showed intermediate,
+        // not-yet-final selection states — flickering the pill and
+        // occasionally rendering a stale multi-passage range. touchend
+        // only fires once, right when the gesture actually ends.
+        onTouchEnd={(e) => onTextSelect(e.currentTarget)}
         className="reader-fade-in om-scroll h-full overflow-y-auto relative"
         style={{ background: "var(--reader-bg)" }}
       >
@@ -201,7 +204,20 @@ const BookContent = memo(function BookContent({
                             color: "var(--reader-text)",
                           }
                         : {
-                            font: `400 ${fontSize}px/${lineHeight} ${fontFamilyVar}`,
+                            // Separate longhand properties, not the `font`
+                            // shorthand — WebKit/Safari drops the entire
+                            // shorthand declaration when its font-family slot
+                            // is a CSS custom property (var(--font-...)),
+                            // silently falling back to the browser default
+                            // font/size/line-height. That's what made body
+                            // text render at the wrong size with the wrong
+                            // spacing specifically on Safari/iPhone, even
+                            // though headings (already longhand below) were
+                            // unaffected.
+                            fontFamily: fontFamilyVar,
+                            fontWeight: 400,
+                            fontSize,
+                            lineHeight,
                             color: "var(--reader-text)",
                           }),
                     }}
@@ -279,87 +295,16 @@ const BookContent = memo(function BookContent({
                   </div>
                 );
               })}
-
-          {(prevSection || nextSection) && (
-            // Explicit, always-visible page-turn affordance at the point a
-            // reader naturally lands when they finish a section — the
-            // invisible full-height edge buttons below cover the same
-            // next()/prev(), but only reveal themselves on hover, which
-            // does nothing for a reader who's just scrolled to the bottom
-            // and is looking for what's next. Muted throughout (subtle
-            // tracking-wide label, --reader-text-subtle chevrons) since
-            // this is wayfinding, not a call to action.
-            <nav
-              aria-label="Section navigation"
-              className="mt-16 pt-6 border-t border-[var(--reader-border)] flex items-stretch justify-between gap-6"
-            >
-              {prevSection ? (
-                <button
-                  onClick={onPrev}
-                  className="group flex items-center gap-2 min-w-0 max-w-[46%] bg-transparent border-none cursor-pointer text-left py-2"
-                >
-                  <ChevronLeft
-                    size={16}
-                    className="flex-none text-[var(--reader-text-subtle)] transition-colors group-hover:text-[var(--reader-text-muted)]"
-                  />
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold tracking-wide uppercase text-[var(--reader-text-subtle)]">
-                      Previous
-                    </div>
-                    <div className="truncate text-sm text-[var(--reader-text-muted)] transition-colors group-hover:text-[var(--reader-text)]">
-                      {sectionLabel(prevSection) ?? "Previous section"}
-                    </div>
-                  </div>
-                </button>
-              ) : (
-                <span />
-              )}
-
-              {nextSection ? (
-                <button
-                  onClick={onNext}
-                  className="group ml-auto flex items-center gap-2 min-w-0 max-w-[46%] bg-transparent border-none cursor-pointer text-right py-2"
-                >
-                  <div className="min-w-0">
-                    <div className="text-[11px] font-semibold tracking-wide uppercase text-[var(--reader-text-subtle)]">
-                      Next
-                    </div>
-                    <div className="truncate text-sm text-[var(--reader-text-muted)] transition-colors group-hover:text-[var(--reader-text)]">
-                      {sectionLabel(nextSection) ?? "Next section"}
-                    </div>
-                  </div>
-                  <ChevronRight
-                    size={16}
-                    className="flex-none text-[var(--reader-text-subtle)] transition-colors group-hover:text-[var(--reader-text-muted)]"
-                  />
-                </button>
-              ) : (
-                <span />
-              )}
-            </nav>
-          )}
         </div>
       </div>
 
-      <button
-        onClick={onPrev}
-        aria-label="Previous section"
-        className="absolute left-3 top-0 bottom-0 w-16 flex items-center justify-start pl-1 opacity-0 hover:opacity-60 outline-none transition-opacity cursor-pointer z-10"
-      >
-        <ChevronLeft className="text-[var(--reader-text-muted)]" />
-      </button>
-      <button
-        onClick={onNext}
-        aria-label="Next section"
-        // Inset from the true right edge (not flush against it, unlike the
-        // left button) — the section's own vertical scrollbar renders right
-        // at that edge, and this button used to sit on top of it (z-10),
-        // swallowing clicks/drags meant for the scrollbar into a page-turn
-        // instead.
-        className="absolute right-3 top-0 bottom-0 w-16 flex items-center justify-end pr-1 opacity-0 hover:opacity-60 outline-none transition-opacity cursor-pointer z-10"
-      >
-        <ChevronRight className="text-[var(--reader-text-muted)]" />
-      </button>
+      {/* Hints that there's more below before hitting the docked
+          ChapterNavFooter (Reader.tsx) — purely visual, pointer-events-none
+          so it never intercepts scroll/selection. */}
+      {/* <div
+        className="pointer-events-none absolute inset-x-0 bottom-0 h-16"
+        style={{ background: "linear-gradient(to bottom, transparent, var(--reader-bg))" }}
+      /> */}
     </div>
   );
 });

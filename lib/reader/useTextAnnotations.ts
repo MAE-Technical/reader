@@ -35,6 +35,7 @@ export function useTextAnnotations(bookId: string) {
   const sameRanges = useLibraryStore((s) => s.sameRanges);
   const addHighlight = useLibraryStore((s) => s.addHighlight);
   const removeHighlight = useLibraryStore((s) => s.removeHighlight);
+  const deleteNoteEntry = useLibraryStore((s) => s.deleteNoteEntry);
 
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [notesPanel, setNotesPanel] = useState<NotesPanelState | null>(null);
@@ -83,6 +84,25 @@ export function useTextAnnotations(bookId: string) {
     setSelection(null);
   }, [selection, bookId, getForPassage, sameRanges]);
 
+  // Whatever highlight/note thread already lives at the exact ranges of the
+  // *current* selection — purely for deciding whether the selection pill
+  // should offer a Delete action at all (undefined = nothing here yet).
+  const existingForSelection = selection
+    ? getForPassage(bookId, selection.ranges[0].passageId).find((a) => sameRanges(a.ranges, selection.ranges))
+    : undefined;
+
+  // Removes everything at this selection in one action — the highlight
+  // wash (if any) and every note in its thread (if any) — rather than only
+  // the highlight flag the way re-selecting and hitting Highlight again
+  // does. Makes deleting a highlight/note discoverable via an explicit icon
+  // on the pill instead of relying on that toggle-by-re-selecting behavior.
+  const deleteSelection = useCallback(() => {
+    if (!selection || !existingForSelection) return;
+    if (existingForSelection.highlightId) removeHighlight(bookId, existingForSelection.highlightId);
+    for (const note of existingForSelection.notes) deleteNoteEntry(bookId, note.id);
+    setSelection(null);
+  }, [selection, existingForSelection, bookId, removeHighlight, deleteNoteEntry]);
+
   // A noted range's inline marker — opens its whole thread (not one
   // specific entry, since a range can carry several notes), composer ready
   // to append. Highlight-only ranges get no click handler at all
@@ -111,6 +131,8 @@ export function useTextAnnotations(bookId: string) {
     dismissSelection,
     highlightSelection,
     noteFromSelection,
+    hasExistingAnnotation: Boolean(existingForSelection),
+    deleteSelection,
     onNoteMarkerClick,
     onOpenPassageNotes,
     onEditAnnotation,

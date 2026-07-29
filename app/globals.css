@@ -116,7 +116,10 @@ body {
   --reader-text: #ffffff;
   --reader-text-muted: #98989d;
   --reader-text-subtle: #636366;
-  --reader-highlight: rgba(226, 140, 96, 0.16);
+  /* Same apricot as light theme's --color-highlight, just translucent over
+     the dark page instead of a different (more saturated) hue — matches
+     the Claude Design mockup's dark-theme selection wash exactly. */
+  --reader-highlight: rgba(246, 228, 206, 0.22);
   --reader-highlight-border: var(--color-brand-400);
   --reader-note-accent: var(--color-brand-300);
   --reader-active-word-bg: #4a7fbd;
@@ -139,6 +142,15 @@ body {
   border-radius: 4px;
   padding: 1px 3px;
   margin: -1px -3px;
+}
+
+/* The browser's native drag-selection wash, recolored to the same warm
+   apricot as a saved highlight (--reader-highlight) instead of the default
+   platform blue — so the moment of selecting text already reads as "this
+   book's" highlight color, not a generic OS affordance, matching the
+   Claude Design mockup's selection treatment. */
+[data-reader-theme] ::selection {
+  background: var(--reader-highlight);
 }
 
 /* The active section's own overflow-y-auto box (BookContent.tsx) — a thin,

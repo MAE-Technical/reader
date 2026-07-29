@@ -1,0 +1,41 @@
+[project]
+name = "kokoro-mlx-server"
+version = "0.1.0"
+description = "Local MLX-based Kokoro TTS server, drop-in replacement for the Docker kokoro-fastapi backend"
+requires-python = ">=3.10"
+dependencies = [
+    # Pinned: this host is on macOS 13.3.1. mlx dropped macOS 13.x wheels as of
+    # 0.29.4 (14.0+ only from there); 0.29.3 is the last version that still
+    # ships one. mlx-audio>=0.3.0 hard-pins mlx-lm==0.30.5 and mlx-audio>=0.4
+    # requires mlx>=0.31.1, so this pin stays on 0.2.9, the last release with
+    # an open-ended mlx>=0.25.2 constraint that resolves to 0.29.3.
+    # Bump both together once the host is on macOS 14+.
+    "mlx-audio==0.2.9",
+    "mlx==0.29.3",
+    # Kokoro's own runtime deps, installed individually rather than via the
+    # mlx-audio[tts] extra — that extra bundles support for every model the
+    # library ships (including mistral-common[audio], which pulls in torch,
+    # which itself has no macOS 13.x wheel). None of this is needed for Kokoro.
+    "misaki[en]>=0.8.2",
+    # misaki's English g2p unconditionally imports torch (via
+    # spacy-curated-transformers) regardless of extras. torch 2.12+ dropped
+    # macOS 13.x wheels the same way mlx did; 2.11.0 is the last one with a
+    # macosx_11_0_arm64 wheel (a compatibility floor, so it runs fine on
+    # 13.3.1). This only does lightweight CPU text processing, not synthesis.
+    "torch<2.12",
+    "loguru>=0.7.3",
+    "num2words>=0.5.14",
+    "spacy>=3.8.4",
+    "phonemizer-fork>=3.3.2",
+    "espeakng-loader>=0.2.4",
+    "sentencepiece>=0.2.0",
+    "soundfile>=0.13.1",
+    "einops>=0.8.1",
+    "pyloudnorm>=0.1.1",
+    "omegaconf==2.3.0",
+    "einx==0.3.0",
+    "dacite>=1.9.2",
+    "tqdm>=4.67.1",
+    "fastapi>=0.115",
+    "uvicorn>=0.32",
+]

@@ -305,7 +305,7 @@ function NoteComposer({
     <div className="flex-none border-t border-[var(--reader-border)] p-3">
       <div
         className={`rounded-sm p-2.5 flex flex-col gap-2 min-h-16 border ${
-          hasDraft || mode === "recording" ? "border-brand-300" : "border-[var(--reader-border)]"
+          hasDraft || mode === "recording" ? "border-brand-300" : "border-transparent"
         }`}
       >
         {mode === "recording" ? (
@@ -461,9 +461,7 @@ function PanelShell({
           </div>
         )}
         <div className="px-5 py-4 border-b border-[var(--reader-border)] flex-none flex items-center justify-between">
-          <span className="text-[11px] font-bold tracking-wide uppercase text-[var(--reader-text-muted)]">
-            {title}
-          </span>
+          <span className="font-serif font-semibold text-base text-[var(--reader-text)]">{title}</span>
           <div className="flex items-center gap-3.5">
             {onDelete && (
               <button
@@ -529,12 +527,12 @@ function ListPanel({
     });
 
   return (
-    <PanelShell panelType={panelType} title="Notes on this passage" onClose={onClose}>
+    <PanelShell panelType={panelType} title="Notes" onClose={onClose}>
       {entries.length === 0 ? (
         <p className="text-sm text-[var(--reader-text-muted)] m-0">No notes on this passage yet.</p>
       ) : (
         entries.map(({ annotation, note }) => (
-          <div key={note.id} className="flex flex-col gap-2 pb-3.5 border-b border-[var(--reader-border)] last:border-b-0">
+          <div key={note.id} className="flex flex-col gap-2.5 pb-4.5 border-b border-[var(--reader-border)] last:border-b-0">
             <Quote text={quoteForRanges(annotation.ranges, getPassageText)} />
             {note.content.kind === "text" ? (
               <p className="text-sm text-[var(--reader-text)] m-0">{note.content.text}</p>
@@ -652,7 +650,7 @@ function EditPanel({
           {existing.notes.map((note) => (
             <div
               key={note.id}
-              className="flex flex-col gap-2 pb-3 border-b border-[var(--reader-border)] last:border-b-0"
+              className="flex flex-col gap-2.5 pb-4 border-b border-[var(--reader-border)] last:border-b-0"
             >
               {note.content.kind === "text" ? (
                 <p className="text-sm text-[var(--reader-text)] m-0">{note.content.text}</p>

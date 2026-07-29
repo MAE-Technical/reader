@@ -229,8 +229,11 @@ export const PassageText = memo(function PassageText({
             style={
               local.highlighted
                 ? {
+                    // Flat wash + a tight radius, no underline — the
+                    // Claude Design mockup's plain highlight treatment
+                    // (Medium-style), rather than an added accent rule.
                     background: "var(--reader-highlight)",
-                    borderBottom: "2px solid var(--reader-highlight-border)",
+                    borderRadius: 2,
                     padding: "0 1px",
                   }
                 : {

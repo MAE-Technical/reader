@@ -8,9 +8,11 @@
     "start": "next start",
     "lint": "eslint",
     "schema:generate": "bun run scripts/generate-schema.ts",
-    "audio:generate": "bun run scripts/generate-audio.ts"
+    "audio:generate": "bun run scripts/generate-audio.ts",
+    "publish:book": "bun run scripts/publish-book.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.111.0",
     "lucide-react": "^1.24.0",
     "minisearch": "^7.2.0",
     "next": "16.2.10",
