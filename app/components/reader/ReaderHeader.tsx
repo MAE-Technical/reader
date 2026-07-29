@@ -90,7 +90,10 @@ export default function ReaderHeader({
           <BookOpen size={18} />
         </span>
 
-        <div className="min-w-0 sm:max-w-20 md:max-w-120 flex flex-col justify-center leading-tight">
+        {/* Title/author/progress hidden below sm — mobile keeps just the
+            outline icon here, since the same info is the first thing shown
+            once the (now full-screen) outline panel opens. */}
+        <div className="hidden sm:flex min-w-0 sm:max-w-20 md:max-w-120 flex-col justify-center leading-tight">
           <div className="text-sm font-semibold text-[var(--reader-text)] truncate">{bookTitle}</div>
           <div className="flex items-center gap-1.5 min-w-0">
             {bookAuthor && (

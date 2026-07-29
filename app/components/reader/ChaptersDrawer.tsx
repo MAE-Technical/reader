@@ -23,23 +23,7 @@ type Props = {
 
 type SidebarRow = { section: Section; depth: number };
 
-const DRAWER_WIDTH = 288;
 
-/**
- * Chapters/TOC drawer — a persistent push-drawer, not a scrim overlay: it
- * takes up real width as a flex sibling of the reading column (Reader.tsx),
- * so opening it narrows the content instead of blocking it. The reading
- * column stays fully scrollable/swipeable/clickable while this is open —
- * there is deliberately no click-outside-to-close scrim.
- *
- * Always mounted (never conditionally rendered) so the width change from
- * 0 -> DRAWER_WIDTH can transition — an unmount/remount can't animate.
- *
- * Medium-rail inspired: cover + title/author + progress up top, then a
- * flattened, arbitrary-depth chapter list (group headers for parts,
- * navigable rows for leaves) with generous vertical rhythm instead of dense
- * boxed rows.
- */
 export default function ChaptersDrawer({
   book,
   scrollPct,
@@ -59,18 +43,31 @@ export default function ChaptersDrawer({
     return flatten(book.sections, 0);
   }, [book.sections]);
 
+  // Mobile vs desktop layout is decided in pure CSS (the min-[860px]:
+  // breakpoint below, matching useSectionCarousel's isMobile threshold) —
+  // deliberately NOT branched on the isMobile prop the way it briefly was.
+  // isMobile starts false on every render (SSR-safe) and only flips to its
+  // real value in an effect after mount, so an isMobile-gated className
+  // swap here caused a one-frame jump from "no transform" straight into
+  // "fixed inset-0 + mid-transition transform" — the drawer flashed full
+  // screen and slid itself away, reading as "open by default" on load. A
+  // media-query breakpoint is correct from the very first paint, no flip.
   return (
     <div
-      style={{ width: open ? DRAWER_WIDTH : 0 }}
-      className="h-full max-w-[82vw] flex-none overflow-hidden transition-[width] duration-300 ease-out"
+      className={`fixed inset-0 z-[70] overflow-hidden transition-transform duration-300 ease-out ${
+        open ? "translate-x-0" : "-translate-x-full pointer-events-none"
+      } min-[860px]:static min-[860px]:inset-auto min-[860px]:z-auto min-[860px]:h-full min-[860px]:max-w-[82vw] min-[860px]:flex-none min-[860px]:translate-x-0 min-[860px]:pointer-events-auto min-[860px]:transition-[width] min-[860px]:duration-300 min-[860px]:ease-out ${
+        open ? "min-[860px]:w-[288px]" : "min-[860px]:w-0"
+      }`}
     >
       <div
-        style={{ width: DRAWER_WIDTH }}
         // z-[60] clears both the header (z-20) and the fixed "now playing"
         // bar (z-50) — safe to just stack on top of the header rather than
         // reserve space below it, since Reader.tsx hides the header outright
-        // for as long as the outline is open.
-        className="relative z-[60] h-full max-w-[82vw] bg-[var(--reader-surface)] border-r border-[var(--reader-border)] flex flex-col overflow-hidden box-border"
+        // for as long as the outline is open. Below the desktop breakpoint
+        // the outer fixed wrapper is already z-[70], clearing all of that
+        // on its own.
+        className="relative h-full w-full min-[860px]:w-[288px] min-[860px]:z-[60] min-[860px]:max-w-[82vw] bg-[var(--reader-surface)] min-[860px]:border-r min-[860px]:border-[var(--reader-border)] flex flex-col overflow-hidden box-border"
       >
         <div className="flex items-start justify-between gap-2 px-5 pt-6 pb-4 flex-none">
           <div className="flex items-start gap-3 min-w-0">
