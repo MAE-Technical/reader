@@ -6,11 +6,25 @@ import type { Theme } from "@/stores/reader-store";
 import type { SelectionAnchor } from "@/lib/reader/useTextAnnotations";
 
 type Props = {
-  /** The selection's own bounding rect (viewport coordinates) — the pill
-   * measures itself against this rather than being handed a precomputed
-   * top/left, so it can clamp/flip to stay fully on screen regardless of
-   * where in the viewport the selection landed. */
+  /** The selection's own bounding rect (viewport coordinates) — the
+   * desktop pill measures itself against this to clamp/flip and stay fully
+   * on screen. Unused on mobile (see isMobile below), which anchors to the
+   * bottom of the screen instead regardless of where the selection is. */
   anchor: SelectionAnchor;
+  /** On mobile this renders as a bar pinned to the bottom of the screen
+   * instead of a pill floating above the selection — iOS's own native
+   * selection callout (Copy/Look Up/Translate) always centers itself
+   * directly above the selection, and there's no supported way to suppress
+   * that native UI on a regular web page, so a floating pill there just
+   * fights it for the same real estate. Anchoring to the bottom instead
+   * sidesteps the collision entirely (and keeps the native drag-handles
+   * fully working, unlike clearing the native selection would). Desktop
+   * has no such native menu, so it keeps the floating pill. */
+  isMobile: boolean;
+  /** How far above the bottom edge to sit (mobile only) — stacks above the
+   * persistent NowPlayingBar when a book is being listened to, matching the
+   * same bottomOffsetPx pattern ChapterNavFooter already uses. */
+  bottomOffsetPx: number;
   /** Drives the pill's invert-against-the-page treatment below — not read
    * from the reader's own CSS theme vars, since this deliberately goes the
    * *opposite* direction of the page it floats over. */
@@ -50,15 +64,15 @@ const VIEWPORT_MARGIN = 8;
  * native OS tooltip landing on arbitrary content, and it guarantees contrast
  * regardless of what's behind it without needing per-theme tuning.
  *
- * Position is measure-then-place, not a single upfront calculation: the
- * pill's own width varies with how many actions are showing (Play/Delete
- * are conditional), so it renders once invisibly, measures itself via
- * `rootRef`, and only then computes a clamped top/left — shifted inward
- * horizontally and flipped above/below the selection vertically as needed
- * so it's always fully on screen, never obscured off an edge.
+ * Two layouts, picked via isMobile (see the Props doc above for why):
+ * desktop floats a pill above/below the selection (measure-then-place,
+ * since its width varies with which actions are showing); mobile is a
+ * fixed bottom bar, position independent of the selection entirely.
  */
 export default function SelectionMenu({
   anchor,
+  isMobile,
+  bottomOffsetPx,
   theme,
   copyLabel,
   onPlay,
@@ -72,6 +86,7 @@ export default function SelectionMenu({
   const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
 
   useLayoutEffect(() => {
+    if (isMobile) return;
     const el = rootRef.current;
     if (!el) return;
     const { width, height } = el.getBoundingClientRect();
@@ -92,7 +107,7 @@ export default function SelectionMenu({
     top = Math.max(top, VIEWPORT_MARGIN);
 
     setPos({ top, left, flipped });
-  }, [anchor]);
+  }, [isMobile, anchor]);
 
   // Tapping anywhere that isn't the pill itself and isn't inside a reading
   // section dismisses it — content-area taps already end the selection via
@@ -116,18 +131,48 @@ export default function SelectionMenu({
   const fg = inverted ? "#fdfbf8" : "#0a0a0a";
   const divider = inverted ? "rgba(255,255,255,.15)" : "rgba(0,0,0,.12)";
   const shadow = inverted ? "var(--shadow-md)" : "var(--shadow-lg)";
+  const iconSize = isMobile ? 18 : 14;
 
   const items: Item[] = [
     ...(onPlay
-      ? [{ key: "play", icon: <Play size={14} fill="currentColor" stroke="none" />, label: "Play", onClick: onPlay }]
+      ? [
+          {
+            key: "play",
+            icon: <Play size={iconSize} fill="currentColor" stroke="none" />,
+            label: "Play",
+            onClick: onPlay,
+          },
+        ]
       : []),
-    { key: "highlight", icon: <Highlighter size={14} />, label: "Highlight", onClick: onHighlight },
-    { key: "note", icon: <PenLine size={14} />, label: "Note", onClick: onNote },
-    { key: "copy", icon: <Copy size={14} />, label: copyLabel, onClick: onCopy },
+    { key: "highlight", icon: <Highlighter size={iconSize} />, label: "Highlight", onClick: onHighlight },
+    { key: "note", icon: <PenLine size={iconSize} />, label: "Note", onClick: onNote },
+    { key: "copy", icon: <Copy size={iconSize} />, label: copyLabel, onClick: onCopy },
     ...(onDelete
-      ? [{ key: "delete", icon: <Trash2 size={14} />, label: "Delete", onClick: onDelete, danger: true }]
+      ? [{ key: "delete", icon: <Trash2 size={iconSize} />, label: "Delete", onClick: onDelete, danger: true }]
       : []),
   ];
+
+  if (isMobile) {
+    return (
+      <div
+        ref={rootRef}
+        style={{ bottom: bottomOffsetPx, background: bg, boxShadow: shadow }}
+        className="reader-menu-in fixed inset-x-0 z-30 flex items-stretch justify-around select-none no-callout"
+      >
+        {items.map((item) => (
+          <button
+            key={item.key}
+            onClick={item.onClick}
+            style={{ color: item.danger ? DANGER_COLOR : fg }}
+            className="flex-1 flex flex-col items-center justify-center gap-1 bg-transparent border-none py-2.5 cursor-pointer text-[11px] font-semibold"
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        ))}
+      </div>
+    );
+  }
 
   return (
     <div

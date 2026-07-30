@@ -433,7 +433,12 @@ export default function Reader({ book }: { book: BookDocument }) {
               nextSection={nextSection}
               onPrev={prev}
               onNext={next}
-              visible={atBottom}
+              // Also hidden for as long as a selection is active — on
+              // mobile the selection pill is itself a fixed bottom bar (see
+              // SelectionMenu.tsx), and would otherwise land directly on
+              // top of this one if the reader selects text right at the
+              // end of a section.
+              visible={atBottom && !selection}
               bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
             />
 
@@ -446,6 +451,8 @@ export default function Reader({ book }: { book: BookDocument }) {
             {selection && (
               <SelectionMenu
                 anchor={selection.anchor}
+                isMobile={isMobile}
+                bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
                 theme={theme}
                 copyLabel={copyLabel}
                 onPlay={
