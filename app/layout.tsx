@@ -3,6 +3,7 @@ import { Source_Serif_4, Manrope, Literata } from "next/font/google";
 import "./globals.css";
 import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
 import NowPlayingBar from "./components/NowPlayingBar";
+import ThemeProvider from "./components/ThemeProvider";
 import NarrationEngine from "@/lib/audio/NarrationEngine";
 
 // The wider reader font picker (app/fonts.ts) is defined but not loaded here
@@ -67,7 +68,7 @@ export default function RootLayout({
       className={`${sourceSerif.variable} ${manrope.variable} ${literata.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
         <ServiceWorkerRegistration />
         <NarrationEngine />
         <NowPlayingBar />

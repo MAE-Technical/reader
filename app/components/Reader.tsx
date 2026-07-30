@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Copy, Highlighter, MessageCircle, Trash2 } from "lucide-react";
 import NotesSidebar from "./NotesSidebar";
 import SearchModal from "./SearchModal";
 import FootnotePopover from "./FootnotePopover";
@@ -9,8 +10,9 @@ import BookContent from "./reader/BookContent";
 import ReaderHeader from "./reader/ReaderHeader";
 import ChaptersDrawer from "./reader/ChaptersDrawer";
 import ChapterNavFooter from "./reader/ChapterNavFooter";
-import SelectionMenu from "./reader/SelectionMenu";
+import SelectionMenu, { type Item } from "./reader/SelectionMenu";
 import BackToCurrentButton from "./reader/BackToCurrentButton";
+import Loader from "./Loader";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
 import {
   FONT_FAMILY_VARS,
@@ -49,8 +51,6 @@ export default function Reader({ book }: { book: BookDocument }) {
     hasExistingAnnotation,
     deleteSelection,
     onNoteMarkerClick,
-    onOpenPassageNotes,
-    onEditAnnotation,
     closeNotesPanel,
   } = useTextAnnotations(book.id);
 
@@ -73,13 +73,9 @@ export default function Reader({ book }: { book: BookDocument }) {
   const hasNarration = book.narrators.length > 0;
   const isListen = audioStoreBook?.id === book.id;
 
-  const setPosition = useLibraryStore((s) => s.setPosition);
-
   const narrationAudioIndex = useNarrationStore((s) => s.audioIndex);
   const narrationAudioSection = useNarrationStore((s) => s.audioSection);
   const currentPlayingPassageId = useNarrationStore((s) => s.currentPlayingPassageId);
-  const seekToPassageForListening = useNarrationStore((s) => s.seekToPassageForListening);
-  const handleWordClick = useNarrationStore((s) => s.handleWordClick);
 
   // These stores skip automatic persist hydration (see their own comments)
   // specifically so the server and the client's first paint render
@@ -87,11 +83,21 @@ export default function Reader({ book }: { book: BookDocument }) {
   // right after mount, is what actually restores them. reader-identity-
   // store's rehydrate must land before ensureReaderId, so a returning
   // reader's existing id is reused rather than shadowed by a fresh one.
+  // `hydrated` gates the loading overlay below — without it, the reader
+  // would paint once with default theme/font/position and then visibly
+  // snap to the real persisted values a moment later.
+  const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
-    useReaderStore.persist.rehydrate();
-    useLibraryStore.persist.rehydrate();
-    useReaderIdentityStore.persist.rehydrate();
-    useReaderIdentityStore.getState().ensureReaderId();
+    Promise.all([
+      useReaderStore.persist.rehydrate(),
+      useLibraryStore.persist.rehydrate(),
+      useReaderIdentityStore.persist.rehydrate(),
+    ])
+      .catch(() => {}) // a storage read failure shouldn't hang the reader
+      .then(() => {
+        useReaderIdentityStore.getState().ensureReaderId();
+        setHydrated(true);
+      });
   }, []);
 
   const fontSize = fontSizePxFromScale(fontSizeScale);
@@ -171,10 +177,11 @@ export default function Reader({ book }: { book: BookDocument }) {
   // Any open modal/panel (or an active selection menu) suspends the
   // carousel's own keyboard/swipe handling, so typing in search or
   // arrow-keying through a picker never turns the page underneath. The
-  // chapters drawer is deliberately excluded — it's a persistent push-
-  // drawer now, not a blocking overlay, so the reader stays fully
-  // navigable (swipe/keyboard) while it's open.
-  const navDisabled = searchOpen || Boolean(notesPanel) || Boolean(noteOpen) || Boolean(selection);
+  // chapters drawer and the notes panel are both deliberately excluded —
+  // neither is a blocking overlay (no scrim, see the notes-panel render
+  // below), so the reader stays fully navigable (scroll/swipe/keyboard)
+  // with either left open, same as the chapters drawer already was.
+  const navDisabled = searchOpen || Boolean(noteOpen) || Boolean(selection);
 
   const {
     activeIndex,
@@ -205,13 +212,19 @@ export default function Reader({ book }: { book: BookDocument }) {
     disabled: navDisabled,
   });
 
-  useResumeScroll({
+  const resumeReady = useResumeScroll({
     book,
     sectionsById,
     orderedSections,
     goTo,
     getSlideEl,
   });
+
+  // Gates the full-screen loader below — the reader isn't considered ready
+  // until every piece of state it renders from (theme/font/position, via
+  // `hydrated`; scroll position, via `resumeReady`) reflects the reader's
+  // actual saved data rather than a first-paint default.
+  const isReady = hydrated && resumeReady;
 
   // Plain reading (no audio) had no position-save path at all — only
   // listen-mode's own effects (now in NarrationEngine) ever called
@@ -285,25 +298,6 @@ export default function Reader({ book }: { book: BookDocument }) {
     });
   }, [goTo, narrationAudioIndex, currentPlayingPassageId, narrationAudioSection, getSlideEl]);
 
-  // Starts listen mode from a specific passage, whether or not this book
-  // is already the one playing — sets the resume target first, then opens
-  // the book; NarrationEngine's own resume-to-stored-position effect (see
-  // its comment) picks that exact spot up on the very next render, rather
-  // than this needing to reach into the audio element itself.
-  const startListeningFromPassage = useCallback(
-    (sectionId: string, passageId: string) => {
-      const targetSection = sectionsById.get(sectionId);
-      const narratorId = book.narrators[0]?.id;
-      const targetTrack = targetSection?.audio?.narratorTracks.find((t) => t.narratorId === narratorId);
-      if (!targetSection || !targetTrack) return;
-      const passageIndex = targetSection.passages.findIndex((p) => p.id === passageId);
-      const word = (targetSection.audio?.words ?? []).find((w) => w.passageId === passageId);
-      if (passageIndex >= 0) setPosition(book.id, { sectionId, passageIndex, audioTimeMs: word?.startMs ?? 0 });
-      openBook(book);
-    },
-    [sectionsById, book, setPosition, openBook]
-  );
-
   const activeSectionForSidebar = activeSectionId ?? book.spine[0];
   const currentSection = orderedSections[activeIndex];
   const currentSectionLabel = currentSection ? sectionLabel(currentSection) : null;
@@ -331,13 +325,13 @@ export default function Reader({ book }: { book: BookDocument }) {
     }, 800);
   };
 
-  // The outline forces the header away for as long as it's open (rather
-  // than the drawer trying to reserve/track the header's own scroll-driven
-  // show/hide, which left a dead gap when the two states disagreed) — the
-  // underlying chromeHidden scroll tracking keeps running regardless, so
-  // closing the drawer returns to whatever visibility plain scrolling
-  // would already have produced.
-  const chromeVisible = !chromeHidden && !chaptersOpen;
+  // The outline (and, same reasoning, the notes panel) forces the header
+  // away for as long as either is open (rather than trying to reserve/
+  // track the header's own scroll-driven show/hide, which left a dead gap
+  // when the two states disagreed) — the underlying chromeHidden scroll
+  // tracking keeps running regardless, so closing either one returns to
+  // whatever visibility plain scrolling would already have produced.
+  const chromeVisible = !chromeHidden && !chaptersOpen && !notesPanel;
   const railInsetPx = isMobile ? 12 : 16;
   // Bumped from the old single-line top bar to fit a book-title +
   // current-section subtitle now that the icon rail has merged into it.
@@ -377,10 +371,12 @@ export default function Reader({ book }: { book: BookDocument }) {
           scrollPct={scrollPct}
         />
 
-        {/* Drawer + content column live side by side — the drawer is a
-            persistent push-drawer (a flex sibling with an animated width),
-            not a scrim overlay, so opening it narrows the reading column
-            instead of blocking it. */}
+        {/* Chapters drawer, content column, and notes panel live side by
+            side — both drawers are persistent push-drawers (flex siblings
+            with an animated width) on desktop, not scrim overlays, so
+            opening either narrows the reading column instead of blocking
+            it. See the notes panel's own comment below for its mobile
+            fallback (a bottom sheet, since there's no room to push there). */}
         <div className="w-full h-full flex overflow-hidden">
           <ChaptersDrawer
             book={book}
@@ -401,7 +397,6 @@ export default function Reader({ book }: { book: BookDocument }) {
           >
             <BookContent
               book={book}
-              isMobile={isMobile}
               activeIndex={activeIndex}
               registerSlide={registerSlide}
               onPointerDown={onPointerDown}
@@ -415,17 +410,13 @@ export default function Reader({ book }: { book: BookDocument }) {
               notesIndexSectionId={notesIndexSectionId}
               notesIndexGroups={notesIndexGroups}
               getAnnotations={getAnnotations}
-              isListen={isListen}
               fontSize={fontSize}
               lineHeight={lineHeight}
               fontFamilyVar={fontFamilyVar}
               notesById={notesById}
               onNoteClick={onNoteClick}
-              onWordClick={handleWordClick}
-              seekToPassageForListening={seekToPassageForListening}
               onTextSelect={onTextSelect}
               onNoteMarkerClick={onNoteMarkerClick}
-              onOpenPassageNotes={onOpenPassageNotes}
             />
 
             <ChapterNavFooter
@@ -445,67 +436,29 @@ export default function Reader({ book }: { book: BookDocument }) {
             {/* Selection menu is a fixed-position overlay, so it doesn't need
                 to live inside BookContent's scrollable tree; keeping it here
                 means selecting text never forces the (memoized) book content
-                to re-render. Selecting text is the *only* way to start a
-                highlight/note/copy (per product decision) — there's no
-                separate click-based menu on already-marked text. */}
+                to re-render. Selecting text (some or all of an existing
+                mark, or fresh) is the only way to reach the full action set
+                — Highlight/Note/Copy/Delete; clicking an existing mark
+                instead (PassageContent's onNoteMarkerClick) just opens its
+                thread directly, no menu. */}
             {selection && (
               <SelectionMenu
                 anchor={selection.anchor}
                 isMobile={isMobile}
                 bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
                 theme={theme}
-                copyLabel={copyLabel}
-                onPlay={
-                  hasNarration
-                    ? () => {
-                        const passageId = selection.ranges[0].passageId;
-                        const sectionId = passageLookup.sectionOf.get(passageId);
-                        if (sectionId) startListeningFromPassage(sectionId, passageId);
-                        dismissSelection();
-                      }
-                    : undefined
+                items={
+                  [
+                    { key: "highlight", icon: <Highlighter size={isMobile ? 18 : 14} />, label: "Highlight", onClick: highlightSelection },
+                    { key: "note", icon: <MessageCircle size={isMobile ? 18 : 14} />, label: "Note", onClick: noteFromSelection },
+                    { key: "copy", icon: <Copy size={isMobile ? 18 : 14} />, label: copyLabel, onClick: menuCopy },
+                    ...(hasExistingAnnotation
+                      ? [{ key: "delete", icon: <Trash2 size={isMobile ? 18 : 14} />, label: "Delete", onClick: deleteSelection, danger: true }]
+                      : []),
+                  ] as Item[]
                 }
-                onHighlight={highlightSelection}
-                onNote={noteFromSelection}
-                onDelete={hasExistingAnnotation ? deleteSelection : undefined}
-                onCopy={menuCopy}
                 onDismiss={dismissSelection}
               />
-            )}
-
-            {notesPanel && (
-              <>
-                <div
-                  onClick={closeNotesPanel}
-                  // z-[65]/z-[70] (not z-40/z-50) so this panel — and its
-                  // scrim — sit above the fixed "now playing" bar (z-50)
-                  // rather than being cut off behind it while audio plays.
-                  className={`absolute inset-0 z-[65] ${isMobile ? "bg-black/45" : "bg-black/25"}`}
-                />
-                <div
-                  className={`absolute top-0 bottom-0 z-[70] ${isMobile ? "left-0 w-full" : "right-0 w-95"}`}
-                >
-                  <NotesSidebar
-                    bookId={book.id}
-                    passageId={notesPanel.passageId}
-                    getPassageText={getPassageText}
-                    mode={notesPanel.mode}
-                    annotationId={notesPanel.mode === "edit" ? notesPanel.annotationId : undefined}
-                    pendingRanges={notesPanel.mode === "edit" ? notesPanel.ranges : undefined}
-                    editingNoteId={notesPanel.mode === "edit" ? notesPanel.editingNoteId : undefined}
-                    panelType={isMobile ? "sheet" : "side"}
-                    citation={
-                      currentSectionLabel
-                        ? `${book.metadata.title} · ${currentSectionLabel}`
-                        : book.metadata.title
-                    }
-                    onEditAnnotation={(annotationId, noteId) =>
-                      onEditAnnotation(notesPanel.passageId, annotationId, noteId)
-                    }
-                    onClose={closeNotesPanel}
-                  />
-                </div>
-              </>
             )}
 
             {searchOpen && (
@@ -535,12 +488,66 @@ export default function Reader({ book }: { book: BookDocument }) {
               />
             )}
           </div>
+
+          {/* Notes panel — a push-drawer on desktop (mirrors ChaptersDrawer,
+              opposite side: a flex sibling with an animated width that
+              narrows the content column instead of floating over it) and a
+              non-blocking bottom-sheet overlay on mobile, where there's no
+              room to push sideways. The min-[860px] breakpoint (not the
+              isMobile prop) is what picks between them, same reasoning as
+              ChaptersDrawer's own: isMobile is false on every first render
+              and only flips after mount, so a JS-gated swap here would
+              flash the wrong layout for a frame. Always mounted (even with
+              nothing to show) so the width can actually transition instead
+              of popping open/closed. */}
+          <div
+            className={`fixed inset-0 z-[70] overflow-hidden pointer-events-none min-[860px]:static min-[860px]:inset-auto min-[860px]:h-full min-[860px]:flex-none min-[860px]:transition-[width] min-[860px]:duration-300 min-[860px]:ease-out ${
+              notesPanel ? "min-[860px]:w-95" : "min-[860px]:w-0"
+            }`}
+          >
+            {notesPanel && (
+              <NotesSidebar
+                bookId={book.id}
+                passageId={notesPanel.passageId}
+                getPassageText={getPassageText}
+                annotationId={notesPanel.annotationId}
+                pendingRanges={notesPanel.ranges}
+                editingNoteId={notesPanel.editingNoteId}
+                panelType={isMobile ? "sheet" : "side"}
+                citation={
+                  currentSectionLabel ? `${book.metadata.title} · ${currentSectionLabel}` : book.metadata.title
+                }
+                onClose={closeNotesPanel}
+              />
+            )}
+          </div>
         </div>
       </div>
 
       {currentPlayingPassageId && awayFromNarration && (
         <BackToCurrentButton bottom={playerHeight + 16} direction={nudgeDirection} onClick={jumpToNarration} />
       )}
+
+      {/* Masks the reader until theme/font/position (hydrated) and scroll
+          position (resumeReady) all reflect real saved state, so nothing
+          the reader would notice snapping into place is ever visible. Loader
+          paints its own background from the same --reader-bg token this
+          div's data-reader-theme ancestor already provides, so it's already
+          showing the right theme by the time it's revealed. Kept mounted
+          (not conditionally rendered) so the opacity transition actually
+          plays. */}
+      <div
+        aria-hidden={isReady}
+        className={`absolute inset-0 z-[100] transition-opacity duration-300 ${
+          isReady ? "opacity-0 pointer-events-none" : "opacity-100"
+        }`}
+        style={{
+          paddingTop: "env(safe-area-inset-top)",
+          paddingBottom: "env(safe-area-inset-bottom)",
+        }}
+      >
+        <Loader label="Loading book…" />
+      </div>
     </div>
   );
 }

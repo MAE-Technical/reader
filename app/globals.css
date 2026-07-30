@@ -50,11 +50,23 @@
   --shadow-lg: 0 16px 40px rgba(20, 17, 14, 0.16);
 }
 
+/* Plain layout constants (not design tokens Tailwind should turn into
+   utilities, so kept out of @theme above) — shared by the app shell's
+   sidebar width and anything that needs to reserve space for or avoid it
+   (AppShell's content padding, NowPlayingBar's desktop left-offset). */
+:root {
+  --app-sidebar-w: 220px;
+}
+
 html,
 body {
   height: 100%;
   margin: 0;
-  background: var(--color-sand-50);
+  /* --reader-bg isn't defined until ThemeProvider's effect sets
+     data-reader-theme on <html> post-mount (see its own comment) — the
+     fallback is what SSR/first paint uses in the meantime, same neutral
+     as before. */
+  background: var(--reader-bg, var(--color-sand-50));
   /* Kills the gray flash Safari/Android paint on every tap — standard PWA
      polish, doubly relevant once this ships inside a WKWebView via
      Capacitor (which shows the same flash by default). */
@@ -101,10 +113,7 @@ body {
    both themes, so it never blends into either page. There is no passage-
    level "now playing" wash anymore (per product decision, note-redesign.md
    round 2) — narration highlighting is word-level only; the rest of the
-   sentence stays plain. --reader-word-hover-* is the lighter preview shown
-   when hovering any *other* word (a paler tint of --reader-highlight's warm
-   hue, not the cool now-playing blue — hovering a word you might click is a
-   different concept from the one actually being read aloud). */
+   sentence stays plain. */
 [data-reader-theme="light"] {
   --reader-bg: #ffffff;
   /* Slightly off-white — pure white bg with pure white surfaces gave every
@@ -123,10 +132,13 @@ body {
   --reader-highlight: var(--color-highlight);
   --reader-highlight-border: var(--color-brand-400);
   --reader-note-accent: var(--color-brand-500);
+  /* Foreground for content sitting *on top of* --reader-note-accent (the
+     inline note-glyph badge) — white reads cleanly against brand-500's dark
+     terracotta here; the dark theme's lighter --color-brand-300 needs the
+     opposite (near-black) instead, see below. */
+  --reader-note-accent-fg: #ffffff;
   --reader-active-word-bg: #3d6fa8;
   --reader-active-word-text: #ffffff;
-  --reader-word-hover-bg: var(--color-brand-100);
-  --reader-word-hover-text: var(--color-brand-700);
 }
 
 [data-reader-theme="dark"] {
@@ -143,26 +155,12 @@ body {
   --reader-highlight: rgba(246, 228, 206, 0.22);
   --reader-highlight-border: var(--color-brand-400);
   --reader-note-accent: var(--color-brand-300);
+  /* --color-brand-300 is a pale apricot, not dark enough for white to read
+     against — near-black ink instead (matches the Claude Design mockup's
+     dark-theme glyph exactly). */
+  --reader-note-accent-fg: #14110e;
   --reader-active-word-bg: #4a7fbd;
   --reader-active-word-text: #ffffff;
-  --reader-word-hover-bg: rgba(226, 140, 96, 0.1);
-  --reader-word-hover-text: #f5f5f5;
-}
-
-/* Hover-preview for any narratable word (PassageContent.tsx) — a paler tint
-   of --reader-active-word-bg/text (the *currently playing* word), not the
-   same solid color, so hovering some other word is never confused with the
-   one actually being read aloud. A plain CSS :hover rule rather than React
-   hover state — cheap even across a whole book's worth of word spans, and
-   it never fights the inline style the actually-playing word carries
-   (inline style always wins regardless, so hovering that exact word still
-   shows the solid "now playing" treatment, not this preview). */
-.reader-word-hover:hover {
-  background: var(--reader-word-hover-bg);
-  color: var(--reader-word-hover-text);
-  border-radius: 4px;
-  padding: 1px 3px;
-  margin: -1px -3px;
 }
 
 /* The browser's native drag-selection wash, recolored to the same warm
@@ -223,4 +221,17 @@ body {
 }
 .reader-menu-in {
   animation: reader-menu-in 140ms ease;
+}
+
+/* The app-wide loading indicator (app/components/Loader.tsx) — a plain
+   rotating ring, no animation library, same convention as the two keyframes
+   above. Not reader-specific: used by every route's loading.tsx and by the
+   reader's own client-side hydration gate. */
+@keyframes loader-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.loader-spin {
+  animation: loader-spin 800ms linear infinite;
 }

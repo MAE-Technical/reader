@@ -5,18 +5,15 @@ import { computeSelectionRanges } from "./annotationSelection";
 export type SelectionAnchor = { top: number; bottom: number; left: number; right: number };
 export type SelectionState = { ranges: AnnotationRange[]; anchor: SelectionAnchor };
 
-export type NotesPanelState =
-  | { mode: "list"; passageId: string }
-  | {
-      mode: "edit";
-      passageId: string;
-      annotationId?: string;
-      ranges?: AnnotationRange[];
-      /** Set only when editing one specific existing note entry in place
-       * (from the list's own per-entry Edit) — absent, the panel composes
-       * a fresh note to append to the thread instead of overwriting one. */
-      editingNoteId?: string;
-    };
+export type NotesPanelState = {
+  passageId: string;
+  annotationId?: string;
+  ranges?: AnnotationRange[];
+  /** Set only when editing one specific existing note entry in place
+   * (from a per-entry Edit) — absent, the panel composes a fresh note to
+   * append to the thread instead of overwriting one. */
+  editingNoteId?: string;
+};
 
 /**
  * Everything about highlighting and note-taking on passage text, in one
@@ -92,7 +89,7 @@ export function useTextAnnotations(bookId: string) {
     if (!selection) return;
     const { ranges } = selection;
     const existing = getForPassage(bookId, ranges[0].passageId).find((a) => sameRanges(a.ranges, ranges));
-    setNotesPanel({ mode: "edit", passageId: ranges[0].passageId, annotationId: existing?.id, ranges });
+    setNotesPanel({ passageId: ranges[0].passageId, annotationId: existing?.id, ranges });
     setSelection(null);
   }, [selection, bookId, getForPassage, sameRanges]);
 
@@ -115,22 +112,14 @@ export function useTextAnnotations(bookId: string) {
     setSelection(null);
   }, [selection, existingForSelection, bookId, removeHighlight, deleteNoteEntry]);
 
-  // A noted range's inline marker — opens its whole thread (not one
-  // specific entry, since a range can carry several notes), composer ready
-  // to append. Highlight-only ranges get no click handler at all
-  // (PassageContent never calls this for them).
+  // Clicking any existing mark (highlight-only or noted) — opens its thread
+  // directly, no intermediate menu. Removing a highlight or deleting a note
+  // stays a *selection*-driven action (re-select the marked text, partially
+  // or in full, and use the pill's Highlight/Delete — see selection/
+  // deleteSelection above), so a plain click has exactly one job: read/add
+  // to this span's notes.
   const onNoteMarkerClick = useCallback((passageId: string, annotationId: string) => {
-    setNotesPanel({ mode: "edit", passageId, annotationId });
-  }, []);
-
-  // The passage gutter marker — every note touching this passage at once.
-  const onOpenPassageNotes = useCallback((passageId: string) => {
-    setNotesPanel({ mode: "list", passageId });
-  }, []);
-
-  // The list view's own per-entry "Edit" — targets one specific note.
-  const onEditAnnotation = useCallback((passageId: string, annotationId: string, noteId: string) => {
-    setNotesPanel({ mode: "edit", passageId, annotationId, editingNoteId: noteId });
+    setNotesPanel({ passageId, annotationId });
   }, []);
 
   const closeNotesPanel = useCallback(() => setNotesPanel(null), []);
@@ -146,8 +135,6 @@ export function useTextAnnotations(bookId: string) {
     hasExistingAnnotation: Boolean(existingForSelection),
     deleteSelection,
     onNoteMarkerClick,
-    onOpenPassageNotes,
-    onEditAnnotation,
     closeNotesPanel,
   };
 }

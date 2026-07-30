@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BookDocument, Section } from "@/lib/book/schema";
 import { useLibraryStore } from "@/stores/library-store";
 
@@ -10,6 +10,10 @@ import { useLibraryStore } from "@/stores/library-store";
  * narration/audio considers "current") lives in library-store and needs no
  * separate seeding here — the global narration engine (lib/audio/
  * NarrationEngine.tsx) reads the same per-book position directly.
+ *
+ * Returns whether the resume attempt (successful or not — an unsaved book
+ * has nothing to resume) has finished, so a caller can hold off revealing
+ * the reader until it has.
  */
 export function useResumeScroll({
   book,
@@ -26,6 +30,7 @@ export function useResumeScroll({
 }) {
   const getPosition = useLibraryStore((s) => s.getPosition);
   const hasScrolledToResumeRef = useRef(false);
+  const [resumed, setResumed] = useState(false);
 
   useEffect(() => {
     if (hasScrolledToResumeRef.current) return;
@@ -34,7 +39,11 @@ export function useResumeScroll({
     const passageId = stored ? sectionsById.get(stored.sectionId)?.passages[stored.passageIndex]?.id : undefined;
     if (!stored || sectionIndex < 0 || !passageId) {
       hasScrolledToResumeRef.current = true;
-      return;
+      // Deferred a frame (rather than set synchronously here) purely to
+      // satisfy the no-setState-in-effect-body rule — nothing here depends
+      // on timing, unlike the resume-found branch below.
+      const raf = requestAnimationFrame(() => setResumed(true));
+      return () => cancelAnimationFrame(raf);
     }
     goTo(sectionIndex, { animate: false });
     const raf = requestAnimationFrame(() => {
@@ -42,8 +51,11 @@ export function useResumeScroll({
         ?.querySelector(`[data-passage-id="${passageId}"]`)
         ?.scrollIntoView({ behavior: "auto", block: "start" });
       hasScrolledToResumeRef.current = true;
+      setResumed(true);
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [book.id, orderedSections.length]);
+
+  return resumed;
 }

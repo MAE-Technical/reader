@@ -73,7 +73,7 @@ export default function ReaderHeader({
     >
       <Tooltip label="Back to library" side="bottom" align="start">
         <Link
-          href="/"
+          href="/library"
           aria-label="Back to library"
           className="w-9 h-9 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] flex items-center justify-center text-[var(--reader-text)] no-underline flex-none"
         >

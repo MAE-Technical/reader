@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
-import { Copy, Highlighter, PenLine, Play, Trash2 } from "lucide-react";
 import type { Theme } from "@/stores/reader-store";
 import type { SelectionAnchor } from "@/lib/reader/useTextAnnotations";
+
+export type Item = { key: string; icon: ReactNode; label: string; onClick: () => void; danger?: boolean };
 
 type Props = {
   /** The selection's own bounding rect (viewport coordinates) — the
@@ -29,22 +30,14 @@ type Props = {
    * from the reader's own CSS theme vars, since this deliberately goes the
    * *opposite* direction of the page it floats over. */
   theme: Theme;
-  copyLabel: string;
-  /** Omitted entirely when the book has no narrator — no Play option is
-   * shown, rather than one that would fall back to a live-TTS voice. */
-  onPlay?: () => void;
-  onHighlight: () => void;
-  onNote: () => void;
-  onCopy: () => void;
-  /** Only present when this selection exactly matches an existing
-   * highlight/note — removes the whole thing (highlight wash + every note
-   * in its thread) in one action, discoverable via the pill itself rather
-   * than relying on re-selecting the same range and hitting Highlight. */
-  onDelete?: () => void;
+  /** Caller builds its own icon/label/action list — this component only
+   * knows how to lay one out and float it, not what it means. Two call
+   * sites in Reader.tsx: the fresh-selection pill (Highlight/Note/Copy/
+   * Delete) and the click-an-existing-mark popover (Remove highlight/Add
+   * note or View thread), each with a different action set. */
+  items: Item[];
   onDismiss: () => void;
 };
-
-type Item = { key: string; icon: ReactNode; label: string; onClick: () => void; danger?: boolean };
 
 // A consistent, theme-independent danger red — the inverted pill already
 // guarantees contrast against the page behind it, so this just needs to
@@ -54,10 +47,11 @@ const DANGER_COLOR = "#f26b6b";
 const VIEWPORT_MARGIN = 8;
 
 /**
- * Selection menu (Play/Highlight/Note/Copy) shown on text selection. A
- * fixed-position overlay rendered outside BookContent's scrollable tree, so
- * selecting text never forces the (memoized) book content to re-render.
- * No Share — sharing is out of scope for now (per product decision).
+ * Floating action pill, shown on text selection or on clicking an existing
+ * mark. A fixed-position overlay rendered outside BookContent's scrollable
+ * tree, so selecting text never forces the (memoized) book content to
+ * re-render. No Share — sharing is out of scope for now (per product
+ * decision).
  *
  * Inverts against the reading page (note-redesign.md): a light page gets a
  * near-black pill, a dark page gets a near-white one — the same idiom as a
@@ -69,19 +63,7 @@ const VIEWPORT_MARGIN = 8;
  * since its width varies with which actions are showing); mobile is a
  * fixed bottom bar, position independent of the selection entirely.
  */
-export default function SelectionMenu({
-  anchor,
-  isMobile,
-  bottomOffsetPx,
-  theme,
-  copyLabel,
-  onPlay,
-  onHighlight,
-  onNote,
-  onCopy,
-  onDelete,
-  onDismiss,
-}: Props) {
+export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme, items, onDismiss }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
 
@@ -131,26 +113,6 @@ export default function SelectionMenu({
   const fg = inverted ? "#fdfbf8" : "#0a0a0a";
   const divider = inverted ? "rgba(255,255,255,.15)" : "rgba(0,0,0,.12)";
   const shadow = inverted ? "var(--shadow-md)" : "var(--shadow-lg)";
-  const iconSize = isMobile ? 18 : 14;
-
-  const items: Item[] = [
-    ...(onPlay
-      ? [
-          {
-            key: "play",
-            icon: <Play size={iconSize} fill="currentColor" stroke="none" />,
-            label: "Play",
-            onClick: onPlay,
-          },
-        ]
-      : []),
-    { key: "highlight", icon: <Highlighter size={iconSize} />, label: "Highlight", onClick: onHighlight },
-    { key: "note", icon: <PenLine size={iconSize} />, label: "Note", onClick: onNote },
-    { key: "copy", icon: <Copy size={iconSize} />, label: copyLabel, onClick: onCopy },
-    ...(onDelete
-      ? [{ key: "delete", icon: <Trash2 size={iconSize} />, label: "Delete", onClick: onDelete, danger: true }]
-      : []),
-  ];
 
   if (isMobile) {
     return (

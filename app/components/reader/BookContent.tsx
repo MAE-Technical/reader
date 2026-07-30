@@ -1,7 +1,6 @@
 "use client";
 
 import { memo } from "react";
-import { Highlighter, MessageSquare } from "lucide-react";
 import { ImagePassageBlock, PassageText, type NoteLookup } from "../PassageContent";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
 import type { Annotation } from "@/stores/library-store";
@@ -16,7 +15,6 @@ function headingFontBump(level: number | undefined): number {
 
 type BookContentProps = {
   book: BookDocument;
-  isMobile: boolean;
   activeIndex: number;
   registerSlide: (id: string) => (el: HTMLDivElement | null) => void;
   onPointerDown: (e: React.PointerEvent) => void;
@@ -30,24 +28,17 @@ type BookContentProps = {
   notesIndexSectionId: string | null;
   notesIndexGroups: { heading: Passage; notes: BookDocument["notes"] }[] | null;
   getAnnotations: (passageId: string) => Annotation[];
-  isListen: boolean;
   fontSize: number;
   lineHeight: number;
   fontFamilyVar: string;
   notesById: Map<string, NoteLookup>;
   onNoteClick: (note: NoteLookup, target: HTMLElement) => void;
-  onWordClick: (passageId: string, wordIndex: number) => void;
-  seekToPassageForListening: (sectionId: string, passageId: string) => void;
   /** Fires on the *section's* own mouseup (not per-passage) so a drag that
    * crosses paragraph boundaries is captured as one selection. */
   onTextSelect: (sectionEl: HTMLElement) => void;
-  /** A plain click on a noted range or its remaining underline — opens
-   * that one note directly. Highlight-only ranges get no click handler. */
+  /** A plain click on any existing mark — highlight-only or noted alike —
+   * opening its thread directly. */
   onNoteMarkerClick: (passageId: string, annotationId: string) => void;
-  /** The gutter marker — opens every note on this passage at once (a
-   * passage can hold several independent ranges), distinct from clicking
-   * one range inline via onNoteMarkerClick above. */
-  onOpenPassageNotes: (passageId: string) => void;
 };
 
 /**
@@ -66,7 +57,6 @@ type BookContentProps = {
  */
 const BookContent = memo(function BookContent({
   book,
-  isMobile,
   activeIndex,
   registerSlide,
   onPointerDown,
@@ -80,17 +70,13 @@ const BookContent = memo(function BookContent({
   notesIndexSectionId,
   notesIndexGroups,
   getAnnotations,
-  isListen,
   fontSize,
   lineHeight,
   fontFamilyVar,
   notesById,
   onNoteClick,
-  onWordClick,
-  seekToPassageForListening,
   onTextSelect,
   onNoteMarkerClick,
-  onOpenPassageNotes,
 }: BookContentProps) {
   const firstSectionId = orderedSections[0]?.id;
   const section = orderedSections[activeIndex];
@@ -183,28 +169,16 @@ const BookContent = memo(function BookContent({
               ))
             : section.passages.map((raw) => {
                 const annotations = getAnnotations(raw.id);
-                const hasNote = annotations.some((a) => a.notes.length > 0);
-                const noteCount = annotations.reduce((sum, a) => sum + a.notes.length, 0);
                 const isHeading = raw.type === "heading";
                 const headingBump = isPartDivider ? 14 : headingFontBump(raw.level);
 
                 const passageText = (
                   <p
-                    onClick={() => {
-                      if (!isListen) return;
-                      // Don't hijack an in-progress text
-                      // selection (highlight/note gesture) —
-                      // only treat a plain click as "narrate
-                      // from here".
-                      const sel = window.getSelection();
-                      if (sel && !sel.isCollapsed && sel.toString().trim()) return;
-                      seekToPassageForListening(section.id, raw.id);
-                    }}
                     // select-text: pins this paragraph as its own explicit
                     // selection root (see the .no-callout comment in
                     // globals.css) — the standard WebKit fix for long-press
                     // selection ballooning past the tapped word.
-                    className={`m-0 font-serif rounded-xs select-text ${isListen ? "cursor-pointer" : ""}`}
+                    className="m-0 font-serif rounded-xs select-text"
                     style={{
                       ...(isHeading
                         ? {
@@ -256,7 +230,6 @@ const BookContent = memo(function BookContent({
                       // synthesis per section (or timestamps are corrected
                       // against real decoded chunk durations).
                       activeWordIndex={undefined}
-                      onWordClick={isListen ? onWordClick : undefined}
                     />
                   </p>
                 );
@@ -271,54 +244,7 @@ const BookContent = memo(function BookContent({
                       marginBottom: `${((24 * lineHeight) / 1.7).toFixed(0)}px`,
                     }}
                   >
-                    {raw.type === "image" ? (
-                      <ImagePassageBlock passage={raw} />
-                    ) : isHeading || annotations.length === 0 ? (
-                      // No gutter marker on headings (a centered, all-caps
-                      // part divider would read as broken with an
-                      // asymmetric left gutter) or on a passage with
-                      // nothing marked yet — selecting text is the only way
-                      // to start a highlight/note (per product decision),
-                      // so there's no "you could add one here" affordance
-                      // to surface ahead of time. Still selectable via the
-                      // tooltip like any passage.
-                      passageText
-                    ) : (
-                      // Absolutely positioned so it never pushes the
-                      // paragraph itself inward — hangs in the left margin
-                      // instead of consuming layout space the way an inline
-                      // flex column would.
-                      <div className="relative">
-                        <button
-                          onClick={() => onOpenPassageNotes(raw.id)}
-                          title={hasNote ? "View notes on this passage" : "Highlighted"}
-                          // Mobile's narrower content padding (px-5, 20px —
-                          // see contentPad in Reader.tsx) has less room in
-                          // the left gutter than desktop's px-10 (40px): the
-                          // desktop-sized marker at -left-7 (28px) overhung
-                          // past the edge of that padding and got clipped/
-                          // obscured. Smaller marker, smaller offset on
-                          // mobile so it sits fully inside the gutter.
-                          className={`absolute cursor-pointer flex items-center justify-center flex-none border-none text-brand-600 select-none no-callout ${
-                            isMobile
-                              ? `top-0.5 -left-5 ${hasNote ? "w-4.5 h-4.5 rounded-sm bg-brand-100" : "w-4 h-4 rounded-full bg-brand-100"}`
-                              : `top-0.5 -left-7 ${hasNote ? "w-5.5 h-5.5 rounded-sm bg-brand-100" : "w-5 h-5 rounded-full bg-brand-100"}`
-                          }`}
-                        >
-                          {hasNote ? (
-                            <MessageSquare size={isMobile ? 10 : 12} />
-                          ) : (
-                            <Highlighter size={isMobile ? 9 : 11} />
-                          )}
-                          {noteCount > 0 && (
-                            <span className="absolute -top-1.5 -right-1.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-brand-500 text-[8px] font-semibold leading-none text-white flex items-center justify-center">
-                              {noteCount}
-                            </span>
-                          )}
-                        </button>
-                        {passageText}
-                      </div>
-                    )}
+                    {raw.type === "image" ? <ImagePassageBlock passage={raw} /> : passageText}
                   </div>
                 );
               })}

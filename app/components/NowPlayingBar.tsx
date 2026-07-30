@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import AudioPlayer from "./AudioPlayer";
 import { useAudioStore } from "@/stores/audio-store";
 import { useNarrationStore } from "@/stores/narration-store";
@@ -36,6 +36,12 @@ export default function NowPlayingBar() {
   const skipToNextSection = useNarrationStore((s) => s.skipToNextSection);
   const handleSeek = useNarrationStore((s) => s.handleSeek);
   const router = useRouter();
+  // Every route except the reader itself now has a persistent left sidebar
+  // (app/components/shell/AppSidebar.tsx) at the same 860px breakpoint —
+  // full-width here would run this bar underneath it, covering the
+  // sidebar's own bottom-pinned theme/logout controls.
+  const pathname = usePathname();
+  const hasSidebar = !pathname.startsWith("/read");
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -52,7 +58,13 @@ export default function NowPlayingBar() {
   if (!book) return null;
 
   return (
-    <div ref={containerRef} data-reader-theme={theme} className="fixed bottom-0 left-0 right-0 z-50">
+    <div
+      ref={containerRef}
+      data-reader-theme={theme}
+      className={`fixed bottom-0 left-0 right-0 z-50 ${
+        hasSidebar ? "min-[860px]:left-[var(--app-sidebar-w)]" : ""
+      }`}
+    >
       <AudioPlayer
         variant="full"
         bookTitle={book.metadata.title}

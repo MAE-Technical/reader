@@ -1,6 +1,7 @@
 "use client";
 
 import { memo } from "react";
+import { MessageCircle } from "lucide-react";
 import type { Mark, Passage } from "@/lib/book/schema";
 import type { Annotation } from "@/stores/library-store";
 
@@ -13,7 +14,18 @@ type Segment = {
   annotationId?: string;
 };
 type WordRange = { start: number; end: number };
-type LocalAnnotation = { id: string; start: number; end: number; highlighted: boolean; hasNote: boolean };
+type LocalAnnotation = {
+  id: string;
+  start: number;
+  end: number;
+  highlighted: boolean;
+  hasNote: boolean;
+  noteCount: number;
+  /** True when this passage is the last one touched by the annotation's own
+   * ranges[] (selection order) — a multi-passage highlight/note renders its
+   * wash in every passage it touches, but the glyph only once, here. */
+  isTail: boolean;
+};
 
 function computeWordRanges(text: string): WordRange[] {
   const ranges: WordRange[] = [];
@@ -86,30 +98,14 @@ function renderLeaf(
   key: number,
   notesById: Map<string, NoteLookup>,
   onNoteClick: (note: NoteLookup, target: HTMLElement) => void,
-  activeWordIndex: number | undefined,
-  onWordClick: ((wordIndex: number) => void) | undefined
+  activeWordIndex: number | undefined
 ) {
   const activeStyle =
     seg.wordIndex !== undefined && seg.wordIndex === activeWordIndex ? ACTIVE_WORD_STYLE : undefined;
 
-  // Hover-to-preview, click-to-play-from-here — only wired up for word-
-  // bearing segments (not the plain whitespace/punctuation gaps between
-  // them), and only when a handler was actually passed in, so passages
-  // rendered without listen-mode context stay inert.
-  const wordProps =
-    seg.wordIndex !== undefined && onWordClick
-      ? {
-          className: "reader-word-hover cursor-pointer",
-          onClick: (e: React.MouseEvent) => {
-            e.stopPropagation();
-            onWordClick(seg.wordIndex!);
-          },
-        }
-      : undefined;
-
-  if (!seg.mark) return <span key={key} style={activeStyle} {...wordProps}>{seg.text}</span>;
-  if (seg.mark.kind === "em") return <em key={key} style={activeStyle} {...wordProps}>{seg.text}</em>;
-  if (seg.mark.kind === "strong") return <strong key={key} style={activeStyle} {...wordProps}>{seg.text}</strong>;
+  if (!seg.mark) return <span key={key} style={activeStyle}>{seg.text}</span>;
+  if (seg.mark.kind === "em") return <em key={key} style={activeStyle}>{seg.text}</em>;
+  if (seg.mark.kind === "strong") return <strong key={key} style={activeStyle}>{seg.text}</strong>;
   if (seg.mark.kind === "note") {
     const note = seg.mark.noteId ? notesById.get(seg.mark.noteId) : undefined;
     if (!note) return <span key={key} style={activeStyle}>{seg.text}</span>;
@@ -128,7 +124,56 @@ function renderLeaf(
       </button>
     );
   }
-  return <span key={key} style={activeStyle} {...wordProps}>{seg.text}</span>;
+  return <span key={key} style={activeStyle}>{seg.text}</span>;
+}
+
+/** The only signal that a marked span has entries attached — a highlight
+ * with zero entries gets the wash alone (PassageText below), nothing more.
+ * Renders once per annotation (see LocalAnnotation.isTail), immediately
+ * after the marked text, never in a margin.
+ *
+ * A bare line-icon at this size read as illegible noise — a thin multi-path
+ * glyph shrunk to ~9px loses its shape entirely. A small solid badge (fill +
+ * contrasting icon color, --reader-note-accent-fg) fixes that: the badge's
+ * silhouette is what's actually recognizable at a glance, the icon just adds
+ * meaning on top of an already-legible shape.
+ *
+ * Geometry matches the Claude Design mockup exactly (not approximated via
+ * Tailwind's spacing scale) — 16px circle for a single entry, widening into
+ * a pill (8px radius, 5px horizontal padding, 3px gap before the count) at
+ * two or more; `position: relative; top: -1px` is the mockup's own nudge to
+ * sit the badge on the text's baseline rather than floating above it the
+ * way `vertical-align: super` (a much bigger, superscript-sized shift) did
+ * in an earlier pass. */
+function NoteGlyph({ count }: { count: number }) {
+  const isPill = count > 1;
+  return (
+    <span
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        position: "relative",
+        top: -1,
+        height: 16,
+        width: isPill ? undefined : 16,
+        padding: isPill ? "0 5px" : undefined,
+        gap: isPill ? 3 : undefined,
+        marginLeft: 4,
+        borderRadius: isPill ? 8 : "50%",
+        background: "var(--reader-note-accent)",
+        color: "var(--reader-note-accent-fg)",
+      }}
+      className="select-none"
+    >
+      <MessageCircle size={9} strokeWidth={2.5} />
+      {isPill && (
+        <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1 }} className="font-sans">
+          {count}
+        </span>
+      )}
+    </span>
+  );
 }
 
 type PassageTextProps = {
@@ -140,23 +185,15 @@ type PassageTextProps = {
    * passage, and a mark can span into neighboring passages too), rendered
    * as wrapping spans around the underlying mark/word tokens. */
   annotations: Annotation[];
-  /** Fired for a plain click (not a fresh drag-selection) landing on a
-   * *noted* range or its remaining underline — opens that note directly.
-   * Highlight-only ranges get no click handler at all: selecting the same
-   * text again and using the tooltip is the only way to remove a highlight
-   * or add a note to it (per product decision — no separate click menu). */
+  /** Fired for a plain click (not a fresh drag-selection) landing on any
+   * existing mark — highlight-only or noted alike — opening its thread
+   * directly. Removing a highlight or deleting a note is a *selection*
+   * action instead (re-select the marked text and use the pill), so a
+   * click here has exactly one job. */
   onNoteMarkerClick: (annotationId: string) => void;
   /** Word index currently being narrated, for inline audio-sync highlighting
    * in the reading view itself (reader-issues #7) — omit outside listen mode. */
   activeWordIndex?: number;
-  /** Hover-to-preview, click-to-start-narration-here, at word granularity.
-   * Passing this (rather than only relying on activeWordIndex) is what
-   * forces word-level tokenization even before anything is playing, so the
-   * hover affordance is available from a standing start, not just once
-   * narration is already under way. Takes the passage id (not just a word
-   * index) so callers can pass one stable, book-wide function — see the
-   * memo note below for why that matters. */
-  onWordClick?: (passageId: string, wordIndex: number) => void;
 };
 
 /** Renders a passage's plain text with its ingested marks (em/strong/
@@ -176,23 +213,30 @@ export const PassageText = memo(function PassageText({
   annotations,
   onNoteMarkerClick,
   activeWordIndex,
-  onWordClick,
 }: PassageTextProps) {
-  const words = activeWordIndex !== undefined || onWordClick ? computeWordRanges(passage.text) : [];
+  const words = activeWordIndex !== undefined ? computeWordRanges(passage.text) : [];
   // An annotation carries one range per passage it touches — resolve each
   // to its own local [start,end) here, since that's all buildSegments
   // needs to know about for this one passage.
   const localAnnotations: LocalAnnotation[] = [];
   for (const a of annotations) {
     const r = a.ranges.find((r) => r.passageId === passage.id);
-    if (r) localAnnotations.push({ id: a.id, start: r.start, end: r.end, highlighted: a.highlighted, hasNote: a.notes.length > 0 });
+    if (r)
+      localAnnotations.push({
+        id: a.id,
+        start: r.start,
+        end: r.end,
+        highlighted: a.highlighted,
+        hasNote: a.notes.length > 0,
+        noteCount: a.notes.length,
+        isTail: a.ranges[a.ranges.length - 1].passageId === passage.id,
+      });
   }
   const segments = buildSegments(passage.text, passage.marks, words, localAnnotations);
-  const onSegmentWordClick = onWordClick ? (wordIndex: number) => onWordClick(passage.id, wordIndex) : undefined;
 
   // Group consecutive same-annotation tokens into one wrapper span each —
-  // where the highlight background/underline actually gets painted (a
-  // range, not the whole passage), and the click target for a noted range.
+  // where the highlight background actually gets painted (a range, not the
+  // whole passage), and the click target for an existing mark.
   const runs: { annotationId?: string; segs: Segment[] }[] = [];
   for (const seg of segments) {
     const last = runs[runs.length - 1];
@@ -203,13 +247,12 @@ export const PassageText = memo(function PassageText({
   return (
     <>
       {runs.map((run, i) => {
-        const children = run.segs.map((seg, j) =>
-          renderLeaf(seg, j, notesById, onNoteClick, activeWordIndex, onSegmentWordClick)
-        );
+        const children = run.segs.map((seg, j) => renderLeaf(seg, j, notesById, onNoteClick, activeWordIndex));
         if (!run.annotationId) return <span key={i}>{children}</span>;
 
         const local = localAnnotations.find((a) => a.id === run.annotationId)!;
-        const handleClick = local.hasNote
+        const clickable = local.highlighted || local.hasNote;
+        const handleClick = clickable
           ? (e: React.MouseEvent<HTMLSpanElement>) => {
               // Don't hijack a fresh drag-selection that merely happens to
               // end on top of this range.
@@ -225,24 +268,24 @@ export const PassageText = memo(function PassageText({
             key={i}
             data-annotation-id={local.id}
             onClick={handleClick}
-            className={local.hasNote ? "cursor-pointer" : ""}
+            className={clickable ? "cursor-pointer" : ""}
             style={
-              local.highlighted
+              // A note implies a mark on the text itself, same as an
+              // explicit highlight — a reader shouldn't have to also hit
+              // Highlight separately just to see where their note is
+              // anchored. Whether it also has notes beyond the wash is
+              // signalled by the glyph below, never by a second text style.
+              clickable
                 ? {
-                    // Flat wash + a tight radius, no underline — the
-                    // Claude Design mockup's plain highlight treatment
-                    // (Medium-style), rather than an added accent rule.
                     background: "var(--reader-highlight)",
                     borderRadius: 2,
                     padding: "0 1px",
                   }
-                : {
-                    borderBottom: "2px dotted var(--reader-note-accent)",
-                    paddingBottom: 1,
-                  }
+                : undefined
             }
           >
             {children}
+            {local.isTail && local.noteCount > 0 && <NoteGlyph count={local.noteCount} />}
           </span>
         );
       })}

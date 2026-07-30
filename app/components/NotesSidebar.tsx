@@ -1,11 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowRight, Check, Mic, Pause, PenLine, Play, Square, Trash2, X } from "lucide-react";
+import { ArrowRight, Mic, Pause, PenLine, Play, Square, Trash2, X, EllipsisVertical } from "lucide-react";
 import TimeAgo from "react-timeago-i18n";
 import { useLibraryStore, type AnnotationRange } from "@/stores/library-store";
 import { computeWaveformBars } from "@/lib/audio/waveform";
 import { LiveWaveform, WaveformBars } from "./reader/Waveform";
+import Tooltip from "./reader/Tooltip";
+
+// A consistent, theme-independent danger red — matches SelectionMenu.tsx's
+// own DANGER_COLOR so "destructive" reads the same across both surfaces.
+const DANGER_COLOR = "#f26b6b";
 
 /** Joins each touched passage's own local slice — a highlight/note can
  * span more than one passage, so "the quote" isn't always a single
@@ -16,28 +21,24 @@ function quoteForRanges(ranges: AnnotationRange[], getPassageText: (passageId: s
 
 type Props = {
   bookId: string;
-  /** The passage this panel was opened from — "list" mode's subject, or
-   * "edit" mode's originating range (one of possibly several the
-   * annotation touches). */
+  /** The passage this panel was opened from — one of possibly several the
+   * annotation's ranges touch. */
   passageId: string;
   /** Resolves any passage's full plain text by id, so a cross-passage
    * annotation's quote can be assembled from more than one passage. */
   getPassageText: (passageId: string) => string;
-  mode: "list" | "edit";
-  /** "edit" mode, an existing annotation (thread) being viewed/added to. */
+  /** An existing annotation (thread) being viewed/added to. */
   annotationId?: string;
-  /** "edit" mode, a brand-new thread with no annotation yet — one range
-   * per passage the just-made selection touched. */
+  /** A brand-new thread with no annotation yet — one range per passage the
+   * just-made selection touched. */
   pendingRanges?: AnnotationRange[];
-  /** "edit" mode, editing one specific existing note entry in place —
-   * absent, the composer starts empty and appends a new entry instead. */
+  /** Editing one specific existing note entry in place — absent, the
+   * composer starts empty and appends a new entry instead. */
   editingNoteId?: string;
   panelType?: "side" | "sheet";
   /** Book title (and section, when known) — the closest this app can get to
    * a "Ch. 7, p. 201" citation without per-passage page numbering. */
   citation?: string;
-  /** List mode → jump into editing one specific note entry. */
-  onEditAnnotation: (annotationId: string, noteId: string) => void;
   onClose: () => void;
 };
 
@@ -165,9 +166,9 @@ function VoiceNoteView({ audioUrl, durationMs }: { audioUrl: string; durationMs:
             bars={bars}
             width={width}
             height={32}
-            barWidth={2}
-            gap={1.5}
-            barColor="var(--reader-border)"
+            barWidth={2.5}
+            gap={1}
+            barColor="var(--reader-text-subtle)"
             barPlayedColor="var(--color-brand-500)"
             progress={durationMs > 0 ? currentTime / (durationMs / 1000) : 0}
           />
@@ -181,9 +182,14 @@ function VoiceNoteView({ audioUrl, durationMs }: { audioUrl: string; durationMs:
 }
 
 /** The text/voice composer — shared by "add a note to a fresh selection"
- * and "edit an existing note," always pinned to the bottom of the panel
- * (its own flex-none row after a scrollable area above), matching a chat
- * input rather than floating mid-content. */
+ * and "edit an existing note." Flows as the last item inside the panel's
+ * single scrollable region, right after the quote and any existing notes —
+ * not a separate fixed-height footer row outside that scroll area. That
+ * used to be a `flex-none` sibling of the scrollable body, which on iOS
+ * Safari made the whole panel balloon past the viewport the moment this
+ * textarea took focus (the keyboard's viewport resize fought the two
+ * competing flex regions). One scroll container, composer last in reading
+ * order, sidesteps that entirely. */
 function NoteComposer({
   initialText,
   onCancelToView,
@@ -204,6 +210,7 @@ function NoteComposer({
   const [isPlayingDraft, setIsPlayingDraft] = useState(false);
   const [draftCurrentTime, setDraftCurrentTime] = useState(0);
   const [micError, setMicError] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
 
   const [waveRef, waveWidth] = useMeasuredWidth<HTMLDivElement>();
   // State, not a ref: LiveWaveform needs its stream during render (to feed
@@ -302,10 +309,10 @@ function NoteComposer({
   };
 
   return (
-    <div className="flex-none border-t border-[var(--reader-border)] p-3">
+    <div className="border-t border-[var(--reader-border)] pt-3">
       <div
         className={`rounded-sm p-2.5 flex flex-col gap-2 min-h-16 border ${
-          hasDraft || mode === "recording" ? "border-brand-300" : "border-transparent"
+          hasDraft || mode === "recording" || isFocused ? "border-brand-300" : "border-[var(--reader-border)]"
         }`}
       >
         {mode === "recording" ? (
@@ -323,8 +330,8 @@ function NoteComposer({
                   stream={mediaRecorder.stream}
                   width={waveWidth}
                   height={32}
-                  barWidth={2}
-                  gap={1.5}
+                  barWidth={2.5}
+                  gap={1}
                   barColor="var(--color-brand-500)"
                 />
               )}
@@ -341,9 +348,9 @@ function NoteComposer({
                   bars={recordedBars}
                   width={waveWidth}
                   height={32}
-                  barWidth={2}
-                  gap={1.5}
-                  barColor="var(--reader-border)"
+                  barWidth={2.5}
+                  gap={1}
+                  barColor="var(--reader-text-subtle)"
                   barPlayedColor="var(--color-brand-500)"
                   progress={audioDurationMs > 0 ? draftCurrentTime / (audioDurationMs / 1000) : 0}
                 />
@@ -357,9 +364,11 @@ function NoteComposer({
           <textarea
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
             placeholder="Add a note…"
             rows={2}
-            className="w-full resize-none border-none outline-none bg-transparent text-xs font-sans text-[var(--reader-text)] placeholder:text-[var(--reader-text-subtle)]"
+            className="w-full resize-none border-none outline-none bg-transparent text-sm font-sans text-[var(--reader-text)] placeholder:text-[var(--reader-text-muted)]"
           />
         )}
 
@@ -424,14 +433,12 @@ function PanelShell({
   onDelete,
   onClose,
   children,
-  footer,
 }: {
   panelType?: "side" | "sheet";
   title: string;
   onDelete?: () => void;
   onClose: () => void;
   children: React.ReactNode;
-  footer?: React.ReactNode;
 }) {
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
@@ -443,13 +450,19 @@ function PanelShell({
   const isSheet = panelType ? panelType === "sheet" : isMobile;
 
   return (
+    // pointer-events-none — this box exists only to flex-align the real
+    // panel below within Reader.tsx's already-narrow wrapper column; on
+    // mobile in particular it's taller than the sheet itself (items-end
+    // leaves the empty space above it), and none of that empty space
+    // should ever intercept a scroll/tap meant for the book content behind
+    // it. pointer-events-auto on the actual panel box below restores it.
     <div
-      className={`w-full h-full min-h-dvh box-border relative flex overflow-hidden ${
+      className={`w-full h-full min-h-dvh box-border relative flex overflow-hidden pointer-events-none ${
         isSheet ? "justify-center items-end" : "justify-end items-stretch"
       }`}
     >
       <div
-        className={`max-w-full bg-[var(--reader-surface)] shadow-lg flex flex-col box-border overflow-hidden flex-none ${
+        className={`max-w-full bg-[var(--reader-surface)] shadow-lg flex flex-col box-border overflow-hidden flex-none pointer-events-auto ${
           isSheet
             ? "w-full h-[82%] max-h-[82%] rounded-t-lg"
             : "w-95 h-full max-h-full border border-[var(--reader-border)]"
@@ -464,23 +477,25 @@ function PanelShell({
           <span className="font-serif font-semibold text-base text-[var(--reader-text)]">{title}</span>
           <div className="flex items-center gap-3.5">
             {onDelete && (
-              <button
-                onClick={onDelete}
-                title="Delete note"
-                className="bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)]"
-              >
-                <Trash2 size={15} />
-              </button>
+              <Tooltip label="Delete highlight" side="bottom">
+                <button
+                  onClick={onDelete}
+                  className="bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)]"
+                >
+                  <Trash2 size={15} />
+                </button>
+              </Tooltip>
             )}
-            <button onClick={onClose} className="bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)]">
-              <X size={16} />
-            </button>
+            <Tooltip label="Close" side="bottom" align="end">
+              <button onClick={onClose} className="bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)]">
+                <X size={16} />
+              </button>
+            </Tooltip>
           </div>
         </div>
         <div className="om-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-5 py-4 flex flex-col gap-3.5">
           {children}
         </div>
-        {footer}
       </div>
     </div>
   );
@@ -504,67 +519,44 @@ function Quote({ text, citation }: { text: string; citation?: string }) {
   );
 }
 
-function ListPanel({
-  bookId,
-  passageId,
-  getPassageText,
-  panelType,
-  onEditAnnotation,
+/** A note entry's Edit/Delete, tucked behind its ellipsis trigger instead of
+ * two always-visible buttons — same scrim + absolute-menu pattern as
+ * AudioPlayer's SpeedMenu (fixed inset-0 catches the outside click that
+ * closes it, the menu itself floats off the trigger's own relative parent). */
+function EntryMenu({
+  canEdit,
+  onEdit,
+  onDelete,
   onClose,
-}: Omit<Props, "mode" | "annotationId" | "pendingRanges" | "editingNoteId" | "citation">) {
-  const annotations = useLibraryStore((s) => s.getForPassage(bookId, passageId));
-  const deleteNoteEntry = useLibraryStore((s) => s.deleteNoteEntry);
-
-  // Flattened across every annotation touching this passage — a single
-  // range can carry a whole thread of notes, and this view lists every
-  // entry from every one of them, each independently editable/deletable.
-  const entries = annotations
-    .flatMap((a) => a.notes.map((note) => ({ annotation: a, note })))
-    .sort((x, y) => {
-      const xStart = x.annotation.ranges.find((r) => r.passageId === passageId)?.start ?? 0;
-      const yStart = y.annotation.ranges.find((r) => r.passageId === passageId)?.start ?? 0;
-      return xStart - yStart || x.note.savedAt - y.note.savedAt;
-    });
-
+}: {
+  canEdit: boolean;
+  onEdit: () => void;
+  onDelete: () => void;
+  onClose: () => void;
+}) {
   return (
-    <PanelShell panelType={panelType} title="Notes" onClose={onClose}>
-      {entries.length === 0 ? (
-        <p className="text-sm text-[var(--reader-text-muted)] m-0">No notes on this passage yet.</p>
-      ) : (
-        entries.map(({ annotation, note }) => (
-          <div key={note.id} className="flex flex-col gap-2.5 pb-4.5 border-b border-[var(--reader-border)] last:border-b-0">
-            <Quote text={quoteForRanges(annotation.ranges, getPassageText)} />
-            {note.content.kind === "text" ? (
-              <p className="text-sm text-[var(--reader-text)] m-0">{note.content.text}</p>
-            ) : (
-              <VoiceNoteView audioUrl={note.content.audioUrl} durationMs={note.content.durationMs} />
-            )}
-            <div className="flex items-center gap-1.5 text-[11px] text-[var(--reader-text-muted)]">
-              <Check size={12} className="text-brand-500" />
-              Saved <TimeAgo date={new Date(note.savedAt)} />
-            </div>
-            <div className="flex items-center gap-3.5">
-              {note.content.kind === "text" && (
-                <button
-                  onClick={() => onEditAnnotation(annotation.id, note.id)}
-                  className="flex items-center gap-1 bg-transparent border-none cursor-pointer text-xs font-semibold text-brand-500 p-0"
-                >
-                  <PenLine size={12} />
-                  Edit
-                </button>
-              )}
-              <button
-                onClick={() => deleteNoteEntry(bookId, note.id)}
-                className="flex items-center gap-1 bg-transparent border-none cursor-pointer text-xs font-semibold text-[var(--reader-text-muted)] p-0"
-              >
-                <Trash2 size={12} />
-                Delete
-              </button>
-            </div>
-          </div>
-        ))
-      )}
-    </PanelShell>
+    <>
+      <div onClick={onClose} className="fixed inset-0 z-19" />
+      <div className="absolute right-0 top-[calc(100%+4px)] min-w-28 py-1 rounded-md bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-lg z-20">
+        {canEdit && (
+          <button
+            onClick={onEdit}
+            className="w-full flex items-center gap-2 bg-transparent border-none cursor-pointer py-1.5 px-3 text-xs font-medium text-[var(--reader-text)] text-left"
+          >
+            <PenLine size={13} />
+            Edit
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          style={{ color: DANGER_COLOR }}
+          className="w-full flex items-center gap-2 bg-transparent border-none cursor-pointer py-1.5 px-3 text-xs font-medium text-left"
+        >
+          <Trash2 size={13} />
+          Delete
+        </button>
+      </div>
+    </>
   );
 }
 
@@ -578,12 +570,13 @@ function EditPanel({
   panelType,
   citation,
   onClose,
-}: Omit<Props, "mode" | "onEditAnnotation">) {
+}: Props) {
   const annotations = useLibraryStore((s) => s.getForPassage(bookId, passageId));
   const sameRanges = useLibraryStore((s) => s.sameRanges);
   const addNote = useLibraryStore((s) => s.addNote);
   const updateNoteEntry = useLibraryStore((s) => s.updateNoteEntry);
   const deleteNoteEntry = useLibraryStore((s) => s.deleteNoteEntry);
+  const removeHighlight = useLibraryStore((s) => s.removeHighlight);
 
   // A brand-new thread has no annotationId yet — after its first note is
   // saved, the store creates one, but this component only has the ranges
@@ -604,6 +597,10 @@ function EditPanel({
   const [editingId, setEditingId] = useState(editingNoteId);
   const editingEntry = editingId ? existing?.notes.find((n) => n.id === editingId) : undefined;
 
+  // Which entry's Edit/Delete menu is open, if any — one at a time, keyed
+  // by note id rather than a boolean per row.
+  const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+
   // Bumped after every append-save so the composer's key below changes even
   // though editingId stays undefined the whole time — without this, saving
   // one new note left NoteComposer mounted with its just-submitted draft
@@ -611,6 +608,13 @@ function EditPanel({
   // state with no way back to the mic) instead of a blank slate for the
   // thread's next entry.
   const [appendCount, setAppendCount] = useState(0);
+
+  // The header trash icon's own confirmation step — deleting a highlight
+  // (and everything in its thread, if any) is destructive and irreversible,
+  // so it never fires straight from the icon click; it just reveals this
+  // warning in place of the notes/composer, requiring an explicit second
+  // tap to actually go through.
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const handleSave = (content: { kind: "text"; text: string } | { kind: "voice"; audioUrl: string; durationMs: number }) => {
     if (editingEntry) {
@@ -622,86 +626,112 @@ function EditPanel({
     }
   };
 
+  const handleDeleteAnnotation = () => {
+    if (!existing) return;
+    if (existing.highlightId) removeHighlight(bookId, existing.highlightId);
+    for (const note of existing.notes) deleteNoteEntry(bookId, note.id);
+    onClose();
+  };
+
   return (
     <PanelShell
       panelType={panelType}
       title="Note"
       onClose={onClose}
-      // Pinned outside the scrollable body (not gated behind a separate
-      // "Edit" click) — opening a note or highlight goes straight to an
-      // editable draft ready to add to the thread.
-      footer={
-        <NoteComposer
-          // Remounts when the composer switches which entry it's editing
-          // (or back to composing fresh), and also after every append-save
-          // (appendCount) so a just-submitted draft doesn't linger — see
-          // appendCount above. NoteComposer only reads `initialText` once,
-          // at mount.
-          key={editingId ?? `new-${appendCount}`}
-          initialText={editingEntry?.content.kind === "text" ? editingEntry.content.text : ""}
-          onCancelToView={editingId ? () => setEditingId(undefined) : undefined}
-          onSave={handleSave}
-        />
-      }
+      onDelete={existing ? () => setConfirmingDelete(true) : undefined}
     >
       <Quote text={quoteText} citation={citation} />
-      {existing && existing.notes.length > 0 && (
-        <div className="flex flex-col gap-3">
-          {existing.notes.map((note) => (
-            <div
-              key={note.id}
-              className="flex flex-col gap-2.5 pb-4 border-b border-[var(--reader-border)] last:border-b-0"
+      {confirmingDelete ? (
+        <div className="flex flex-col gap-3 pb-1">
+          <p className="text-sm text-[var(--reader-text)] m-0">
+            {existing && existing.notes.length > 0
+              ? "Delete this highlight and its notes? This can't be undone."
+              : "Delete this highlight? This can't be undone."}
+          </p>
+          <div className="flex items-center gap-4">
+            <button
+              onClick={handleDeleteAnnotation}
+              style={{ color: DANGER_COLOR }}
+              className="bg-transparent border-none cursor-pointer text-xs font-semibold p-0"
             >
-              {note.content.kind === "text" ? (
-                <p className="text-sm text-[var(--reader-text)] m-0">{note.content.text}</p>
-              ) : (
-                <VoiceNoteView audioUrl={note.content.audioUrl} durationMs={note.content.durationMs} />
-              )}
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5 text-[11.5px] font-medium text-[var(--reader-text-muted)]">
-                  <Check size={13} className="text-brand-500" />
-                  Saved <TimeAgo date={new Date(note.savedAt)} />
-                </div>
-                <div className="flex items-center gap-3">
-                  {note.content.kind === "text" && (
-                    <button
-                      onClick={() => setEditingId(note.id)}
-                      className="flex items-center gap-1 bg-transparent border-none cursor-pointer text-xs font-semibold text-brand-500 p-0"
-                    >
-                      <PenLine size={12} />
-                      Edit
-                    </button>
-                  )}
-                  <button
-                    onClick={() => {
-                      deleteNoteEntry(bookId, note.id);
-                      if (editingId === note.id) setEditingId(undefined);
-                    }}
-                    className="flex items-center gap-1 bg-transparent border-none cursor-pointer text-xs font-semibold text-[var(--reader-text-muted)] p-0"
-                  >
-                    <Trash2 size={12} />
-                    Delete
-                  </button>
-                </div>
-              </div>
-            </div>
-          ))}
+              Delete
+            </button>
+            <button
+              onClick={() => setConfirmingDelete(false)}
+              className="bg-transparent border-none cursor-pointer text-xs font-semibold text-[var(--reader-text-muted)] p-0"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
+      ) : (
+        <>
+          {existing && existing.notes.length > 0 && (
+            <div className="flex flex-col gap-3">
+              {existing.notes.map((note) => (
+                <div
+                  key={note.id}
+                  className="flex flex-col gap-1.5 pb-4 border-b border-[var(--reader-border)] last:border-b-0"
+                >
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      {note.content.kind === "text" ? (
+                        <p className="text-sm text-[var(--reader-text)] m-0">{note.content.text}</p>
+                      ) : (
+                        <VoiceNoteView audioUrl={note.content.audioUrl} durationMs={note.content.durationMs} />
+                      )}
+                    </div>
+                    <div className="relative flex-none">
+                      <button
+                        onClick={() => setOpenMenuId((id) => (id === note.id ? null : note.id))}
+                        className="flex items-center bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0.5"
+                      >
+                        <EllipsisVertical size={15} />
+                      </button>
+                      {openMenuId === note.id && (
+                        <EntryMenu
+                          canEdit={note.content.kind === "text"}
+                          onEdit={() => {
+                            setEditingId(note.id);
+                            setOpenMenuId(null);
+                          }}
+                          onDelete={() => {
+                            deleteNoteEntry(bookId, note.id);
+                            if (editingId === note.id) setEditingId(undefined);
+                            setOpenMenuId(null);
+                          }}
+                          onClose={() => setOpenMenuId(null)}
+                        />
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10.5px] font-medium text-[var(--reader-text-muted)]">
+                    <TimeAgo date={new Date(note.savedAt)} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          <NoteComposer
+            // Remounts when the composer switches which entry it's editing
+            // (or back to composing fresh), and also after every append-save
+            // (appendCount) so a just-submitted draft doesn't linger — see
+            // appendCount above. NoteComposer only reads `initialText` once,
+            // at mount.
+            key={editingId ?? `new-${appendCount}`}
+            initialText={editingEntry?.content.kind === "text" ? editingEntry.content.text : ""}
+            onCancelToView={editingId ? () => setEditingId(undefined) : undefined}
+            onSave={handleSave}
+          />
+        </>
       )}
     </PanelShell>
   );
 }
 
-/**
- * Private highlights/notes UI for a passage — dispatches to a "list every
- * note on this passage" view (the gutter marker) or a "view/edit one
- * specific range" view (an inline marker's click, or the list's own
- * per-item Edit) as two separate components rather than an if/else inside
- * one, so each keeps an unconditional hook order of its own — switching
- * mode unmounts one and mounts the other, which is exactly what should
- * happen given how differently shaped their state is.
- */
+/** Private highlights/notes UI for one annotation — opened from clicking an
+ * existing mark's "Add note"/"View thread" action, or from a fresh
+ * selection's Note action. */
 export default function NotesSidebar(props: Props) {
-  if (props.mode === "list") return <ListPanel {...props} />;
   return <EditPanel {...props} />;
 }
