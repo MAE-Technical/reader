@@ -67,7 +67,7 @@ export default function ChaptersDrawer({
         // for as long as the outline is open. Below the desktop breakpoint
         // the outer fixed wrapper is already z-[70], clearing all of that
         // on its own.
-        className="relative h-full w-full min-[860px]:w-[288px] min-[860px]:z-[60] min-[860px]:max-w-[82vw] bg-[var(--reader-surface)] min-[860px]:border-r min-[860px]:border-[var(--reader-border)] flex flex-col overflow-hidden box-border"
+        className="relative h-full w-full min-[860px]:w-[288px] min-[860px]:z-[60] min-[860px]:max-w-[82vw] bg-[var(--reader-surface)] min-[860px]:border-r min-[860px]:border-[var(--reader-border)] flex flex-col overflow-hidden box-border select-none no-callout"
       >
         <div className="flex items-start justify-between gap-2 px-5 pt-6 pb-4 flex-none">
           <div className="flex items-start gap-3 min-w-0">

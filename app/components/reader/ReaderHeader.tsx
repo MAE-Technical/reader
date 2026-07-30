@@ -63,7 +63,11 @@ export default function ReaderHeader({
   return (
     <div
       style={{ height: topBarHeightPx, paddingLeft: railInsetPx, paddingRight: railInsetPx }}
-      className={`absolute top-0 left-0 right-0 z-20 flex items-center gap-2 box-border border-b border-[var(--reader-border)] bg-[var(--reader-surface)] transition-[transform,opacity] duration-200 ease-out ${
+      // select-none/no-callout: this is all chrome, nothing here is meant
+      // to be selectable text — same reasoning as the .no-callout comment
+      // in globals.css (an explicit boundary, not an inherited guess, is
+      // what keeps Safari's long-press selection from getting confused).
+      className={`absolute top-0 left-0 right-0 z-20 flex items-center gap-2 box-border border-b border-[var(--reader-border)] bg-[var(--reader-surface)] transition-[transform,opacity] duration-200 ease-out select-none no-callout ${
         visible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
       }`}
     >

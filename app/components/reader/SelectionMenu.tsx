@@ -1,12 +1,16 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Copy, Highlighter, PenLine, Play, Trash2 } from "lucide-react";
 import type { Theme } from "@/stores/reader-store";
+import type { SelectionAnchor } from "@/lib/reader/useTextAnnotations";
 
 type Props = {
-  top: number;
-  left: number;
+  /** The selection's own bounding rect (viewport coordinates) — the pill
+   * measures itself against this rather than being handed a precomputed
+   * top/left, so it can clamp/flip to stay fully on screen regardless of
+   * where in the viewport the selection landed. */
+  anchor: SelectionAnchor;
   /** Drives the pill's invert-against-the-page treatment below — not read
    * from the reader's own CSS theme vars, since this deliberately goes the
    * *opposite* direction of the page it floats over. */
@@ -33,6 +37,8 @@ type Item = { key: string; icon: ReactNode; label: string; onClick: () => void; 
 // read as "destructive" against the pill's own near-black/near-white fill.
 const DANGER_COLOR = "#f26b6b";
 
+const VIEWPORT_MARGIN = 8;
+
 /**
  * Selection menu (Play/Highlight/Note/Copy) shown on text selection. A
  * fixed-position overlay rendered outside BookContent's scrollable tree, so
@@ -43,10 +49,16 @@ const DANGER_COLOR = "#f26b6b";
  * near-black pill, a dark page gets a near-white one — the same idiom as a
  * native OS tooltip landing on arbitrary content, and it guarantees contrast
  * regardless of what's behind it without needing per-theme tuning.
+ *
+ * Position is measure-then-place, not a single upfront calculation: the
+ * pill's own width varies with how many actions are showing (Play/Delete
+ * are conditional), so it renders once invisibly, measures itself via
+ * `rootRef`, and only then computes a clamped top/left — shifted inward
+ * horizontally and flipped above/below the selection vertically as needed
+ * so it's always fully on screen, never obscured off an edge.
  */
 export default function SelectionMenu({
-  top,
-  left,
+  anchor,
   theme,
   copyLabel,
   onPlay,
@@ -56,6 +68,49 @@ export default function SelectionMenu({
   onDelete,
   onDismiss,
 }: Props) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
+
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const { width, height } = el.getBoundingClientRect();
+
+    let left = anchor.left;
+    left = Math.min(left, window.innerWidth - width - VIEWPORT_MARGIN);
+    left = Math.max(left, VIEWPORT_MARGIN);
+
+    // Prefer floating above the selection (matches the old fixed -48px
+    // offset); flip below it instead when there isn't room above — e.g. a
+    // selection starting right at the top of the viewport. The little
+    // pointer triangle (below) tracks which side won so it stays attached
+    // to the edge nearest the selection either way.
+    let top = anchor.top - height - 12;
+    const flipped = top < VIEWPORT_MARGIN;
+    if (flipped) top = anchor.bottom + 12;
+    top = Math.min(top, window.innerHeight - height - VIEWPORT_MARGIN);
+    top = Math.max(top, VIEWPORT_MARGIN);
+
+    setPos({ top, left, flipped });
+  }, [anchor]);
+
+  // Tapping anywhere that isn't the pill itself and isn't inside a reading
+  // section dismisses it — content-area taps already end the selection via
+  // onTextSelect's own touchend/mouseup handler (see useTextAnnotations.ts),
+  // so this only needs to cover chrome outside that (header, rail, etc.).
+  // A listener, not an overlay element, so it never sits in the hit-test
+  // path and can't block scrolling the way the old full-screen catcher did.
+  useEffect(() => {
+    const handler = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if ((target as HTMLElement).closest?.("[data-section-id]")) return;
+      onDismiss();
+    };
+    document.addEventListener("pointerdown", handler);
+    return () => document.removeEventListener("pointerdown", handler);
+  }, [onDismiss]);
+
   const inverted = theme === "light";
   const bg = inverted ? "#0a0a0a" : "#fdfbf8";
   const fg = inverted ? "#fdfbf8" : "#0a0a0a";
@@ -75,31 +130,37 @@ export default function SelectionMenu({
   ];
 
   return (
-    <>
-      {/* Transparent click-outside catcher — the selection menu previously
-          had no dismiss path besides its own buttons (unlike every other
-          popover in this file), so it stuck around after the reader clicked
-          away or moved on. */}
-      <div onClick={onDismiss} className="fixed inset-0 z-29" />
+    <div
+      ref={rootRef}
+      style={{
+        top: pos?.top ?? anchor.top,
+        left: pos?.left ?? anchor.left,
+        background: bg,
+        boxShadow: shadow,
+        // Invisible until the first measure/clamp pass has run — otherwise
+        // there'd be a one-frame flash at the raw (unclamped) anchor
+        // position before it jumps to its real, on-screen spot.
+        visibility: pos ? "visible" : "hidden",
+      }}
+      className="reader-menu-in fixed flex items-center gap-px rounded-md p-1 z-30 select-none no-callout"
+    >
       <div
-        style={{ top, left, background: bg, boxShadow: shadow }}
-        className="reader-menu-in fixed flex items-center gap-px rounded-md p-1 z-30"
-      >
-        <div style={{ background: bg }} className="absolute -bottom-1 left-5 w-2 h-2 rotate-45 rounded-xs" />
-        {items.map((item, i) => (
-          <div key={item.key} className="flex items-center">
-            {i > 0 && <div style={{ background: divider }} className="w-px h-4 mx-0.5 flex-none" />}
-            <button
-              onClick={item.onClick}
-              style={{ color: item.danger ? DANGER_COLOR : fg }}
-              className="flex items-center gap-1.5 bg-transparent border-none py-1.75 px-3 rounded-full cursor-pointer text-xs font-semibold whitespace-nowrap"
-            >
-              {item.icon}
-              {item.label}
-            </button>
-          </div>
-        ))}
-      </div>
-    </>
+        style={{ background: bg }}
+        className={`absolute left-5 w-2 h-2 rotate-45 rounded-xs ${pos?.flipped ? "-top-1" : "-bottom-1"}`}
+      />
+      {items.map((item, i) => (
+        <div key={item.key} className="flex items-center">
+          {i > 0 && <div style={{ background: divider }} className="w-px h-4 mx-0.5 flex-none" />}
+          <button
+            onClick={item.onClick}
+            style={{ color: item.danger ? DANGER_COLOR : fg }}
+            className="flex items-center gap-1.5 bg-transparent border-none py-1.75 px-3 rounded-full cursor-pointer text-xs font-semibold whitespace-nowrap"
+          >
+            {item.icon}
+            {item.label}
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }

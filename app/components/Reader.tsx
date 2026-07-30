@@ -401,6 +401,7 @@ export default function Reader({ book }: { book: BookDocument }) {
           >
             <BookContent
               book={book}
+              isMobile={isMobile}
               activeIndex={activeIndex}
               registerSlide={registerSlide}
               onPointerDown={onPointerDown}
@@ -444,8 +445,7 @@ export default function Reader({ book }: { book: BookDocument }) {
                 separate click-based menu on already-marked text. */}
             {selection && (
               <SelectionMenu
-                top={selection.top}
-                left={selection.left}
+                anchor={selection.anchor}
                 theme={theme}
                 copyLabel={copyLabel}
                 onPlay={

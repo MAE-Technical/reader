@@ -2,7 +2,8 @@ import { useCallback, useState } from "react";
 import { useLibraryStore, type AnnotationRange } from "@/stores/library-store";
 import { computeSelectionRanges } from "./annotationSelection";
 
-export type SelectionState = { ranges: AnnotationRange[]; top: number; left: number };
+export type SelectionAnchor = { top: number; bottom: number; left: number; right: number };
+export type SelectionState = { ranges: AnnotationRange[]; anchor: SelectionAnchor };
 
 export type NotesPanelState =
   | { mode: "list"; passageId: string }
@@ -46,9 +47,20 @@ export function useTextAnnotations(bookId: string) {
   // release over.
   const onTextSelect = useCallback((sectionEl: HTMLElement) => {
     const ranges = computeSelectionRanges(sectionEl);
-    if (!ranges) return;
+    if (!ranges) {
+      // A plain tap (mouseup/touchend that leaves nothing selected) ends
+      // whatever selection is currently on screen — the same gesture that
+      // opened the pill now closes it. This used to be the job of a
+      // full-screen "click outside" catcher in SelectionMenu, but that was
+      // a bare `fixed inset-0` div sitting outside the scrollable content
+      // tree with no scrollable ancestor of its own, so it silently
+      // swallowed every touch-scroll gesture for as long as the pill was
+      // open (Safari/iPhone: "selects everything and you can't scroll").
+      setSelection(null);
+      return;
+    }
     const rect = window.getSelection()!.getRangeAt(0).getBoundingClientRect();
-    setSelection({ ranges, top: Math.max(8, rect.top - 48), left: rect.left });
+    setSelection({ ranges, anchor: { top: rect.top, bottom: rect.bottom, left: rect.left, right: rect.right } });
   }, []);
 
   const dismissSelection = useCallback(() => setSelection(null), []);

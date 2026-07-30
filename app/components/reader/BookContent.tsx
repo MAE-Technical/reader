@@ -16,6 +16,7 @@ function headingFontBump(level: number | undefined): number {
 
 type BookContentProps = {
   book: BookDocument;
+  isMobile: boolean;
   activeIndex: number;
   registerSlide: (id: string) => (el: HTMLDivElement | null) => void;
   onPointerDown: (e: React.PointerEvent) => void;
@@ -65,6 +66,7 @@ type BookContentProps = {
  */
 const BookContent = memo(function BookContent({
   book,
+  isMobile,
   activeIndex,
   registerSlide,
   onPointerDown,
@@ -122,7 +124,15 @@ const BookContent = memo(function BookContent({
         // occasionally rendering a stale multi-passage range. touchend
         // only fires once, right when the gesture actually ends.
         onTouchEnd={(e) => onTextSelect(e.currentTarget)}
-        className="reader-fade-in om-scroll h-full overflow-y-auto relative"
+        // select-none here, select-text on each passage <p> below — user-
+        // select doesn't strictly inherit, so a child can still opt back
+        // into being selectable. Giving Safari this explicit boundary (this
+        // scrolling container is NOT selectable, only the actual passage
+        // text is) is the other half of the .no-callout fix in globals.css:
+        // without it, a long-press here had nothing telling it where
+        // "selectable" stops, and it would balloon past the tapped word to
+        // the whole visible screen.
+        className="reader-fade-in om-scroll h-full overflow-y-auto relative select-none"
         style={{ background: "var(--reader-bg)" }}
       >
         <div
@@ -190,7 +200,11 @@ const BookContent = memo(function BookContent({
                       if (sel && !sel.isCollapsed && sel.toString().trim()) return;
                       seekToPassageForListening(section.id, raw.id);
                     }}
-                    className={`m-0 font-serif rounded-xs ${isListen ? "cursor-pointer" : ""}`}
+                    // select-text: pins this paragraph as its own explicit
+                    // selection root (see the .no-callout comment in
+                    // globals.css) — the standard WebKit fix for long-press
+                    // selection ballooning past the tapped word.
+                    className={`m-0 font-serif rounded-xs select-text ${isListen ? "cursor-pointer" : ""}`}
                     style={{
                       ...(isHeading
                         ? {
@@ -278,11 +292,24 @@ const BookContent = memo(function BookContent({
                         <button
                           onClick={() => onOpenPassageNotes(raw.id)}
                           title={hasNote ? "View notes on this passage" : "Highlighted"}
-                          className={`absolute top-0.5 -left-7 cursor-pointer flex items-center justify-center flex-none border-none text-brand-600 ${
-                            hasNote ? "w-5.5 h-5.5 rounded-sm bg-brand-100" : "w-5 h-5 rounded-full bg-brand-100"
+                          // Mobile's narrower content padding (px-5, 20px —
+                          // see contentPad in Reader.tsx) has less room in
+                          // the left gutter than desktop's px-10 (40px): the
+                          // desktop-sized marker at -left-7 (28px) overhung
+                          // past the edge of that padding and got clipped/
+                          // obscured. Smaller marker, smaller offset on
+                          // mobile so it sits fully inside the gutter.
+                          className={`absolute cursor-pointer flex items-center justify-center flex-none border-none text-brand-600 select-none no-callout ${
+                            isMobile
+                              ? `top-0.5 -left-5 ${hasNote ? "w-4.5 h-4.5 rounded-sm bg-brand-100" : "w-4 h-4 rounded-full bg-brand-100"}`
+                              : `top-0.5 -left-7 ${hasNote ? "w-5.5 h-5.5 rounded-sm bg-brand-100" : "w-5 h-5 rounded-full bg-brand-100"}`
                           }`}
                         >
-                          {hasNote ? <MessageSquare size={12} /> : <Highlighter size={11} />}
+                          {hasNote ? (
+                            <MessageSquare size={isMobile ? 10 : 12} />
+                          ) : (
+                            <Highlighter size={isMobile ? 9 : 11} />
+                          )}
                           {noteCount > 0 && (
                             <span className="absolute -top-1.5 -right-1.5 min-w-3.5 h-3.5 px-0.5 rounded-full bg-brand-500 text-[8px] font-semibold leading-none text-white flex items-center justify-center">
                               {noteCount}

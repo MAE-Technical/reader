@@ -55,6 +55,27 @@ body {
   height: 100%;
   margin: 0;
   background: var(--color-sand-50);
+  /* Kills the gray flash Safari/Android paint on every tap — standard PWA
+     polish, doubly relevant once this ships inside a WKWebView via
+     Capacitor (which shows the same flash by default). */
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Long-press callout ("Copy/Look Up/Save Image"...) suppressed on anything
+   that isn't the passage text itself — chrome buttons, gutter markers, the
+   selection pill, drawer rows. Paired with Tailwind's select-text/select-
+   none utilities (applied per-element, see BookContent.tsx/ReaderHeader.tsx/
+   etc.), this is the standard fix for a WebKit bug where a long-press
+   selection started inside a scrolling container that mixes selectable text
+   with non-text siblings (buttons, markers) balloons past the tapped word
+   to select the entire visible screen and locks scrolling until it's
+   cleared — Safari needs an explicit, unambiguous user-select boundary
+   around the actual selectable text rather than inheriting/guessing one.
+   Tailwind's own select-text/select-none utilities already emit both the
+   unprefixed and -webkit- prefixed user-select properties, so only the
+   touch-callout piece needs a rule of its own here. */
+.no-callout {
+  -webkit-touch-callout: none;
 }
 
 /* Reader chrome theme tokens — every reader-scoped component (rail, header,
