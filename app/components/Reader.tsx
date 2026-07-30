@@ -32,7 +32,16 @@ import { useReadingProgress } from "@/lib/reader/useReadingProgress";
 import { useTextAnnotations } from "@/lib/reader/useTextAnnotations";
 import { sectionLabel } from "@/lib/reader/sectionHeading";
 
-export default function Reader({ book }: { book: BookDocument }) {
+export default function Reader({
+  book,
+  targetSectionId,
+}: {
+  book: BookDocument;
+  /** ?section=<id> from the book-detail page's chapter links — see
+   * useResumeScroll's own doc comment for why this never touches the saved
+   * resume position. */
+  targetSectionId?: string;
+}) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [copyLabel, setCopyLabel] = useState("Copy");
   const [chaptersOpen, setChaptersOpen] = useState(false);
@@ -218,6 +227,7 @@ export default function Reader({ book }: { book: BookDocument }) {
     orderedSections,
     goTo,
     getSlideEl,
+    targetSectionId,
   });
 
   // Gates the full-screen loader below — the reader isn't considered ready
@@ -358,6 +368,7 @@ export default function Reader({ book }: { book: BookDocument }) {
           visible={chromeVisible}
           topBarHeightPx={topBarHeightPx}
           railInsetPx={railInsetPx}
+          bookSlug={book.slug}
           bookTitle={book.metadata.title}
           bookAuthor={book.metadata.author}
           chaptersOpen={chaptersOpen}

@@ -14,6 +14,11 @@ import { useLibraryStore } from "@/stores/library-store";
  * Returns whether the resume attempt (successful or not — an unsaved book
  * has nothing to resume) has finished, so a caller can hold off revealing
  * the reader until it has.
+ *
+ * `targetSectionId` (the book-detail page's chapter links, `?section=`)
+ * overrides the saved position for this one jump — deliberately never
+ * written back to library-store, so a reader just previewing a chapter link
+ * doesn't clobber their real bookmark.
  */
 export function useResumeScroll({
   book,
@@ -21,12 +26,14 @@ export function useResumeScroll({
   orderedSections,
   goTo,
   getSlideEl,
+  targetSectionId,
 }: {
   book: BookDocument;
   sectionsById: Map<string, Section>;
   orderedSections: Section[];
   goTo: (index: number, opts?: { animate?: boolean }) => void;
   getSlideEl: (id: string) => HTMLDivElement | undefined;
+  targetSectionId?: string;
 }) {
   const getPosition = useLibraryStore((s) => s.getPosition);
   const hasScrolledToResumeRef = useRef(false);
@@ -34,7 +41,7 @@ export function useResumeScroll({
 
   useEffect(() => {
     if (hasScrolledToResumeRef.current) return;
-    const stored = getPosition(book.id);
+    const stored = targetSectionId ? { sectionId: targetSectionId, passageIndex: 0 } : getPosition(book.id);
     const sectionIndex = stored ? orderedSections.findIndex((s) => s.id === stored.sectionId) : -1;
     const passageId = stored ? sectionsById.get(stored.sectionId)?.passages[stored.passageIndex]?.id : undefined;
     if (!stored || sectionIndex < 0 || !passageId) {
@@ -55,7 +62,7 @@ export function useResumeScroll({
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, orderedSections.length]);
+  }, [book.id, orderedSections.length, targetSectionId]);
 
   return resumed;
 }

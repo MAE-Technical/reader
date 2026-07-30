@@ -1,12 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Mic, Pause, PenLine, Play, Square, Trash2, X, EllipsisVertical } from "lucide-react";
-import TimeAgo from "react-timeago-i18n";
 import { useLibraryStore, type AnnotationRange } from "@/stores/library-store";
-import { computeWaveformBars } from "@/lib/audio/waveform";
 import { LiveWaveform, WaveformBars } from "./reader/Waveform";
 import Tooltip from "./reader/Tooltip";
+import NoteCard from "./notes/NoteCard";
+import { formatSeconds, useMeasuredWidth, useWaveformBars } from "./notes/noteAudioUtils";
 
 // A consistent, theme-independent danger red — matches SelectionMenu.tsx's
 // own DANGER_COLOR so "destructive" reads the same across both surfaces.
@@ -43,143 +43,6 @@ type Props = {
 };
 
 type ComposerMode = "idle" | "recording" | "recorded";
-
-function formatSeconds(totalSeconds: number): string {
-  const m = Math.floor(totalSeconds / 60);
-  const s = Math.floor(totalSeconds % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-
-/** Measures a container's width live (ResizeObserver) so the voice-note
- * waveform can render at its true full width — "just like a WhatsApp voice
- * note" — rather than an arbitrary fixed pixel count. A callback ref (not a
- * plain ref object read inside a mount-only effect) because both callers'
- * containers are conditionally rendered (recording/recorded composer state,
- * or a saved voice note's own mount) — a mount-only effect would capture
- * `ref.current === null` from before that DOM node ever existed and never
- * look again, leaving width stuck at 0 forever.
- */
-function useMeasuredWidth<T extends HTMLElement>() {
-  const [node, setNode] = useState<T | null>(null);
-  const [width, setWidth] = useState(0);
-  const ref = useCallback((el: T | null) => setNode(el), []);
-  useEffect(() => {
-    if (!node) return;
-    const ro = new ResizeObserver((entries) => setWidth(entries[0].contentRect.width));
-    ro.observe(node);
-    return () => ro.disconnect();
-  }, [node]);
-  return [ref, width] as const;
-}
-
-/** Decodes a blob into a fixed set of waveform bars once, for a saved/
- * just-recorded clip's full-length static display (not the live meter,
- * which reads the stream directly instead of a finished recording). */
-function useWaveformBars(blob: Blob | null, barCount = 64): number[] {
-  const [bars, setBars] = useState<number[]>([]);
-  useEffect(() => {
-    // A null blob (nothing recorded yet, or just discarded) simply leaves
-    // the last computed bars in place — harmless, since callers only ever
-    // render them while a blob exists — rather than a synchronous setState
-    // right at the top of the effect.
-    if (!blob) return;
-    let cancelled = false;
-    const ctx = new AudioContext();
-    blob
-      .arrayBuffer()
-      .then((buf) => ctx.decodeAudioData(buf))
-      .then((audioBuffer) => {
-        if (!cancelled) setBars(computeWaveformBars(audioBuffer, barCount));
-      })
-      .catch(() => {
-        if (!cancelled) setBars([]);
-      })
-      .finally(() => {
-        ctx.close().catch(() => {});
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [blob, barCount]);
-  return bars;
-}
-
-/** A saved voice note's full-length waveform + play/pause — fetches the
- * blob back from its own blob: URL (valid for this tab's session) since
- * decoding it into bars needs the raw audio data, not just a src. */
-function VoiceNoteView({ audioUrl, durationMs }: { audioUrl: string; durationMs: number }) {
-  const [containerRef, width] = useMeasuredWidth<HTMLDivElement>();
-  const [blob, setBlob] = useState<Blob | null>(null);
-  const bars = useWaveformBars(blob);
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [currentTime, setCurrentTime] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    fetch(audioUrl)
-      .then((r) => r.blob())
-      .then((b) => {
-        if (!cancelled) setBlob(b);
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [audioUrl]);
-
-  useEffect(() => {
-    if (!audioRef.current) {
-      const el = new Audio(audioUrl);
-      el.addEventListener("timeupdate", () => setCurrentTime(el.currentTime));
-      el.addEventListener("ended", () => {
-        setIsPlaying(false);
-        setCurrentTime(0);
-      });
-      audioRef.current = el;
-    }
-  }, [audioUrl]);
-
-  const toggle = () => {
-    const el = audioRef.current;
-    if (!el) return;
-    if (isPlaying) {
-      el.pause();
-      setIsPlaying(false);
-    } else {
-      el.play();
-      setIsPlaying(true);
-    }
-  };
-
-  return (
-    <div
-      onClick={toggle}
-      className="cursor-pointer border border-brand-300 rounded-sm py-2 px-2.5 flex items-center gap-2"
-    >
-      <span className="w-6.5 h-6.5 rounded-full bg-brand-500 flex items-center justify-center flex-none text-white">
-        {isPlaying ? <Pause size={11} /> : <Play size={11} fill="currentColor" stroke="none" />}
-      </span>
-      <div ref={containerRef} className="flex-1 min-w-0 h-8">
-        {width > 0 && (
-          <WaveformBars
-            bars={bars}
-            width={width}
-            height={32}
-            barWidth={2.5}
-            gap={1}
-            barColor="var(--reader-text-subtle)"
-            barPlayedColor="var(--color-brand-500)"
-            progress={durationMs > 0 ? currentTime / (durationMs / 1000) : 0}
-          />
-        )}
-      </div>
-      <span className="text-xs font-medium text-[var(--reader-text-muted)] flex-none">
-        {formatSeconds(durationMs / 1000)}
-      </span>
-    </div>
-  );
-}
 
 /** The text/voice composer — shared by "add a note to a fresh selection"
  * and "edit an existing note." Flows as the last item inside the panel's
@@ -669,45 +532,36 @@ function EditPanel({
           {existing && existing.notes.length > 0 && (
             <div className="flex flex-col gap-3">
               {existing.notes.map((note) => (
-                <div
-                  key={note.id}
-                  className="flex flex-col gap-1.5 pb-4 border-b border-[var(--reader-border)] last:border-b-0"
-                >
-                  <div className="flex items-start gap-2">
-                    <div className="flex-1 min-w-0">
-                      {note.content.kind === "text" ? (
-                        <p className="text-sm text-[var(--reader-text)] m-0">{note.content.text}</p>
-                      ) : (
-                        <VoiceNoteView audioUrl={note.content.audioUrl} durationMs={note.content.durationMs} />
-                      )}
-                    </div>
-                    <div className="relative flex-none">
-                      <button
-                        onClick={() => setOpenMenuId((id) => (id === note.id ? null : note.id))}
-                        className="flex items-center bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0.5"
-                      >
-                        <EllipsisVertical size={15} />
-                      </button>
-                      {openMenuId === note.id && (
-                        <EntryMenu
-                          canEdit={note.content.kind === "text"}
-                          onEdit={() => {
-                            setEditingId(note.id);
-                            setOpenMenuId(null);
-                          }}
-                          onDelete={() => {
-                            deleteNoteEntry(bookId, note.id);
-                            if (editingId === note.id) setEditingId(undefined);
-                            setOpenMenuId(null);
-                          }}
-                          onClose={() => setOpenMenuId(null)}
-                        />
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1.5 text-[10.5px] font-medium text-[var(--reader-text-muted)]">
-                    <TimeAgo date={new Date(note.savedAt)} />
-                  </div>
+                <div key={note.id} className="pb-4 border-b border-[var(--reader-border)] last:border-b-0">
+                  <NoteCard
+                    content={note.content}
+                    savedAt={note.savedAt}
+                    actions={
+                      <div className="relative flex-none">
+                        <button
+                          onClick={() => setOpenMenuId((id) => (id === note.id ? null : note.id))}
+                          className="flex items-center bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0.5"
+                        >
+                          <EllipsisVertical size={15} />
+                        </button>
+                        {openMenuId === note.id && (
+                          <EntryMenu
+                            canEdit={note.content.kind === "text"}
+                            onEdit={() => {
+                              setEditingId(note.id);
+                              setOpenMenuId(null);
+                            }}
+                            onDelete={() => {
+                              deleteNoteEntry(bookId, note.id);
+                              if (editingId === note.id) setEditingId(undefined);
+                              setOpenMenuId(null);
+                            }}
+                            onClose={() => setOpenMenuId(null)}
+                          />
+                        )}
+                      </div>
+                    }
+                  />
                 </div>
               ))}
             </div>

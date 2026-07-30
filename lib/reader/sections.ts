@@ -1,4 +1,4 @@
-import type { Section } from "@/lib/book/schema";
+import type { Passage, Section } from "@/lib/book/schema";
 
 /** Flat lookup over a book's content tree (arbitrary depth — see
  * ingestion.md's "content-first, chapter-agnostic" design) so sections can
@@ -10,6 +10,21 @@ export function buildSectionsById(sections: Section[]): Map<string, Section> {
   const walk = (secs: Section[]) => {
     for (const s of secs) {
       map.set(s.id, s);
+      walk(s.children);
+    }
+  };
+  walk(sections);
+  return map;
+}
+
+/** Flat passage -> {passage, sectionId} lookup over the same content tree —
+ * for contexts that only have a passageId (a saved highlight/note range) and
+ * need the passage's own text plus which section/chapter cites it. */
+export function buildPassageIndex(sections: Section[]): Map<string, { passage: Passage; sectionId: string }> {
+  const map = new Map<string, { passage: Passage; sectionId: string }>();
+  const walk = (secs: Section[]) => {
+    for (const s of secs) {
+      for (const p of s.passages) map.set(p.id, { passage: p, sectionId: s.id });
       walk(s.children);
     }
   };

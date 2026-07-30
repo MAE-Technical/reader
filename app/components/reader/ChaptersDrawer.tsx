@@ -2,7 +2,8 @@
 
 import { useMemo } from "react";
 import { X } from "lucide-react";
-import type { BookDocument, Section } from "@/lib/book/schema";
+import type { BookDocument } from "@/lib/book/schema";
+import { buildOutlineRows } from "@/lib/reader/outline";
 import Tooltip from "./Tooltip";
 
 type Props = {
@@ -21,9 +22,6 @@ type Props = {
   onClose: () => void;
 };
 
-type SidebarRow = { section: Section; depth: number };
-
-
 export default function ChaptersDrawer({
   book,
   scrollPct,
@@ -33,15 +31,7 @@ export default function ChaptersDrawer({
   onNavigate,
   onClose,
 }: Props) {
-  const sidebarRows = useMemo(() => {
-    const flatten = (sections: Section[], depth: number): SidebarRow[] =>
-      sections.flatMap((s) => {
-        const isGroup = s.children.length > 0;
-        if (!isGroup && !s.title) return [];
-        return [{ section: s, depth }, ...flatten(s.children, depth + 1)];
-      });
-    return flatten(book.sections, 0);
-  }, [book.sections]);
+  const sidebarRows = useMemo(() => buildOutlineRows(book.sections), [book.sections]);
 
   // Mobile vs desktop layout is decided in pure CSS (the min-[860px]:
   // breakpoint below, matching useSectionCarousel's isMobile threshold) —
@@ -108,8 +98,7 @@ export default function ChaptersDrawer({
         </div>
 
         <div className="om-scroll flex-1 overflow-y-auto px-4 pb-5">
-          {sidebarRows.map(({ section, depth }) => {
-            const isGroup = section.children.length > 0;
+          {sidebarRows.map(({ section, depth, isGroup }) => {
             const hasContent = section.passages.length > 0;
             const isCurrent = section.id === activeSectionId;
             if (isGroup) {

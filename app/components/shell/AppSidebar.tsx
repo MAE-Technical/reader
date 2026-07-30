@@ -33,7 +33,7 @@ export default function AppSidebar() {
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-md mb-3 no-underline text-sm font-bold transition-colors ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-md mb-3 no-underline text-sm font-semibold transition-colors ${
                 active
                   ? "bg-brand-500/10 text-brand-500"
                   : "text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
@@ -49,7 +49,7 @@ export default function AppSidebar() {
       <div className="flex-none px-3 pb-6 pt-2 border-t border-[var(--reader-border)]">
         <button
           onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md border-none bg-transparent cursor-pointer text-sm font-bold text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md border-none bg-transparent cursor-pointer text-sm font-semibold text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
         >
           {theme === "light" ? <Sun size={18} /> : <Moon size={18} />}
           {theme === "light" ? "Light mode" : "Dark mode"}
@@ -59,7 +59,7 @@ export default function AppSidebar() {
             is anonymous device identity, not an account), so there's nothing
             to actually sign out of. Kept visible per the wireframe rather
             than removed, just not wired to a real flow yet. */}
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md border-none bg-transparent cursor-pointer text-sm font-bold text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]">
+        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md border-none bg-transparent cursor-pointer text-sm font-semibold text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]">
           <LogOut size={18} />
           Logout
         </button>

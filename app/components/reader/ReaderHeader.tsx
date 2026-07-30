@@ -9,6 +9,7 @@ type Props = {
   visible: boolean;
   topBarHeightPx: number;
   railInsetPx: number;
+  bookSlug: string;
   bookTitle: string;
   bookAuthor: string;
   chaptersOpen: boolean;
@@ -46,6 +47,7 @@ export default function ReaderHeader({
   visible,
   topBarHeightPx,
   railInsetPx,
+  bookSlug,
   bookTitle,
   bookAuthor,
   chaptersOpen,
@@ -71,10 +73,10 @@ export default function ReaderHeader({
         visible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
       }`}
     >
-      <Tooltip label="Back to library" side="bottom" align="start">
+      <Tooltip label="Back to book details" side="bottom" align="start">
         <Link
-          href="/library"
-          aria-label="Back to library"
+          href={`/book/${bookSlug}`}
+          aria-label="Back to book details"
           className="w-9 h-9 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] flex items-center justify-center text-[var(--reader-text)] no-underline flex-none"
         >
           <ArrowLeft size={18} />

@@ -1,0 +1,38 @@
+"use client";
+
+import { useState } from "react";
+import { Check, Share } from "lucide-react";
+
+/**
+ * Real, zero-backend sharing: the native share sheet where available
+ * (navigator.share needs no server support, just a title/text/url), a
+ * clipboard-copy fallback everywhere else — never a fake/inert button.
+ */
+export default function ShareButton({ title, text }: { title: string; text?: string }) {
+  const [copied, setCopied] = useState(false);
+
+  const onClick = async () => {
+    const url = window.location.href;
+    if (typeof navigator.share === "function") {
+      try {
+        await navigator.share({ title, text, url });
+      } catch {
+        // Reader dismissed the native share sheet — not an error.
+      }
+      return;
+    }
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1200);
+  };
+
+  return (
+    <button
+      onClick={onClick}
+      aria-label="Share this book"
+      className="flex flex-none cursor-pointer items-center justify-center text-[var(--reader-text)]"
+    >
+      {copied ? <Check size={20} /> : <Share size={20} />}
+    </button>
+  );
+}

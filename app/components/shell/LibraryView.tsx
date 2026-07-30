@@ -50,7 +50,7 @@ export default function LibraryView({ books }: { books: LibraryBookSummary[] }) 
               : "No books match your search."}
         </p>
       ) : (
-        <div className="grid grid-cols-1 gap-x-8 gap-y-6 min-[860px]:grid-cols-2">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4">
           {filtered.map((book) => (
             <BookCard key={book.id} book={book} />
           ))}
