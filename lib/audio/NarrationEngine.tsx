@@ -146,10 +146,57 @@ export default function NarrationEngine() {
   useEffect(() => {
     const audio = audioElRef.current;
     if (!audio || !usesRecordedAudio) return;
-    const onTimeUpdate = () => useAudioStore.getState().seekTo(audio.currentTime * 1000);
+    const onTimeUpdate = () => {
+      useAudioStore.getState().seekTo(audio.currentTime * 1000);
+      // Drives the lock-screen/Control Center scrub bar and elapsed-time
+      // display — without it the OS media UI still shows play/pause but no
+      // progress, since it has no other way to know where in the track the
+      // real element is.
+      if (typeof navigator !== "undefined" && "mediaSession" in navigator && audioSectionTrack) {
+        try {
+          navigator.mediaSession.setPositionState({
+            duration: audioSectionTrack.durationMs / 1000,
+            playbackRate: audio.playbackRate,
+            position: audio.currentTime,
+          });
+        } catch {
+          // Safari throws if position momentarily exceeds duration (e.g.
+          // right at track-end, just before the auto-advance effect below
+          // swaps in the next source) — harmless to skip that one update.
+        }
+      }
+    };
     audio.addEventListener("timeupdate", onTimeUpdate);
     return () => audio.removeEventListener("timeupdate", onTimeUpdate);
-  }, [usesRecordedAudio]);
+  }, [usesRecordedAudio, audioSectionTrack]);
+
+  // Lock-screen / Control Center / Bluetooth-headset controls — the same
+  // surface a podcast app gets, including while the screen is locked or the
+  // PWA is backgrounded. iOS Safari only shows any of this once
+  // `navigator.mediaSession.metadata` is set on the tab actually driving the
+  // real <audio> element, which is always this one (see the module doc
+  // comment above on why there's exactly one).
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    if (!book) {
+      navigator.mediaSession.metadata = null;
+      return;
+    }
+    navigator.mediaSession.metadata = new MediaMetadata({
+      // Matches NowPlayingBar's own chapterLabel fallback exactly, so the
+      // lock screen and the in-app bar never disagree about what to call
+      // the current track.
+      title: audioSection?.title ?? book.metadata.title,
+      artist: book.metadata.author,
+      album: book.metadata.title,
+      artwork: [{ src: book.metadata.cover }],
+    });
+  }, [book, audioSection]);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    navigator.mediaSession.playbackState = !book ? "none" : audioPlaying ? "playing" : "paused";
+  }, [book, audioPlaying]);
 
   // Explicit seeks (resume, click-to-play, scrub) need to move the real
   // element, not just the store's cached position.
@@ -274,6 +321,45 @@ export default function NarrationEngine() {
   );
   const skipToPrevSection = useCallback(() => skipSection(-1), [skipSection]);
   const skipToNextSection = useCallback(() => skipSection(1), [skipSection]);
+
+  // The other half of Media Session support (metadata/playbackState are set
+  // above, near where audioSection/audioPlaying are already in scope) —
+  // these are the actual lock-screen/Control Center/headset button
+  // handlers, registered here since they need seekAudio/skipToPrevSection/
+  // skipToNextSection, all defined above this point.
+  useEffect(() => {
+    if (typeof navigator === "undefined" || !("mediaSession" in navigator)) return;
+    const ms = navigator.mediaSession;
+    ms.setActionHandler("play", () => useAudioStore.getState().play());
+    ms.setActionHandler("pause", () => useAudioStore.getState().pause());
+    // 15s, matching AudioPlayer's own back15Btn/forward15Btn — not the
+    // browser-suggested 10s default — so a lock-screen skip lands on
+    // exactly the same offset the in-app buttons use. details.seekOffset
+    // (seconds) is only present when the OS itself specifies one.
+    ms.setActionHandler("seekbackward", (details) => {
+      seekAudio(useAudioStore.getState().currentTimeMs - (details.seekOffset ?? 15) * 1000);
+    });
+    ms.setActionHandler("seekforward", (details) => {
+      seekAudio(useAudioStore.getState().currentTimeMs + (details.seekOffset ?? 15) * 1000);
+    });
+    ms.setActionHandler("seekto", (details) => {
+      if (details.seekTime !== undefined) seekAudio(details.seekTime * 1000);
+    });
+    // Chapter skip (same as skipPrevBtn/skipNextBtn in AudioPlayer.tsx),
+    // not a ±15s nudge.
+    ms.setActionHandler("previoustrack", skipToPrevSection);
+    ms.setActionHandler("nexttrack", skipToNextSection);
+
+    return () => {
+      ms.setActionHandler("play", null);
+      ms.setActionHandler("pause", null);
+      ms.setActionHandler("seekbackward", null);
+      ms.setActionHandler("seekforward", null);
+      ms.setActionHandler("seekto", null);
+      ms.setActionHandler("previoustrack", null);
+      ms.setActionHandler("nexttrack", null);
+    };
+  }, [seekAudio, skipToPrevSection, skipToNextSection]);
 
   // Click-a-specific-word-to-narrate-from-there — the word-granularity
   // counterpart above.
