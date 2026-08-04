@@ -1,5 +1,5 @@
 import { notFound } from "next/navigation";
-import Reader from "@/app/components/Reader";
+import Reader from "@/app/components/reader/Reader";
 import { BookNotFoundError, getBookDocument } from "@/lib/book/repository";
 
 export default async function ReadBookPage({
@@ -10,10 +10,14 @@ export default async function ReadBookPage({
   // ?section=<sectionId> — set by the book-detail page's chapter links
   // (app/(app)/book/[slug]) to jump straight to that chapter on this one
   // load, without touching the reader's own saved resume position.
-  searchParams: Promise<{ section?: string }>;
+  // ?passage=<passageId>&note=<annotationId> — set by the home community
+  // feed's cards, narrowing that further to one exact passage and
+  // (optionally, paired with it) opening that annotation's thread once
+  // the reader has landed.
+  searchParams: Promise<{ section?: string; passage?: string; note?: string }>;
 }) {
   const { slug } = await params;
-  const { section } = await searchParams;
+  const { section, passage, note } = await searchParams;
 
   let book;
   try {
@@ -25,5 +29,5 @@ export default async function ReadBookPage({
     // BookValidationError and anything unexpected surface through error.tsx
     throw err;
   }
-  return <Reader book={book} targetSectionId={section} />;
+  return <Reader book={book} targetSectionId={section} targetPassageId={passage} targetNoteId={note} />;
 }

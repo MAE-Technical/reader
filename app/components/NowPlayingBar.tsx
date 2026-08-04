@@ -6,6 +6,7 @@ import AudioPlayer from "./AudioPlayer";
 import { useAudioStore } from "@/stores/audio-store";
 import { useNarrationStore } from "@/stores/narration-store";
 import { useReaderStore } from "@/stores/reader-store";
+import { useReaderOverlayStore } from "@/stores/reader-overlay-store";
 
 /**
  * The one persistent "now playing" bar — mounted once in the root layout
@@ -40,8 +41,21 @@ export default function NowPlayingBar() {
   // (app/components/shell/AppSidebar.tsx) at the same 860px breakpoint —
   // full-width here would run this bar underneath it, covering the
   // sidebar's own bottom-pinned theme/logout controls.
+  //
+  // pathname alone can't tell "the standalone /read page" (no sidebar)
+  // apart from "ReaderModal open over a sidebar-having page" (sidebar's
+  // still there) — an intercepted (.)read/[slug] navigation moves the URL
+  // to /read/[slug] either way. overlayOpen (reader-overlay-store) is what
+  // ReaderModal itself sets, so it's the actual source of truth here; a
+  // pathname starting with "/read" only means "no sidebar" when that flag
+  // says the overlay isn't the reason. Without this override, this bar ran
+  // full-width underneath the modal and sat on top of the sidebar's own
+  // nav items (z-50 vs. the sidebar's z-30) whenever a book was loaded for
+  // listening while the reader overlay was open — silently eating clicks
+  // on whatever nav item it happened to cover.
   const pathname = usePathname();
-  const hasSidebar = !pathname.startsWith("/read");
+  const overlayOpen = useReaderOverlayStore((s) => s.open);
+  const hasSidebar = !pathname.startsWith("/read") || overlayOpen;
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -62,7 +76,7 @@ export default function NowPlayingBar() {
       ref={containerRef}
       data-reader-theme={theme}
       className={`fixed bottom-0 left-0 right-0 z-50 ${
-        hasSidebar ? "min-[860px]:left-[var(--app-sidebar-w)]" : ""
+        hasSidebar ? "shell:left-[var(--app-sidebar-w)]" : ""
       }`}
     >
       <AudioPlayer

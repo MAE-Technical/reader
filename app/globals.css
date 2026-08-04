@@ -1,6 +1,19 @@
 @import "tailwindcss";
 
 @theme {
+  /* The one desktop-shell breakpoint the whole app hinges layout on — the
+     sidebar rail appears, ChaptersDrawer/notes panels push sideways instead
+     of overlaying, etc. Named (not Tailwind's stock sm/md/lg) because 860px
+     is a deliberate product value — the point where a fixed 220px sidebar
+     plus a comfortably-wide content pane actually fit — not a generic
+     "tablet" or "desktop" cutoff; none of Tailwind's presets (768/1024)
+     land there, and snapping to one would show the sidebar either before
+     there's room for it or later than there needs to be. Defining it here
+     makes `shell:` a real Tailwind breakpoint variant everywhere, instead
+     of every callsite repeating `min-[860px]:` as a magic number.
+     Reference: --app-sidebar-w below is the width this math is built on. */
+  --breakpoint-shell: 860px;
+
   /* Warm paper-like neutrals */
   --color-sand-0: #ffffff;
   --color-sand-25: #fdfbf8;
@@ -33,7 +46,13 @@
   --color-olive-500: #3f4a2e;
   --color-forest-500: #2b4a34;
 
-  --color-highlight: #f6e4ce;
+  --color-highlight: #ffde59;
+  --color-highlight-border: #d9a404;
+  /* The Claude Design system's --fill-highlight — a warm tan wash used only
+     for the mission card's Biko pull-quote (MissionCard) and the install
+     banner's "open in Safari" callout (HomeInstallBanner). Distinct from
+     --color-highlight above, which is the reading-highlighter yellow. */
+  --color-quote-wash: #f6e4ce;
 
   --font-serif: var(--font-source-serif), "Iowan Old Style", Georgia, serif;
   --font-sans: var(--font-manrope), -apple-system, "Segoe UI", sans-serif;
@@ -106,7 +125,7 @@ body {
 
    --reader-active-word-bg/text is the *currently narrated word* during
    listen mode (PassageContent.tsx) — a cool steel-blue, deliberately nowhere
-   near the warm brand-terracotta used for --reader-highlight, so "this is
+   near the marker-yellow used for --reader-highlight, so "this is
    the one word playing right now" (a solid, high-contrast chip that jumps
    word to word) is never confused with "I highlighted this" (a soft
    background wash the reader chose themselves). White text on the chip in
@@ -120,7 +139,8 @@ body {
      floating panel/rail zero elevation cue (no separation from the page
      behind it), which is what read as "flat"/wrong even though the reading
      background itself is still literal white, per spec. */
-  --reader-surface: #f7f7f7;
+  /* --reader-surface: #f7f7f7; */
+  --reader-surface: #ffffff;
   --reader-surface-hover: #ececec;
   /* Deliberately faint — a hairline, not a stroke. Any border reads with
      outsized weight against a pure-white canvas, so this needs to sit well
@@ -130,8 +150,27 @@ body {
   --reader-text-muted: #6e6e73;
   --reader-text-subtle: #a1a1a6;
   --reader-highlight: var(--color-highlight);
-  --reader-highlight-border: var(--color-brand-400);
+  --reader-highlight-border: var(--color-highlight-border);
+  /* The jump-to-highlight flash's starting color (see .reader-jump-flash
+     below) — solid, deeper gold than the steady wash itself, since black
+     ink over it stays perfectly legible at full opacity in light theme
+     (unlike dark theme, which needs its own translucent version — see the
+     dark block below). */
+  --reader-highlight-flash: var(--color-highlight-border);
   --reader-note-accent: var(--color-brand-500);
+  /* Theme-aware brand accent for app-shell chrome (sidebar logo/active nav,
+     account stat numbers, plain-text links) — same light/dark split as
+     --reader-note-accent above, just named for chrome rather than notes,
+     since brand-500 alone (a plain Tailwind text-brand-500 class) loses too
+     much contrast once dark theme's background goes literal black. */
+  --reader-accent: var(--color-brand-500);
+  /* The quote card's own "sunken" surface — deliberately the warm sand
+     palette (same family as the app shell's cream chrome), not
+     --reader-surface-hover's neutral grey, so a pulled-out excerpt reads
+     as a warm paper-toned object sitting on the page rather than a cold
+     UI panel. Lighter than the page in light theme, a lifted near-black
+     in dark theme (see dark block below) — Substack-restack effect. */
+  --reader-quote-bg: var(--color-sand-75);
   /* Foreground for content sitting *on top of* --reader-note-accent (the
      inline note-glyph badge) — white reads cleanly against brand-500's dark
      terracotta here; the dark theme's lighter --color-brand-300 needs the
@@ -143,18 +182,30 @@ body {
 
 [data-reader-theme="dark"] {
   --reader-bg: #000000;
-  --reader-surface: #121212;
+  /* --reader-surface: #121212; */
+  --reader-surface: #000000;
   --reader-surface-hover: #1c1c1e;
   --reader-border: rgba(255, 255, 255, 0.1);
   --reader-text: #ffffff;
   --reader-text-muted: #98989d;
   --reader-text-subtle: #636366;
-  /* Same apricot as light theme's --color-highlight, just translucent over
-     the dark page instead of a different (more saturated) hue — matches
-     the Claude Design mockup's dark-theme selection wash exactly. */
-  --reader-highlight: rgba(246, 228, 206, 0.22);
-  --reader-highlight-border: var(--color-brand-400);
+  /* Same marker-yellow as light theme's --color-highlight, just translucent
+     over the black page instead of solid — a solid highlighter yellow here
+     would wash out white text on top of it (light-on-light), so this stays
+     a low-opacity gold wash instead: dark enough for white text to stay
+     crisp, still readably warm/yellow rather than a dull grey. */
+  --reader-highlight: rgba(255, 222, 89, 0.32);
+  --reader-highlight-border: var(--color-highlight-border);
+  /* A brighter, higher-alpha version of the same yellow, not the solid
+     opaque border color light theme uses — full opacity here would flip to
+     light-on-light against this theme's white text (same reasoning as
+     --reader-highlight's own translucency above), so the flash stays
+     translucent too, just noticeably stronger than the steady 0.32 wash it
+     eases into. */
+  --reader-highlight-flash: rgba(255, 222, 89, 0.55);
   --reader-note-accent: var(--color-brand-300);
+  --reader-accent: var(--color-brand-300);
+  --reader-quote-bg: var(--color-sand-900);
   /* --color-brand-300 is a pale apricot, not dark enough for white to read
      against — near-black ink instead (matches the Claude Design mockup's
      dark-theme glyph exactly). */
@@ -163,11 +214,10 @@ body {
   --reader-active-word-text: #ffffff;
 }
 
-/* The browser's native drag-selection wash, recolored to the same warm
-   apricot as a saved highlight (--reader-highlight) instead of the default
+/* The browser's native drag-selection wash, recolored to the same marker
+   yellow as a saved highlight (--reader-highlight) instead of the default
    platform blue — so the moment of selecting text already reads as "this
-   book's" highlight color, not a generic OS affordance, matching the
-   Claude Design mockup's selection treatment. */
+   book's" highlight color, not a generic OS affordance. */
 [data-reader-theme] ::selection {
   background: var(--reader-highlight);
 }
@@ -221,6 +271,109 @@ body {
 }
 .reader-menu-in {
   animation: reader-menu-in 140ms ease;
+}
+
+/* Jump-to-highlight flash (PassageContent.tsx/Reader.tsx) — plays once on
+   whichever specific highlight span the reader was just taken to from its
+   own quote card in the annotation feed (or a deep link).
+   A background-color pulse alone (the first version of this) turned out not
+   to be enough: two adjacent highlighted paragraphs share the exact same
+   --reader-highlight fill with no gap between them, so a same-family color
+   change (paler vs. richer yellow) didn't read as a *boundary* — it just
+   looked like slightly different lighting on one continuous block. A ring
+   (box-shadow) traces the actual edges of the one span in question, in a
+   hue nowhere near the highlight-yellow family (brand-500 rust), so it's
+   legible as "this specific range" regardless of what color the highlight
+   itself already is or what's sitting right next to it. Held near-full
+   strength for the first ~60% of the run (a pure ease-out starts fading
+   immediately, which was too easy to miss entirely — a passing glance or a
+   screenshot taken half a second late could catch it already gone), then
+   eases out the rest of the way, settling into the ordinary steady wash. */
+@keyframes reader-jump-flash {
+  0%,
+  60% {
+    background-color: var(--reader-highlight-flash);
+    box-shadow: 0 0 0 2px rgba(190, 64, 13, 0.85);
+  }
+  100% {
+    background-color: var(--reader-highlight);
+    box-shadow: 0 0 0 2px rgba(190, 64, 13, 0);
+  }
+}
+.reader-jump-flash {
+  animation: reader-jump-flash 2.4s ease-out forwards;
+  /* Without this, a span's box-shadow/border-radius only wraps the first
+     and last line fragments of a highlight that wraps across multiple
+     lines, leaving the ring's vertical edges to cut straight through the
+     middle lines instead of framing each one — clone applies both to every
+     wrapped line individually, the same way the background wash already
+     does by default. */
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* Reader-as-overlay open/close (ReaderModal.tsx) — an intercepted-route
+   modal that swapped in/out instantly read as indistinguishable from a
+   plain page navigation, which is exactly the "doesn't feel like an
+   overlay" problem this fixes. Two coordinated animations, not one: the
+   *scrim* (this outer fixed layer's own background-color) fades in/out
+   while the *panel* (the inner layer wrapping Reader itself) slides up
+   slightly and scales in/out — while the panel is mid-transform, the gap
+   it briefly leaves around itself reveals the scrim (and, through it, a
+   glimpse of whatever page sits underneath), which is what actually reads
+   as "a layer arriving on top of / returning to the page behind it" rather
+   than a flat cut. Exit is driven by ReaderModal's own `closing` state
+   (not a route change directly) so it gets to play out before
+   router.back() actually pops the page a moment later — ease-out entering
+   quick then settling, ease-in leaving with the same shape in reverse. */
+@keyframes reader-modal-scrim-in {
+  from {
+    background-color: rgba(0, 0, 0, 0);
+  }
+  to {
+    background-color: rgba(0, 0, 0, 0.35);
+  }
+}
+@keyframes reader-modal-scrim-out {
+  from {
+    background-color: rgba(0, 0, 0, 0.35);
+  }
+  to {
+    background-color: rgba(0, 0, 0, 0);
+  }
+}
+.reader-modal-scrim-enter {
+  animation: reader-modal-scrim-in 280ms ease-out forwards;
+}
+.reader-modal-scrim-exit {
+  animation: reader-modal-scrim-out 220ms ease-in forwards;
+}
+
+@keyframes reader-modal-panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(28px) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@keyframes reader-modal-panel-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(28px) scale(0.97);
+  }
+}
+.reader-modal-panel-enter {
+  animation: reader-modal-panel-in 280ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.reader-modal-panel-exit {
+  animation: reader-modal-panel-out 220ms ease-in forwards;
 }
 
 /* The app-wide loading indicator (app/components/Loader.tsx) — a plain

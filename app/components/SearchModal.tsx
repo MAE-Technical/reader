@@ -93,7 +93,7 @@ export default function SearchModal({ book, currentSectionId, onNavigate, onClos
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search this book..."
-            className="flex-1 border-none outline-none text-md font-semibold text-[var(--reader-text)] bg-transparent"
+            className="flex-1 border-none outline-none text-[14px] font-medium text-[var(--reader-text)] bg-transparent"
           />
           {query && (
             <span

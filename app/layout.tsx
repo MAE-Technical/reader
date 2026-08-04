@@ -52,8 +52,14 @@ export const viewport: Viewport = {
 
 export default function RootLayout({
   children,
+  modal,
 }: Readonly<{
   children: React.ReactNode;
+  /** The @modal parallel slot (app/@modal) — null on every route except an
+   * intercepted (.)read/[slug] navigation (app/@modal/(.)read/[slug]),
+   * where it renders the reader as a full-viewport overlay on top of
+   * `children` instead of replacing it. See ReaderModal's own doc comment. */
+  modal: React.ReactNode;
 }>) {
   return (
     <html
@@ -69,6 +75,7 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         <ThemeProvider>{children}</ThemeProvider>
+        {modal}
         <ServiceWorkerRegistration />
         <NarrationEngine />
         <NowPlayingBar />

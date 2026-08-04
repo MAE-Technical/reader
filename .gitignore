@@ -60,4 +60,11 @@ next-env.d.ts
 # audiobook mp3s; published to Supabase Storage, not committed
 content/books/*/audiobooks/*.mp3
 
+# rudimentary local-file storage for library-store (highlights/notes/
+# position) — see app/api/library-data
+/data/library.json
 
+# recorded voice-note audio — see app/api/voice-notes
+/data/voice-notes/
+
+Archive/

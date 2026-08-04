@@ -12,10 +12,10 @@ export default function AppShell({ children }: { children: ReactNode }) {
       <AppSidebar />
 
       <div
-        className="min-[860px]:pl-[var(--app-sidebar-w)] pb-20 min-[860px]:pb-0"
+        className="shell:pl-[var(--app-sidebar-w)] pb-20 shell:pb-0"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
       >
-        <main className="mx-auto max-w-5xl px-5 py-2 min-[860px]:px-10">{children}</main>
+        <main className="mx-auto max-w-5xl px-5 py-2 shell:px-10">{children}</main>
       </div>
 
       <AppBottomNav />

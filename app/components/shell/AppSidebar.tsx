@@ -1,10 +1,15 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LogOut, Moon, Sun } from "lucide-react";
+import * as Popover from "@radix-ui/react-popover";
+import { LogOut, MoreVertical, X } from "lucide-react";
 import { NAV_ITEMS } from "./navItems";
-import { useReaderStore } from "@/stores/reader-store";
+import { useReaderOverlayStore } from "@/stores/reader-overlay-store";
+import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
+import { CURRENT_READER_NAME } from "@/lib/reader/currentAuthor";
+import { avatarColor, avatarInitial } from "@/lib/reader/authorDisplay";
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -17,53 +22,151 @@ function isActive(pathname: string, href: string) {
  */
 export default function AppSidebar() {
   const pathname = usePathname();
-  const theme = useReaderStore((s) => s.theme);
-  const setTheme = useReaderStore((s) => s.setTheme);
+  const overlayOpen = useReaderOverlayStore((s) => s.open);
+  const isAuthenticated = useIsAuthenticated();
+  // Dismissing the promo card only clears it for this page load, not
+  // forever — HomeAuthBanner (the other login discovery surface) only
+  // renders on /home, so a permanent dismiss here would leave a reader who
+  // then browses elsewhere with no in-app path back to Log in/Join us.
+  const [promoDismissed, setPromoDismissed] = useState(false);
+
+  // A soft (client-side) navigation away while ReaderModal is open didn't
+  // reliably leave Next's own interception/parallel-route state clean —
+  // the destination page rendered, but the *next* deep link into the
+  // reader (a different book's ArrowUpRight) could then silently fail to
+  // open, leaving the page it landed on unresponsive to clicks until a
+  // hard reload. A real browser navigation sidesteps that whole class of
+  // problem by resetting everything, at the cost of a full reload instead
+  // of an instant client transition — worth it specifically here, since
+  // it's the one moment guaranteed to already be mid-navigation anyway.
+  const onNavClick = overlayOpen
+    ? (e: React.MouseEvent<HTMLAnchorElement>) => {
+        e.preventDefault();
+        window.location.href = e.currentTarget.href;
+      }
+    : undefined;
+
+  // Account has nothing to show without an account — hidden rather than
+  // repurposed the way it used to be (swapped for Log in/Join us rows);
+  // those now live in the promo card below instead.
+  const items = NAV_ITEMS.filter((item) => item.href !== "/account" || isAuthenticated);
 
   return (
-    <aside className="hidden min-[860px]:flex fixed left-0 top-0 h-full w-[var(--app-sidebar-w)] z-30 flex-col box-border border-r border-[var(--reader-border)] bg-[var(--reader-surface)] select-none no-callout">
-      <Link href="/home" className="px-6 pt-6 pb-4 flex-none no-underline">
-        <span className="text-xl font-serif font-bold text-brand-500">Ominira</span>
+    <aside className="hidden shell:flex fixed left-0 top-0 h-full w-[var(--app-sidebar-w)] z-30 flex-col box-border border-r border-[var(--reader-border)] bg-[var(--reader-surface)] select-none no-callout">
+      <Link
+        href="/home"
+        onClick={onNavClick}
+        className="flex-none flex items-center gap-2.5 px-4 pt-[18px] pb-3.5 no-underline"
+      >
+        <img src="/icons/icon-192.png" alt="" className="h-[30px] w-[30px] flex-none rounded-xs object-cover object-[center_20%]" />
+        <span className="text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--reader-accent)]">
+          Ominira
+        </span>
       </Link>
 
-      <nav className="flex-1 min-h-0 overflow-y-auto px-3 pt-2">
-        {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+      <nav className="flex-1 min-h-0 overflow-y-auto px-2.5 pt-2 flex flex-col gap-3">
+        {items.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (
             <Link
               key={href}
               href={href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-md mb-3 no-underline text-sm font-semibold transition-colors ${
+              onClick={onNavClick}
+              className={`flex items-center gap-3 rounded-sm px-2.5 py-[9px] no-underline transition-colors ${
                 active
-                  ? "bg-brand-500/10 text-brand-500"
-                  : "text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
+                  ? "bg-[var(--reader-accent)]/10 text-[var(--reader-accent)] text-[15px] font-semibold"
+                  : "text-[var(--reader-text-muted)] text-sm font-medium hover:bg-[var(--reader-surface-hover)]"
               }`}
             >
-              <Icon size={18} />
+              <Icon size={19} />
               {label}
             </Link>
           );
         })}
+
+        {!isAuthenticated && !promoDismissed && (
+          <div className="mt-3.5 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
+            <div className="mb-1.5 flex items-center justify-between">
+              <span className="text-[13px] font-medium text-[var(--reader-text)]">New to Ominira?</span>
+              <button
+                type="button"
+                onClick={() => setPromoDismissed(true)}
+                aria-label="Dismiss"
+                className="cursor-pointer rounded-sm border-none bg-transparent p-0.5 text-[var(--reader-text-subtle)] hover:text-[var(--reader-text-muted)]"
+              >
+                <X size={14} />
+              </button>
+            </div>
+            <p className="m-0 mb-2.5 text-xs font-normal leading-relaxed text-[var(--reader-text-muted)]">
+              Raise your Pan-African consciousness. Read revolutionary books. Share your thoughts with comrades anonymously.
+            </p>
+            <div className="flex gap-4">
+              <Link
+                href="/auth/login"
+                onClick={onNavClick}
+                className="text-[13px] font-medium text-[var(--reader-text-muted)] no-underline hover:text-[var(--reader-text)]"
+              >
+                Log in
+              </Link>
+              <Link
+                href="/auth/signup"
+                onClick={onNavClick}
+                className="text-[13px] font-bold text-[var(--reader-accent)] no-underline hover:opacity-80"
+              >
+                Join us
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
-      <div className="flex-none px-3 pb-6 pt-2 border-t border-[var(--reader-border)]">
-        <button
-          onClick={() => setTheme(theme === "light" ? "dark" : "light")}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md border-none bg-transparent cursor-pointer text-sm font-semibold text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
-        >
-          {theme === "light" ? <Sun size={18} /> : <Moon size={18} />}
-          {theme === "light" ? "Light mode" : "Dark mode"}
-        </button>
-
-        {/* Inert — there's no auth/session system yet (reader-identity-store
-            is anonymous device identity, not an account), so there's nothing
-            to actually sign out of. Kept visible per the wireframe rather
-            than removed, just not wired to a real flow yet. */}
-        <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md border-none bg-transparent cursor-pointer text-sm font-semibold text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]">
-          <LogOut size={18} />
-          Logout
-        </button>
-      </div>
+      {/* No real auth/session system yet (reader-identity-store is
+          anonymous device identity, not an account) — useIsAuthenticated
+          is the seam a real session check plugs into. Until then
+          isAuthenticated is always false, so this footer never renders;
+          Log in / Join us live in the promo card above instead, alongside
+          HomeAuthBanner on mobile. Theme switching now lives in AppHeader,
+          beside the notification bell. */}
+      {isAuthenticated && (
+        <div className="flex-none px-4 pb-6 pt-3.5 border-t border-[var(--reader-border)] flex items-center gap-2.5">
+          <span
+            style={{ background: avatarColor(CURRENT_READER_NAME) }}
+            className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full text-[11px] font-semibold text-white"
+          >
+            {avatarInitial(CURRENT_READER_NAME)}
+          </span>
+          <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--reader-text)]">
+            {CURRENT_READER_NAME}
+          </span>
+          <Popover.Root>
+            <Popover.Trigger asChild>
+              <button
+                type="button"
+                aria-label="Account menu"
+                className="cursor-pointer flex-none rounded-sm border-none bg-transparent p-0.5 text-[var(--reader-text-subtle)] hover:text-[var(--reader-text-muted)]"
+              >
+                <MoreVertical size={16} />
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                align="start"
+                sideOffset={6}
+                className="z-50 min-w-40 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-1 shadow-lg"
+              >
+                <Link
+                  href="/auth"
+                  onClick={onNavClick}
+                  className="flex items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] font-medium text-[var(--reader-text-muted)] no-underline hover:bg-[var(--reader-surface-hover)]"
+                >
+                  <LogOut size={15} />
+                  Logout
+                </Link>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        </div>
+      )}
     </aside>
   );
 }

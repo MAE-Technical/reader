@@ -80,7 +80,7 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
     .join(" · ");
 
   return (
-    <div className="pb-12 min-[860px]:mx-auto min-[860px]:max-w-3xl">
+    <div className="pb-12 shell:mx-auto shell:max-w-3xl">
       <div className="flex items-center justify-between py-5">
         <Link
           href="/library"
@@ -99,20 +99,33 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
           aria-hidden="true"
           className="absolute -inset-8 h-[calc(100%+64px)] w-[calc(100%+64px)] scale-110 object-cover opacity-40 blur-[50px]"
         />
-        <div className="relative bg-[var(--reader-bg)]/55 p-6 min-[860px]:p-10">
-          <div className="flex flex-col items-start gap-5 min-[860px]:flex-row min-[860px]:items-center min-[860px]:gap-9">
+        <div className="relative bg-[var(--reader-bg)]/55 p-6 shell:p-10">
+          <div className="flex flex-col items-start gap-5 shell:flex-row shell:items-center shell:gap-9">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={book.metadata.cover}
               alt={book.metadata.title}
-              className="aspect-[2/3] w-36 flex-none rounded-xs object-cover shadow-lg min-[860px]:w-56"
+              className="aspect-[2/3] w-36 flex-none rounded-xs object-cover shadow-lg shell:w-56"
             />
             <div className="min-w-0 flex-1">
-              <h1 className="font-serif text-2xl font-semibold leading-tight text-[var(--reader-text)] min-[860px]:text-3xl">
+              <h1 className="font-serif text-2xl font-semibold leading-tight text-[var(--reader-text)] shell:text-3xl">
                 {book.metadata.title}
               </h1>
               <div className="mt-1.5 text-base font-medium text-[var(--reader-text-muted)]">{book.metadata.author}</div>
               {metaLine && <div className="mt-2.5 text-xs text-[var(--reader-text-subtle)]">{metaLine}</div>}
+
+              <div className="mt-3.5">
+                {pct > 0 && (
+                  <div className="mb-3 flex items-center gap-3">
+                    <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--reader-surface)]">
+                      <div className="h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
+                    </div>
+                    <span className="flex-none text-xs font-semibold text-[var(--reader-text-muted)]">
+                      {pct}% complete
+                    </span>
+                  </div>
+                )}
+              </div>
               <div className="mt-3.5 grid max-w-[250px] gap-3">
               <Link
                 href={`/read/${book.slug}`}
@@ -130,24 +143,11 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
                   className="flex items-center cursor-pointer justify-center gap-2 rounded-md border border-[var(--reader-border)] bg-transparent px-5 py-2.5 text-sm font-semibold text-[var(--reader-text)] hover:bg-[var(--reader-surface)]"
                 >
                   <Play size={16} />
-                  {hasListened ? "Continue Playing" : "Listen (Audiobook)"}
+                  {hasListened ? "Continue playing" : "Listen (audiobook)"}
                 </button>
               )}
             </div>
             </div>
-          </div>
-
-          <div className="mt-6">
-            {pct > 0 && (
-              <div className="mb-3 flex items-center gap-3">
-                <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--reader-surface)]">
-                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
-                </div>
-                <span className="flex-none text-xs font-semibold text-[var(--reader-text-muted)]">
-                  {pct}% complete
-                </span>
-              </div>
-            )}
           </div>
         </div>
       </div>

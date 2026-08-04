@@ -171,6 +171,15 @@ export function useSectionCarousel({
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (disabled) return;
+      // This listener is on `window`, so it sees every keydown in the
+      // document — including ones typed into the notes panel's textarea,
+      // which is a DOM sibling of the book content, not a descendant (so
+      // there's no ancestor to stopPropagation at). Without this guard,
+      // typing a note hijacked Space/Arrow/Home/End as page-turn commands
+      // instead of text input. isContentEditable is included for parity,
+      // though nothing in the reader currently uses it.
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === "TEXTAREA" || target.tagName === "INPUT" || target.isContentEditable)) return;
       if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") {
         e.preventDefault();
         next();
@@ -192,6 +201,16 @@ export function useSectionCarousel({
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (disabled) return;
+      // Swipe-to-turn-page is a touch/pen gesture only — a mouse's own
+      // click-and-drag is how a reader selects text, and treating that as
+      // a swipe candidate too is what made an ordinary selection attempt
+      // (one that, for whatever reason, didn't end up producing a real
+      // native selection) misread as "turn the page," sometimes advancing
+      // by two sections at once (see onPointerUp's own selection check
+      // below — it can only catch a selection that actually landed).
+      // Desktop already has the footer/keyboard for page-turning (see this
+      // hook's own doc comment) — this only narrows *this* gesture path.
+      if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
       touchStart.current = { x: e.clientX, y: e.clientY };
     },
     [disabled]

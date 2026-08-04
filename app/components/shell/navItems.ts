@@ -9,5 +9,5 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/home", label: "Home", icon: Home },
   { href: "/library", label: "Library", icon: Library },
   // { href: "/notes", label: "Notes", icon: MessageCircle },
-  { href: "/profile", label: "Profile", icon: User },
+  { href: "/account", label: "Account", icon: User },
 ];

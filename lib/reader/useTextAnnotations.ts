@@ -1,9 +1,16 @@
 import { useCallback, useState } from "react";
-import { useLibraryStore, type AnnotationRange } from "@/stores/library-store";
+import { useLibraryStore, type Annotation, type AnnotationRange } from "@/stores/library-store";
 import { computeSelectionRanges } from "./annotationSelection";
 
 export type SelectionAnchor = { top: number; bottom: number; left: number; right: number };
 export type SelectionState = { ranges: AnnotationRange[]; anchor: SelectionAnchor };
+
+/** The synthetic id `getForPassage` stamps onto the pending-selection
+ * overlay below — PassageText (PassageContent.tsx) checks for exactly this
+ * id to render its wash without also making it clickable (see there for
+ * why a click target is wrong for a row that isn't backed by anything real
+ * yet). */
+export const PENDING_ANNOTATION_ID = "pending-selection";
 
 export type NotesPanelState = {
   passageId: string;
@@ -13,6 +20,9 @@ export type NotesPanelState = {
    * (from a per-entry Edit) — absent, the panel composes a fresh note to
    * append to the thread instead of overwriting one. */
   editingNoteId?: string;
+  /** Every top-level note's replies start expanded rather than collapsed —
+   * see onNoteMarkerClick's own comment for when this is set. */
+  expandAll?: boolean;
 };
 
 /**
@@ -118,14 +128,53 @@ export function useTextAnnotations(bookId: string) {
   // or in full, and use the pill's Highlight/Delete — see selection/
   // deleteSelection above), so a plain click has exactly one job: read/add
   // to this span's notes.
-  const onNoteMarkerClick = useCallback((passageId: string, annotationId: string) => {
-    setNotesPanel({ passageId, annotationId });
-  }, []);
+  //
+  // `expandAll` defaults to false (a reader who taps a marker mid-book
+  // usually cares about one specific reply, if any, not the whole thread at
+  // once) — Reader.tsx's own deep-link effect passes true, since a reader
+  // arriving from the home feed's community discussion came *for* the
+  // conversation and shouldn't have to expand every reply by hand to see
+  // it. Same "opt-in via the call site, not a second function" reasoning as
+  // openNoteMarker's own keepHeaderVisible.
+  const onNoteMarkerClick = useCallback(
+    (passageId: string, annotationId: string, opts?: { expandAll?: boolean }) => {
+      setNotesPanel({ passageId, annotationId, expandAll: opts?.expandAll });
+    },
+    []
+  );
 
   const closeNotesPanel = useCallback(() => setNotesPanel(null), []);
 
+  // Once the reader taps "Note," the browser collapses its own native
+  // selection as ordinary click-handling fallout (no code here does that —
+  // it happens before this hook's onClick even runs), so the marked text
+  // would otherwise go visually bare for as long as the panel is open on a
+  // brand-new thread. Splicing in this synthetic, unsaved-but-highlighted
+  // entry keeps the exact same wash a real Highlight would have produced —
+  // gone the moment the panel closes, whether or not anything was actually
+  // saved, since it's never written to the store. Only for a *fresh*
+  // thread (no `annotationId` yet) — one already backed by a real
+  // Annotation is already rendering correctly on its own.
+  const getForPassageWithPending = useCallback(
+    (passageId: string): Annotation[] => {
+      const real = getForPassage(bookId, passageId);
+      if (!notesPanel || notesPanel.annotationId || !notesPanel.ranges) return real;
+      const range = notesPanel.ranges.find((r) => r.passageId === passageId);
+      if (!range) return real;
+      const pending: Annotation = {
+        id: PENDING_ANNOTATION_ID,
+        ranges: notesPanel.ranges,
+        highlighted: true,
+        notes: [],
+        savedAt: 0,
+      };
+      return [...real, pending];
+    },
+    [getForPassage, bookId, notesPanel]
+  );
+
   return {
-    getForPassage: useCallback((passageId: string) => getForPassage(bookId, passageId), [getForPassage, bookId]),
+    getForPassage: getForPassageWithPending,
     selection,
     notesPanel,
     onTextSelect,

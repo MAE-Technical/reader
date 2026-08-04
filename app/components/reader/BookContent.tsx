@@ -1,7 +1,7 @@
 "use client";
 
 import { memo } from "react";
-import { ImagePassageBlock, PassageText, type NoteLookup } from "../PassageContent";
+import { ImagePassageBlock, PassageText, type NoteLookup } from "./PassageContent";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
 import type { Annotation } from "@/stores/library-store";
 
@@ -39,6 +39,8 @@ type BookContentProps = {
   /** A plain click on any existing mark — highlight-only or noted alike —
    * opening its thread directly. */
   onNoteMarkerClick: (passageId: string, annotationId: string) => void;
+  /** Passed straight through to PassageText — see its own doc comment. */
+  justJumpedAnnotationId: string | null;
 };
 
 /**
@@ -77,6 +79,7 @@ const BookContent = memo(function BookContent({
   onNoteClick,
   onTextSelect,
   onNoteMarkerClick,
+  justJumpedAnnotationId,
 }: BookContentProps) {
   const firstSectionId = orderedSections[0]?.id;
   const section = orderedSections[activeIndex];
@@ -150,7 +153,7 @@ const BookContent = memo(function BookContent({
                   </h3>
                   {notes.length === 0 ? (
                     <p className="text-sm text-[var(--reader-text-muted)] m-0">
-                      No notes for this chapter.
+                      {/* No notes */}
                     </p>
                   ) : (
                     <div className="flex flex-col gap-2">
@@ -230,6 +233,7 @@ const BookContent = memo(function BookContent({
                       // synthesis per section (or timestamps are corrected
                       // against real decoded chunk durations).
                       activeWordIndex={undefined}
+                      justJumpedAnnotationId={justJumpedAnnotationId}
                     />
                   </p>
                 );

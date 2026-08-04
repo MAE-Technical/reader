@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { X } from "lucide-react";
 import type { BookDocument } from "@/lib/book/schema";
 import { buildOutlineRows } from "@/lib/reader/outline";
+import { sectionLabel } from "@/lib/reader/sectionHeading";
 import Tooltip from "./Tooltip";
 
 type Props = {
@@ -33,7 +34,7 @@ export default function ChaptersDrawer({
 }: Props) {
   const sidebarRows = useMemo(() => buildOutlineRows(book.sections), [book.sections]);
 
-  // Mobile vs desktop layout is decided in pure CSS (the min-[860px]:
+  // Mobile vs desktop layout is decided in pure CSS (the shell:
   // breakpoint below, matching useSectionCarousel's isMobile threshold) —
   // deliberately NOT branched on the isMobile prop the way it briefly was.
   // isMobile starts false on every render (SSR-safe) and only flips to its
@@ -46,8 +47,8 @@ export default function ChaptersDrawer({
     <div
       className={`fixed inset-0 z-[70] overflow-hidden transition-transform duration-300 ease-out ${
         open ? "translate-x-0" : "-translate-x-full pointer-events-none"
-      } min-[860px]:static min-[860px]:inset-auto min-[860px]:z-auto min-[860px]:h-full min-[860px]:max-w-[82vw] min-[860px]:flex-none min-[860px]:translate-x-0 min-[860px]:pointer-events-auto min-[860px]:transition-[width] min-[860px]:duration-300 min-[860px]:ease-out ${
-        open ? "min-[860px]:w-[288px]" : "min-[860px]:w-0"
+      } shell:static shell:inset-auto shell:z-auto shell:h-full shell:max-w-[82vw] shell:flex-none shell:translate-x-0 shell:pointer-events-auto shell:transition-[width] shell:duration-300 shell:ease-out ${
+        open ? "shell:w-[288px]" : "shell:w-0"
       }`}
     >
       <div
@@ -57,7 +58,7 @@ export default function ChaptersDrawer({
         // for as long as the outline is open. Below the desktop breakpoint
         // the outer fixed wrapper is already z-[70], clearing all of that
         // on its own.
-        className="relative h-full w-full min-[860px]:w-[288px] min-[860px]:z-[60] min-[860px]:max-w-[82vw] bg-[var(--reader-surface)] min-[860px]:border-r min-[860px]:border-[var(--reader-border)] flex flex-col overflow-hidden box-border select-none no-callout"
+        className="relative h-full w-full shell:w-[288px] shell:z-[60] shell:max-w-[82vw] bg-[var(--reader-surface)] shell:border-r shell:border-[var(--reader-border)] flex flex-col overflow-hidden box-border select-none no-callout"
       >
         <div className="flex items-start justify-between gap-2 px-5 pt-6 pb-4 flex-none">
           <div className="flex items-start gap-3 min-w-0">
@@ -108,7 +109,7 @@ export default function ChaptersDrawer({
                   style={{ paddingLeft: depth * 14 }}
                   className="pt-4 first:pt-1 pb-1.5 px-2.5 text-[10px] font-bold tracking-wider uppercase text-[var(--reader-text-subtle)]"
                 >
-                  {section.title}
+                  {sectionLabel(section)}
                 </div>
               );
             }
@@ -129,7 +130,7 @@ export default function ChaptersDrawer({
                     isCurrent ? "font-semibold text-brand-500" : "font-medium text-[var(--reader-text-muted)]"
                   }`}
                 >
-                  {section.title}
+                  {sectionLabel(section)}
                 </span>
               </div>
             );

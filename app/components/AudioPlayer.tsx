@@ -59,14 +59,14 @@ function SpeedMenu({
     <>
       <div onClick={onClose} className="fixed inset-0 z-19" />
       {isMobile ? (
-        <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-1 rounded-full bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-lg z-20 whitespace-nowrap">
+        <div className="absolute bottom-[calc(100%+8px)] left-1/2 -translate-x-1/2 flex items-center gap-0.5 p-1 rounded-sm bg-[var(--reader-surface)] border border-[var(--reader-border)] shadow-lg z-20 whitespace-nowrap">
           {SPEEDS.map((s) => {
             const active = s === speed;
             return (
               <button
                 key={s}
                 onClick={() => onSelect(s)}
-                className={`border-none cursor-pointer rounded-full py-1.5 px-2.5 text-[11px] font-semibold ${
+                className={`border-none cursor-pointer rounded-sm py-1.5 px-2.5 text-[11px] font-semibold ${
                   active ? "bg-brand-500 text-white" : "bg-transparent text-[var(--reader-text-muted)]"
                 }`}
               >
@@ -152,7 +152,7 @@ export default function AudioPlayer({
     <Tooltip label="Playback speed" side="top">
       <button
         onClick={() => setSpeedMenuOpen((o) => !o)}
-        className="flex items-center gap-0.5 border-none cursor-pointer rounded-full py-1.25 px-2.5 text-xs font-semibold bg-[var(--reader-surface-hover)] text-[var(--reader-text-muted)] flex-none"
+        className="flex items-center gap-0.5 border-none cursor-pointer rounded-sm py-1.25 px-2.5 text-xs font-semibold bg-[var(--reader-surface-hover)] text-[var(--reader-text-muted)] flex-none"
       >
         {speed}×
         <ChevronDown size={12} />
@@ -222,7 +222,7 @@ export default function AudioPlayer({
       <button
         onClick={onClose}
         aria-label="Close player"
-        className="w-8 h-8 rounded-full flex-none flex items-center justify-center border-none cursor-pointer bg-transparent text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
+        className="w-8 h-8 rounded-sm flex-none flex items-center justify-center border-none cursor-pointer bg-transparent text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
       >
         <X size={16} />
       </button>
@@ -259,9 +259,9 @@ export default function AudioPlayer({
           {formatDuration(time, withHours)}
         </span>
         <div onClick={onScrub} className="flex-1 h-4 flex items-center cursor-pointer">
-          <div className="w-full h-1 rounded-full bg-[var(--reader-border)] overflow-hidden">
+          <div className="w-full h-1 rounded-sm bg-[var(--reader-border)] overflow-hidden">
             <div
-              className="h-full bg-brand-500 rounded-full"
+              className="h-full bg-brand-500 rounded-sm"
               style={{ width: `${Math.round(progress * 100)}%` }}
             />
           </div>

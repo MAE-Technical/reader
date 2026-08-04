@@ -18,7 +18,10 @@ import { useLibraryStore } from "@/stores/library-store";
  * `targetSectionId` (the book-detail page's chapter links, `?section=`)
  * overrides the saved position for this one jump — deliberately never
  * written back to library-store, so a reader just previewing a chapter link
- * doesn't clobber their real bookmark.
+ * doesn't clobber their real bookmark. `targetPassageId` (the home
+ * community feed's deep links, `?passage=`) narrows that further to one
+ * specific passage within the section, instead of always landing on the
+ * section's first passage.
  */
 export function useResumeScroll({
   book,
@@ -27,6 +30,7 @@ export function useResumeScroll({
   goTo,
   getSlideEl,
   targetSectionId,
+  targetPassageId,
 }: {
   book: BookDocument;
   sectionsById: Map<string, Section>;
@@ -34,6 +38,7 @@ export function useResumeScroll({
   goTo: (index: number, opts?: { animate?: boolean }) => void;
   getSlideEl: (id: string) => HTMLDivElement | undefined;
   targetSectionId?: string;
+  targetPassageId?: string;
 }) {
   const getPosition = useLibraryStore((s) => s.getPosition);
   const hasScrolledToResumeRef = useRef(false);
@@ -43,7 +48,8 @@ export function useResumeScroll({
     if (hasScrolledToResumeRef.current) return;
     const stored = targetSectionId ? { sectionId: targetSectionId, passageIndex: 0 } : getPosition(book.id);
     const sectionIndex = stored ? orderedSections.findIndex((s) => s.id === stored.sectionId) : -1;
-    const passageId = stored ? sectionsById.get(stored.sectionId)?.passages[stored.passageIndex]?.id : undefined;
+    const passageId =
+      targetPassageId ?? (stored ? sectionsById.get(stored.sectionId)?.passages[stored.passageIndex]?.id : undefined);
     if (!stored || sectionIndex < 0 || !passageId) {
       hasScrolledToResumeRef.current = true;
       // Deferred a frame (rather than set synchronously here) purely to
@@ -62,7 +68,7 @@ export function useResumeScroll({
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, orderedSections.length, targetSectionId]);
+  }, [book.id, orderedSections.length, targetSectionId, targetPassageId]);
 
   return resumed;
 }

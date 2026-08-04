@@ -1,0 +1,78 @@
+"use client";
+
+import { useLibraryStore } from "@/stores/library-store";
+import { quoteForRanges } from "@/lib/reader/annotationSelection";
+import { topLevelNotes, repliesFor, sortNotes } from "@/lib/reader/noteThread";
+import { useThreadInteraction } from "@/lib/reader/useThreadInteraction";
+import type { FeedEntry } from "@/lib/reader/annotationFeed";
+import Quote from "./Quote";
+import NoteThreadCard from "./NoteThreadCard";
+import NoteComposer from "./NoteComposer";
+
+/** One highlight's full block in the book-wide feed — a truncated quote
+ * (Quote's own universal "See more") that's itself the "show in passage"
+ * click target (`onJump`), followed by the exact same interactive thread
+ * the standalone note panel renders for this highlight — full
+ * reply/edit/delete/react, not a read-only summary, via the same
+ * useThreadInteraction hook that panel uses. Which section this excerpt
+ * belongs to is the enclosing feed's own divider's job (see
+ * BookAnnotationFeedPanel), not repeated per card. */
+export default function FeedHighlightThread({
+  bookId,
+  entry,
+  getPassageText,
+  onJump,
+}: {
+  bookId: string;
+  entry: FeedEntry;
+  getPassageText: (passageId: string) => string;
+  onJump: (entry: FeedEntry) => void;
+}) {
+  const addNote = useLibraryStore((s) => s.addNote);
+  const { annotation } = entry;
+  const excerpt = quoteForRanges(annotation.ranges, getPassageText);
+  const { ui, actions, expandedIds, toggleExpanded } = useThreadInteraction({
+    bookId,
+    ranges: annotation.ranges,
+    allNotes: annotation.notes,
+  });
+  const roots = sortNotes(topLevelNotes(annotation.notes), "chronological");
+
+  return (
+    <div className="flex flex-col gap-3 border-l-2 border-[var(--reader-border)] pl-4">
+      <Quote text={excerpt} onJump={() => onJump(entry)} />
+
+      {roots.length > 0 && (
+        <div className="flex flex-col gap-4">
+          {roots.map((note) => (
+            <NoteThreadCard
+              key={note.id}
+              note={note}
+              replies={repliesFor(annotation.notes, note.id)}
+              expanded={expandedIds.has(note.id)}
+              onToggleExpand={() => toggleExpanded(note.id)}
+              ui={ui}
+              actions={actions}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Same single-composer-active-at-a-time rule as the standalone note
+          panel's own root composer (see NotesSidebar), scoped to this
+          highlight's own ui state so a reply/edit open on a sibling
+          highlight never hides this one's composer. Also hidden whenever
+          any of this highlight's own threads is expanded — that thread
+          already carries its own composer (defaulting to a reply on its
+          root note), so this one would otherwise double up alongside it. */}
+      {expandedIds.size === 0 && ui.activeComposerFor === null && ui.editingId === null && (
+        <NoteComposer
+          initialText=""
+          placeholder="Add to the discourse…"
+          startCollapsed
+          onSave={(content) => addNote(bookId, annotation.ranges, content)}
+        />
+      )}
+    </div>
+  );
+}
