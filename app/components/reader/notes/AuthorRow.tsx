@@ -15,28 +15,39 @@ import { formatShortTimeAgo } from "@/lib/reader/timeAgo";
 export default function AuthorRow({
   name,
   savedAt,
+  size = "default",
   menu,
 }: {
   name: string;
   savedAt: number;
   /** Reply-tier entries render smaller than top-level notes. */
+  size?: "default" | "small";
   menu?: ReactNode;
 }) {
+  const small = size === "small";
   return (
     <div className="flex items-center gap-2">
       <span
         style={{ background: avatarColor(name) }}
-        className={`flex flex-none items-center justify-center rounded-sm font-bold text-white h-5 w-5 text-xs`}
+        className={`flex flex-none items-center justify-center rounded-sm font-bold text-white ${
+          small ? "h-4 w-4 text-[10px]" : "h-5 w-5 text-xs"
+        }`}
       >
         {avatarInitial(name)}
       </span>
       <div className="flex items-baseline gap-1.5">
         <span
-          className={`font-bold capitalize text-[var(--reader-text)] text-xs`}
+          className={`font-bold capitalize text-[var(--reader-text)] ${
+            small ? "text-[11px]" : "text-xs"
+          }`}
         >
           {name}
         </span>
-        <span className="text-[11px] font-medium text-[var(--reader-text-muted)]">
+        <span
+          className={`font-medium text-[var(--reader-text-muted)] ${
+            small ? "text-[10px]" : "text-[11px]"
+          }`}
+        >
           {formatShortTimeAgo(savedAt)}
         </span>
       </div>
