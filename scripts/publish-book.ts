@@ -18,10 +18,11 @@
 import path from "node:path";
 import { readFile } from "node:fs/promises";
 import { getLocalBookDocument, listLocalBookSlugs } from "@/lib/book/repository";
-import { getStorageAdminClient } from "@/lib/storage/adminClient";
+import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { STORAGE_BUCKET, storagePublicUrl } from "@/lib/storage/config";
 import { flattenSections } from "@/lib/search/bookIndex";
-import type { BookDocument } from "@/lib/book/schema";
+import { sectionLabel } from "@/lib/reader/sectionHeading";
+import type { BookDocument, Section } from "@/lib/book/schema";
 
 const PUBLIC_DIR = path.join(process.cwd(), "public");
 const CONTENT_DIR = path.join(process.cwd(), "content", "books");
@@ -35,10 +36,80 @@ const CONTENT_TYPES: Record<string, string> = {
   ".mp3": "audio/mpeg",
 };
 
+// The `materials.toc` shape (models-spec.md § materials / api-spec.md's TocSection) —
+// pruned section tree: resolved label + passage count, no passage content.
+type TocSection = {
+  id: string;
+  label: string | null;
+  kind: Section["kind"];
+  passageCount: number;
+  children: TocSection[];
+  audioDurationMs?: number;
+  narratorIds?: string[];
+};
+
+function buildToc(sections: Section[]): TocSection[] {
+  return sections.map((section) => {
+    const track = section.audio?.narratorTracks[0];
+    return {
+      id: section.id,
+      label: sectionLabel(section),
+      kind: section.kind,
+      passageCount: section.passages.length,
+      children: buildToc(section.children),
+      ...(track ? { audioDurationMs: track.durationMs } : {}),
+      ...(section.audio ? { narratorIds: section.audio.narratorTracks.map((t) => t.narratorId) } : {}),
+    };
+  });
+}
+
+function collectTocTitles(toc: TocSection[]): string {
+  const labels: string[] = [];
+  const walk = (nodes: TocSection[]) => {
+    for (const node of nodes) {
+      if (node.label) labels.push(node.label);
+      walk(node.children);
+    }
+  };
+  walk(toc);
+  return labels.join(" ");
+}
+
+// Populates the `materials` row alongside the Storage upload above — this is
+// what actually makes a published book show up via the Materials API
+// (models-spec.md § materials). Upserts on `slug` so a republish keeps the
+// same `id` rather than minting a new row every time.
+async function upsertMaterialRow(published: BookDocument, jsonObjectPath: string) {
+  const toc = buildToc(published.sections);
+  const { error } = await getSupabaseAdminClient()
+    .from("materials")
+    .upsert(
+      {
+        slug: published.slug,
+        title: published.metadata.title,
+        author: published.metadata.author,
+        description: published.metadata.description,
+        cover_url: published.metadata.cover,
+        language: published.metadata.language,
+        published_year: published.metadata.publishedYear ?? null,
+        page_count_estimate: published.metadata.pageCountEstimate ?? null,
+        narrator_count: published.narrators.length,
+        toc,
+        toc_titles: collectTocTitles(toc),
+        spine: published.spine,
+        json_storage_path: jsonObjectPath,
+        status: "published",
+      },
+      { onConflict: "slug" }
+    );
+  if (error) throw new Error(`materials upsert for ${published.slug} failed: ${error.message}`);
+  console.log(`  materials row -> slug=${published.slug}`);
+}
+
 async function uploadFile(localPath: string, objectPath: string, cacheControl: string) {
   const bytes = await readFile(localPath);
   const contentType = CONTENT_TYPES[path.extname(localPath).toLowerCase()] ?? "application/octet-stream";
-  const { error } = await getStorageAdminClient()
+  const { error } = await getSupabaseAdminClient()
     .storage.from(STORAGE_BUCKET)
     .upload(objectPath, bytes, { contentType, cacheControl, upsert: true });
   if (error) throw new Error(`upload ${objectPath} failed: ${error.message}`);
@@ -77,7 +148,7 @@ async function publishBook(slug: string) {
 
   // Book JSON last, so it only goes live once every asset it points to exists
   const jsonObjectPath = `books/${slug}.json`;
-  const { error } = await getStorageAdminClient()
+  const { error } = await getSupabaseAdminClient()
     .storage.from(STORAGE_BUCKET)
     .upload(jsonObjectPath, JSON.stringify(published, null, 2), {
       contentType: "application/json",
@@ -86,6 +157,8 @@ async function publishBook(slug: string) {
     });
   if (error) throw new Error(`upload ${jsonObjectPath} failed: ${error.message}`);
   console.log(`  json -> ${jsonObjectPath}`);
+
+  await upsertMaterialRow(published, jsonObjectPath);
 }
 
 // listBooks() in supabase mode reads this instead of doing a Storage API
@@ -101,7 +174,7 @@ async function updateIndex(publishedSlugs: string[]) {
     // first publish ever — no existing index yet
   }
   const merged = Array.from(new Set([...existing, ...publishedSlugs])).sort();
-  const { error } = await getStorageAdminClient()
+  const { error } = await getSupabaseAdminClient()
     .storage.from(STORAGE_BUCKET)
     .upload(indexObjectPath, JSON.stringify(merged, null, 2), {
       contentType: "application/json",

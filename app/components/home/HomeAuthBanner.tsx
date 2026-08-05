@@ -40,7 +40,7 @@ export default function HomeAuthBanner() {
         >
           <div className="flex min-w-0 flex-row items-center gap-3">
             <img
-              src="/biko.jpg"
+              src="/biko/2.jpg"
               alt="Steve Biko"
               className="h-8 w-8 flex-none rounded-sm object-cover object-top grayscale"
             />

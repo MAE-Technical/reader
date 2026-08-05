@@ -5,6 +5,7 @@ import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
 import NowPlayingBar from "./components/NowPlayingBar";
 import ThemeProvider from "./components/ThemeProvider";
 import NarrationEngine from "@/lib/audio/NarrationEngine";
+import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 
 // The wider reader font picker (app/fonts.ts) is defined but not loaded here
 // right now — only Literata (the current single reading-font default) is
@@ -28,14 +29,22 @@ const literata = Literata({
 });
 
 export const metadata: Metadata = {
-  title: "Ominira",
+  metadataBase: new URL(PLATFORM_URL),
+  title: { default: PLATFORM_NAME, template: `%s — ${PLATFORM_NAME}` },
   description: "Raise your consciousness.",
-  applicationName: "Ominira",
+  applicationName: PLATFORM_NAME,
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Ominira",
+    title: PLATFORM_NAME,
+  },
+  openGraph: {
+    siteName: PLATFORM_NAME,
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
   },
   other: {
     // Next only emits the standardized `mobile-web-app-capable` tag; older

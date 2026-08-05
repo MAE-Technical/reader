@@ -5,6 +5,7 @@ import { Download, Share, X } from "lucide-react";
 import { domToBlob } from "modern-screenshot";
 import QuoteCard from "./notes/QuoteCard";
 import { truncateQuote } from "./notes/Quote";
+import { PLATFORM_HOST } from "@/lib/config/platform";
 
 // Long enough that most highlighted passages still show in full, short
 // enough that the card's now-natural (unclamped) height stays in the
@@ -187,7 +188,7 @@ export default function ShareQuoteModal({ quote, author, bookTitle, coverSrc, on
               </div>
 
               <div className="text-center">
-                <span className="font-serif text-base font-bold tracking-[0.15em] text-brand-500">ominira.com</span>
+                <span className="font-serif text-base font-bold tracking-[0.15em] text-brand-500">{PLATFORM_HOST}</span>
               </div>
             </div>
           </div>

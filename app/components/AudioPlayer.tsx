@@ -251,7 +251,7 @@ export default function AudioPlayer({
 
   return (
     <div
-      className="w-full h-full box-border relative flex flex-col justify-center bg-[var(--reader-surface)] border-t border-[var(--reader-border)] pb-[env(safe-area-inset-bottom)]"
+      className="w-full h-full box-border relative flex flex-col justify-center bg-[var(--reader-surface)] border-t border-b border-[var(--reader-border)] pb-[env(safe-area-inset-bottom)]"
     >
       {/* Progress track */}
       <div className={`flex items-center gap-2.5 ${isMini ? "px-4 pt-2" : isMobile ? "px-3.5 pt-2.5" : "px-6 pt-3"}`}>

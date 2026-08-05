@@ -1,0 +1,26 @@
+{
+  "categories": [
+    { "value": "pan-africanism", "label": "Pan-Africanism" },
+    { "value": "marxism", "label": "Marxism" },
+    { "value": "feminism", "label": "Feminism" },
+    { "value": "decolonial-theory", "label": "Decolonial Theory" },
+    { "value": "black-liberation", "label": "Black Liberation" },
+    { "value": "political-economy", "label": "Political Economy" },
+    { "value": "african-history", "label": "African History" },
+    { "value": "psychology", "label": "Psychology" },
+    { "value": "literature-culture", "label": "Literature & Culture" },
+    { "value": "philosophy", "label": "Philosophy" },
+    { "value": "science-technology", "label": "Science & Technology" },
+    { "value": "education", "label": "Education" },
+    { "value": "environment-climate", "label": "Environment & Climate" },
+    { "value": "spirituality", "label": "Spirituality" }
+  ],
+  "readMaterialIds": [
+    "28a7d510-4a3a-446f-b5fa-5e92380c5a7a",
+    "36e77373-2895-448a-9f38-d5ebb6781fd0",
+    "39bb946c-052d-4329-9404-c28689c4e692",
+    "6dbcc07e-a48b-45a0-9aec-4b79a5541c49",
+    "90cf5f01-a69d-4251-979d-7905410290d4",
+    "df1a0acd-e0e2-4a39-9347-ffbfe212616e"
+  ]
+}

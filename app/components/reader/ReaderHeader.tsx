@@ -160,7 +160,7 @@ export default function ReaderHeader({
           </button>
         </Tooltip>
 
-        {!hasNarration && !isListen && (
+        {hasNarration && !isListen && (
           <Tooltip label="Listen to this book" side="bottom">
             <button onClick={onListen} aria-label="Listen to this book" className={iconButtonClass}>
               <Play size={16} />
