@@ -1,6 +1,7 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import type { BookDocument, Section } from "@/lib/book/schema";
-import { useLibraryStore } from "@/stores/library-store";
+import { useReadingPositionStore } from "@/stores/reading-position-store";
+import { buildProgressShape, computeBookProgress } from "@/lib/reader/progress";
 
 // Only committed to the store after scrolling has settled for this long —
 // resets on every scroll event, so continuous scrolling never writes at
@@ -39,20 +40,28 @@ const SETTLE_MS = 600;
  */
 export function useReadingProgress({
   book,
+  materialId,
   mode,
   activeSectionId,
   activeSection,
   getSlideEl,
 }: {
   book: BookDocument;
+  materialId: string;
   mode: "read" | "listen";
   activeSectionId: string | undefined;
   activeSection: Section | undefined;
   getSlideEl: (id: string) => HTMLDivElement | undefined;
 }) {
-  const getPosition = useLibraryStore((s) => s.getPosition);
-  const setPosition = useLibraryStore((s) => s.setPosition);
+  const getPosition = useReadingPositionStore((s) => s.getPosition);
+  const setPosition = useReadingPositionStore((s) => s.setPosition);
   const previousSectionRef = useRef<string | null>(null);
+  const progressShape = useMemo(() => buildProgressShape(book), [book]);
+  const progressPercentFor = useCallback(
+    (position: { sectionId: string; passageIndex: number }) =>
+      Math.round(computeBookProgress(progressShape, position) * 100),
+    [progressShape]
+  );
 
   useEffect(() => {
     if (mode !== "read" || !activeSectionId || !activeSection) return;
@@ -63,9 +72,10 @@ export function useReadingProgress({
     // whether that's book.spine[0] or wherever useResumeScroll is about to
     // jump to — left alone rather than written back on its own.
     if (previous !== null && previous !== activeSectionId) {
-      const existing = getPosition(book.id);
+      const existing = getPosition(materialId);
       const passageIndex = existing?.sectionId === activeSectionId ? existing.passageIndex : 0;
-      setPosition(book.id, { sectionId: activeSectionId, passageIndex });
+      const position = { sectionId: activeSectionId, passageIndex };
+      setPosition(materialId, position, progressPercentFor(position));
     }
 
     const el = getSlideEl(activeSectionId);
@@ -96,10 +106,10 @@ export function useReadingProgress({
       const passageIndex = computePassageIndex();
       if (passageIndex === undefined) return;
       if (settleTimer) clearTimeout(settleTimer);
-      settleTimer = setTimeout(
-        () => setPosition(book.id, { sectionId: activeSectionId, passageIndex }),
-        SETTLE_MS
-      );
+      settleTimer = setTimeout(() => {
+        const position = { sectionId: activeSectionId, passageIndex };
+        setPosition(materialId, position, progressPercentFor(position));
+      }, SETTLE_MS);
     };
     el.addEventListener("scroll", onScroll, { passive: true });
 
@@ -113,7 +123,10 @@ export function useReadingProgress({
     const onVisibilityChange = () => {
       if (document.visibilityState !== "hidden") return;
       const passageIndex = computePassageIndex();
-      if (passageIndex !== undefined) setPosition(book.id, { sectionId: activeSectionId, passageIndex });
+      if (passageIndex !== undefined) {
+        const position = { sectionId: activeSectionId, passageIndex };
+        setPosition(materialId, position, progressPercentFor(position));
+      }
     };
     document.addEventListener("visibilitychange", onVisibilityChange);
 
@@ -122,5 +135,5 @@ export function useReadingProgress({
       el.removeEventListener("scroll", onScroll);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [book.id, mode, activeSectionId, activeSection, getSlideEl, getPosition, setPosition]);
+  }, [book.id, materialId, mode, activeSectionId, activeSection, getSlideEl, getPosition, setPosition, progressPercentFor]);
 }

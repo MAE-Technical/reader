@@ -1,5 +1,5 @@
 import type { BookDocument } from "@/lib/book/schema";
-import type { Position } from "@/stores/library-store";
+import type { Position } from "@/stores/reading-position-store";
 import { buildSectionsById } from "./sections";
 
 /** Just enough of a book's structure to compute reading progress from a

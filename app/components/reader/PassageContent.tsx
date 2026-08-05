@@ -5,6 +5,7 @@ import { MessageCircle } from "lucide-react";
 import type { Mark, Passage } from "@/lib/book/schema";
 import type { Annotation } from "@/stores/library-store";
 import { PENDING_ANNOTATION_ID } from "@/lib/reader/useTextAnnotations";
+import { useSessionStore } from "@/stores/session-store";
 
 export type NoteLookup = { id: string; marker: string; text: string };
 
@@ -21,6 +22,13 @@ type LocalAnnotation = {
   end: number;
   highlighted: boolean;
   hasNote: boolean;
+  /** True iff the signed-in reader themself authored at least one note in
+   * this group — distinct from `hasNote`, which is true for *any* reader's
+   * public note here. Only this, not `hasNote`, should ever wash the text
+   * (see showWash below): another reader's public note is signalled with
+   * just the counter glyph, never by highlighting text on this reader's
+   * behalf that they never marked themselves. */
+  hasOwnNote: boolean;
   noteCount: number;
   /** True when this passage is the last one touched by the annotation's own
    * ranges[] (selection order) — a multi-passage highlight/note renders its
@@ -196,11 +204,14 @@ type PassageTextProps = {
    * in the reading view itself (reader-issues #7) — omit outside listen mode. */
   activeWordIndex?: number;
   /** The one annotation (if any) the reader was just taken to from its own
-   * quote card in the annotation feed or a deep link — gets the one-shot
-   * .reader-jump-flash treatment instead of the plain steady wash every
-   * other mark gets, so a passage with several distinct highlights makes
-   * obvious which one this was. Reader.tsx clears it back to null shortly
-   * after the animation plays once. */
+   * quote card in the annotation feed or a deep link — gets the
+   * .reader-jump-flash treatment (a one-shot pulse that settles into, and
+   * holds, the same wash a real highlight gets) instead of the plain
+   * steady wash every other mark gets, so a passage with several distinct
+   * highlights makes obvious which one this was. Reader.tsx clears it back
+   * to null once whichever panel sent the reader here (the book-wide feed,
+   * or this note's own thread) closes — not on a timer, so the reader can
+   * keep browsing with it lit for as long as they like. */
   justJumpedAnnotationId?: string | null;
 };
 
@@ -223,6 +234,7 @@ export const PassageText = memo(function PassageText({
   activeWordIndex,
   justJumpedAnnotationId,
 }: PassageTextProps) {
+  const readerId = useSessionStore((s) => s.readerId);
   const words = activeWordIndex !== undefined ? computeWordRanges(passage.text) : [];
   // An annotation carries one range per passage it touches — resolve each
   // to its own local [start,end) here, since that's all buildSegments
@@ -237,6 +249,7 @@ export const PassageText = memo(function PassageText({
         end: r.end,
         highlighted: a.highlighted,
         hasNote: a.notes.length > 0,
+        hasOwnNote: readerId !== null && a.notes.some((n) => n.author.readerId === readerId),
         noteCount: a.notes.length,
         isTail: a.ranges[a.ranges.length - 1].passageId === passage.id,
       });
@@ -267,7 +280,20 @@ export const PassageText = memo(function PassageText({
         // never becomes a click target the way an actual highlight/note
         // does.
         const isPending = local.id === PENDING_ANNOTATION_ID;
-        const showWash = isPending || local.highlighted || local.hasNote;
+        const isJustJumped = local.id === justJumpedAnnotationId;
+        // Own highlight or own note washes the text persistently — another
+        // reader's public note on this same span only ever gets the
+        // counter glyph below, never a standing wash (see
+        // LocalAnnotation.hasOwnNote's own comment): a reader shouldn't see
+        // text lit up on their behalf for something only someone else
+        // marked. The one exception is `isJustJumped`: a quote-card (or
+        // deep-link) jump into *any* note (own or not) shows the reader
+        // exactly what they clicked into for as long as that panel stays
+        // open — Reader.tsx only clears justJumpedAnnotationId once neither
+        // panel is open anymore, not on a timer. Once it does clear, this
+        // reverts to showing nothing for a not-own note, same as any other
+        // passage with only someone else's note on it.
+        const showWash = isPending || local.highlighted || local.hasOwnNote || isJustJumped;
         const clickable = !isPending && (local.highlighted || local.hasNote);
         const handleClick = clickable
           ? (e: React.MouseEvent<HTMLSpanElement>) => {
@@ -285,15 +311,16 @@ export const PassageText = memo(function PassageText({
             key={i}
             data-annotation-id={local.id}
             onClick={handleClick}
-            className={[clickable ? "cursor-pointer" : "", local.id === justJumpedAnnotationId ? "reader-jump-flash" : ""]
+            className={[clickable ? "cursor-pointer" : "", isJustJumped ? "reader-jump-flash" : ""]
               .filter(Boolean)
               .join(" ")}
             style={
-              // A note implies a mark on the text itself, same as an
-              // explicit highlight — a reader shouldn't have to also hit
-              // Highlight separately just to see where their note is
-              // anchored. Whether it also has notes beyond the wash is
-              // signalled by the glyph below, never by a second text style.
+              // The reader's own note implies a mark on the text itself,
+              // same as an explicit highlight — they shouldn't have to also
+              // hit Highlight separately just to see where their own note
+              // is anchored. Someone else's public note on this same span
+              // never washes the text on this reader's behalf (see
+              // showWash above) — it's signalled by the glyph alone.
               showWash
                 ? {
                     background: "var(--reader-highlight)",

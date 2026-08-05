@@ -1,25 +1,23 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
 import AppHeader from "@/app/components/shell/AppHeader";
+import Loader from "@/app/components/Loader";
 import ThemeToggle from "@/app/components/shell/ThemeToggle";
-import { useLibraryStore } from "@/stores/library-store";
 import { useInstallBannerStore } from "@/stores/install-banner-store";
 import { useInstallPrompt } from "@/lib/pwa/useInstallPrompt";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
-import { CURRENT_READER_NAME } from "@/lib/reader/currentAuthor";
+import { useProfile } from "@/lib/auth/useProfile";
+import { useLogout } from "@/lib/auth/useLogout";
+import { useContinueReading } from "@/lib/auth/useContinueReading";
 import { avatarColor, avatarInitial } from "@/lib/reader/authorDisplay";
 
 function handleFor(name: string): string {
   return `@${name.toLowerCase().replace(/\s+/g, ".")}`;
 }
-
-// No real auth/profile backend yet (see useIsAuthenticated's own comment) —
-// these stand in for what a real account object will supply, the same
-// "seam" CURRENT_READER_NAME already is for the name/avatar below.
-const MOCK_ACCOUNT_DETAILS = { email: "yeast@ominira.app", country: "Ghana", city: "Accra" };
 
 const APP_VERSION = "0.1.0";
 
@@ -94,33 +92,26 @@ function AccountInstallCard() {
 }
 
 export default function AccountView() {
+  const router = useRouter();
   const isAuthenticated = useIsAuthenticated();
+  const { data: reader } = useProfile();
+  const logout = useLogout();
 
-  const hasHydrated = useLibraryStore((s) => s.hasHydrated);
-  const books = useLibraryStore((s) => s.books);
+  // Real "books started" count — GET /api/auth/me/continue-reading already
+  // only lists materials with a saved position (api-spec.md), so this is a
+  // straight count, no local computation needed. There's no equivalent
+  // aggregate endpoint for "notes made across every book" (api-spec.md has
+  // no "my notes" listing), so that second stat tile from the old
+  // local-only version is dropped rather than shown with fabricated data.
+  const { data: continueReading } = useContinueReading();
+  const booksStarted = continueReading?.length;
 
-  // library-store skips automatic persist hydration (see its own doc
-  // comment) so the server and first client paint agree — rehydrated here
-  // the same way LibraryView/Reader.tsx do, since the stats below read the
-  // real saved positions/notes.
-  useEffect(() => {
-    useLibraryStore.persist.rehydrate();
-  }, []);
-
-  // Same reasoning as library-store above — AccountInstallCard needs this
-  // rehydrated independently of HomeInstallBanner, since a reader landing
-  // straight on /account (not via /home) would otherwise never trigger it.
+  // AccountInstallCard needs this rehydrated independently of
+  // HomeInstallBanner, since a reader landing straight on /account (not via
+  // /home) would otherwise never trigger it.
   useEffect(() => {
     useInstallBannerStore.persist.rehydrate();
   }, []);
-
-  const { booksStarted, notesMade } = useMemo(() => {
-    const entries = Object.values(books);
-    return {
-      booksStarted: entries.filter((b) => b.position !== undefined).length,
-      notesMade: entries.reduce((sum, b) => sum + Object.keys(b.notes.byId).length, 0),
-    };
-  }, [books]);
 
   return (
     <div className="pb-10">
@@ -128,19 +119,24 @@ export default function AccountView() {
 
       <h1 className="mt-1 mb-6 font-serif text-2xl font-semibold text-[var(--reader-text)]">Account</h1>
 
-      {isAuthenticated ? (
+      {isAuthenticated && !reader ? (
+        <div className="relative min-h-[240px]">
+          <Loader confined />
+        </div>
+      ) : isAuthenticated && reader ? (
         <>
           <div className="mb-5 flex flex-col items-center gap-2.5 text-center">
             <span
-              style={{ background: avatarColor(CURRENT_READER_NAME) }}
+              style={{ background: avatarColor(reader.pseudonym) }}
               className="flex h-[72px] w-[72px] flex-none items-center justify-center rounded-full text-2xl font-semibold text-white"
             >
-              {avatarInitial(CURRENT_READER_NAME)}
+              {avatarInitial(reader.pseudonym)}
             </span>
             <div>
-              <div className="font-sans text-xl font-bold text-[var(--reader-text)]">{CURRENT_READER_NAME}</div>
+              <div className="font-sans text-xl font-bold text-[var(--reader-text)]">{reader.pseudonym}</div>
               <div className="text-[13px] font-medium text-[var(--reader-text-muted)]">
-                {handleFor(CURRENT_READER_NAME)} · {MOCK_ACCOUNT_DETAILS.city}, {MOCK_ACCOUNT_DETAILS.country}
+                {handleFor(reader.pseudonym)}
+                {reader.city && reader.country ? ` · ${reader.city}, ${reader.country}` : ""}
               </div>
             </div>
           </div>
@@ -148,25 +144,19 @@ export default function AccountView() {
           <div className="mb-5 flex gap-2.5">
             <div className="flex-1 rounded-md border border-[var(--reader-border)] p-3.5 text-center">
               <div className="font-serif text-[22px] font-semibold text-[var(--reader-accent)]">
-                {hasHydrated ? booksStarted : "–"}
+                {booksStarted ?? "–"}
               </div>
               <div className="mt-1 text-xs font-medium text-[var(--reader-text-subtle)]">Books started</div>
-            </div>
-            <div className="flex-1 rounded-md border border-[var(--reader-border)] p-3.5 text-center">
-              <div className="font-serif text-[22px] font-semibold text-[var(--reader-accent)]">
-                {hasHydrated ? notesMade : "–"}
-              </div>
-              <div className="mt-1 text-xs font-medium text-[var(--reader-text-subtle)]">Notes made</div>
             </div>
           </div>
 
           <div className="mb-5 overflow-hidden rounded-md border border-[var(--reader-border)]">
             {(
               [
-                ["Email", MOCK_ACCOUNT_DETAILS.email],
-                ["Pseudonym", CURRENT_READER_NAME],
-                ["Country", MOCK_ACCOUNT_DETAILS.country],
-                ["City", MOCK_ACCOUNT_DETAILS.city],
+                ["Email", reader.email],
+                ["Pseudonym", reader.pseudonym],
+                ["Country", reader.country ?? "—"],
+                ["City", reader.city ?? "—"],
               ] as const
             ).map(([label, value], i) => (
               <div
@@ -187,13 +177,14 @@ export default function AccountView() {
           </div>
 
           <div className="mb-5 text-center">
-            {/* No real auth/session system yet (reader-identity-store is
-                anonymous device identity, not an account) — useIsAuthenticated
-                is the seam a real session check plugs into. Until then
-                isAuthenticated is always false, so this never renders. */}
-            <Link href="/auth" className="text-[13px] font-medium text-[var(--reader-text-muted)] no-underline">
-              Log out
-            </Link>
+            <button
+              type="button"
+              onClick={() => logout.mutate(undefined, { onSuccess: () => router.push("/auth") })}
+              disabled={logout.isPending}
+              className="cursor-pointer border-none bg-transparent p-0 text-[13px] font-medium text-[var(--reader-text-muted)] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {logout.isPending ? "Logging out…" : "Log out"}
+            </button>
           </div>
 
           <div className="border-t border-[var(--reader-border)] pt-3.5 text-center">

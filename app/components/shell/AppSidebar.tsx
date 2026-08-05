@@ -2,13 +2,14 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
 import { LogOut, MoreVertical, X } from "lucide-react";
 import { NAV_ITEMS } from "./navItems";
 import { useReaderOverlayStore } from "@/stores/reader-overlay-store";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
-import { CURRENT_READER_NAME } from "@/lib/reader/currentAuthor";
+import { useProfile } from "@/lib/auth/useProfile";
+import { useLogout } from "@/lib/auth/useLogout";
 import { avatarColor, avatarInitial } from "@/lib/reader/authorDisplay";
 
 function isActive(pathname: string, href: string) {
@@ -22,8 +23,11 @@ function isActive(pathname: string, href: string) {
  */
 export default function AppSidebar() {
   const pathname = usePathname();
+  const router = useRouter();
   const overlayOpen = useReaderOverlayStore((s) => s.open);
   const isAuthenticated = useIsAuthenticated();
+  const { data: reader } = useProfile();
+  const logout = useLogout();
   // Dismissing the promo card only clears it for this page load, not
   // forever — HomeAuthBanner (the other login discovery surface) only
   // renders on /home, so a permanent dismiss here would leave a reader who
@@ -97,8 +101,8 @@ export default function AppSidebar() {
                 <X size={14} />
               </button>
             </div>
-            <p className="m-0 mb-2.5 text-xs font-normal leading-relaxed text-[var(--reader-text-muted)]">
-              Raise your Pan-African consciousness. Read revolutionary books. Share your thoughts with comrades anonymously.
+            <p className="m-0 mb-2.5 text-xs font-medium leading-relaxed text-[var(--reader-text-muted)]">
+              Raise your Pan-African consciousness. Read revolutionary books. Share your thoughts with other comrades.
             </p>
             <div className="flex gap-4">
               <Link
@@ -120,23 +124,20 @@ export default function AppSidebar() {
         )}
       </nav>
 
-      {/* No real auth/session system yet (reader-identity-store is
-          anonymous device identity, not an account) — useIsAuthenticated
-          is the seam a real session check plugs into. Until then
-          isAuthenticated is always false, so this footer never renders;
-          Log in / Join us live in the promo card above instead, alongside
-          HomeAuthBanner on mobile. Theme switching now lives in AppHeader,
-          beside the notification bell. */}
-      {isAuthenticated && (
+      {/* Theme switching lives in AppHeader, beside the notification bell —
+          this footer is account-only. Log in / Join us live in the promo
+          card above instead, alongside HomeAuthBanner on mobile, whenever
+          !isAuthenticated. */}
+      {isAuthenticated && reader && (
         <div className="flex-none px-4 pb-6 pt-3.5 border-t border-[var(--reader-border)] flex items-center gap-2.5">
           <span
-            style={{ background: avatarColor(CURRENT_READER_NAME) }}
+            style={{ background: avatarColor(reader.pseudonym) }}
             className="flex h-[26px] w-[26px] flex-none items-center justify-center rounded-full text-[11px] font-semibold text-white"
           >
-            {avatarInitial(CURRENT_READER_NAME)}
+            {avatarInitial(reader.pseudonym)}
           </span>
           <span className="min-w-0 flex-1 truncate text-[13px] font-medium text-[var(--reader-text)]">
-            {CURRENT_READER_NAME}
+            {reader.pseudonym}
           </span>
           <Popover.Root>
             <Popover.Trigger asChild>
@@ -154,14 +155,15 @@ export default function AppSidebar() {
                 sideOffset={6}
                 className="z-50 min-w-40 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-1 shadow-lg"
               >
-                <Link
-                  href="/auth"
-                  onClick={onNavClick}
-                  className="flex items-center gap-2.5 rounded-sm px-2.5 py-2 text-[13px] font-medium text-[var(--reader-text-muted)] no-underline hover:bg-[var(--reader-surface-hover)]"
+                <button
+                  type="button"
+                  onClick={() => logout.mutate(undefined, { onSuccess: () => router.push("/auth") })}
+                  disabled={logout.isPending}
+                  className="flex w-full cursor-pointer items-center gap-2.5 rounded-sm border-none bg-transparent px-2.5 py-2 text-[13px] font-medium text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   <LogOut size={15} />
-                  Logout
-                </Link>
+                  {logout.isPending ? "Logging out…" : "Logout"}
+                </button>
               </Popover.Content>
             </Popover.Portal>
           </Popover.Root>

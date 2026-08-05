@@ -41,12 +41,33 @@ async function fetchBookFromStorage(jsonStoragePath: string): Promise<BookDocume
  */
 export async function projectMaterial(
   row: MaterialRow,
-  opts: { fields: string[]; sectionId?: string; passagesOnly?: boolean }
+  opts: {
+    fields: string[];
+    sectionId?: string;
+    passagesOnly?: boolean;
+    /**
+     * Deliberate, documented deviation from api-spec.md's literal `fields=`
+     * contract: a `sections` request with no `sectionId` normally returns
+     * only the DB-backed TocSection[] outline (no passage content). This
+     * flag instead returns the *full* `Section[]` tree (every section, real
+     * passages) in one response — used only by the server-side reader-page
+     * loaders (lib/materials/toBookDocument.ts), which reconstruct a whole
+     * `BookDocument` through this same endpoint/projection rather than
+     * bypassing it with a raw Storage fetch. plan.md's Phase 6 "Reader data
+     * source" decision: true per-section lazy loading was weighed and
+     * deliberately not implemented this pass (search/notes-index/carousel
+     * all currently assume the whole book is in memory) — this is the
+     * pragmatic middle ground: still routed through the materials table
+     * (so an unpublished/nonexistent slug 404s the same way every other
+     * materials endpoint does), just not chunked per section on the wire.
+     */
+    fullContent?: boolean;
+  }
 ): Promise<Record<string, unknown>> {
   const fields = new Set(opts.fields);
   const result: Record<string, unknown> = { id: row.id, slug: row.slug };
 
-  const needsSectionContent = fields.has("sections") && !!opts.sectionId;
+  const needsSectionContent = fields.has("sections") && (!!opts.sectionId || !!opts.fullContent);
   const needsStorage = [...fields].some((f) => STORAGE_FIELDS.has(f)) || needsSectionContent;
   const book = needsStorage ? await fetchBookFromStorage(row.json_storage_path) : null;
 
@@ -85,6 +106,12 @@ export async function projectMaterial(
     }
 
     if (field === "sections") {
+      if (!opts.sectionId && opts.fullContent) {
+        // See fullContent's own doc comment above — the real Section[]
+        // tree, not the pruned TocSection[] outline.
+        result.sections = book!.sections;
+        continue;
+      }
       if (!opts.sectionId) {
         // Pure DB path — the pruned TocSection[] populated at publish time,
         // no passage content, no Storage round trip.

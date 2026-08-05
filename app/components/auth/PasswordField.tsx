@@ -5,13 +5,14 @@ import { Eye, EyeOff } from "lucide-react";
 import TextField from "./TextField";
 import type { InputHTMLAttributes } from "react";
 
-type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { label: string };
+type Props = Omit<InputHTMLAttributes<HTMLInputElement>, "type"> & { label: string; error?: string };
 
-export default function PasswordField({ label, ...props }: Props) {
+export default function PasswordField({ label, error, ...props }: Props) {
   const [visible, setVisible] = useState(false);
   return (
     <TextField
       label={label}
+      error={error}
       type={visible ? "text" : "password"}
       endAdornment={
         <button

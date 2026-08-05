@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
-import type { CommunityFeedItem } from "@/lib/home/communityFeed";
+import { rangesKey } from "@/stores/library-store";
+import type { CommunityFeedItem } from "@/lib/community/useCommunityFeed";
 
 /** A community note's book context — cover, title, author, and (when
  * known) the section the highlight is drawn from, plus a deep link into
@@ -19,30 +20,37 @@ import type { CommunityFeedItem } from "@/lib/home/communityFeed";
  * light up that one visual affordance, instead of every child needing its
  * own hover state. */
 export default function NoteBookHeader({ item }: { item: CommunityFeedItem }) {
-  const href = `/read/${item.book.slug}?${new URLSearchParams({
+  const passageId = item.note.ranges[0]?.passageId;
+  // Reader.tsx's own annotation ids are deterministic, derived from an
+  // annotation's exact ranges (see rangesKey) — recomputing it here from
+  // the same note's own ranges is what makes `?note=` actually match the
+  // Annotation the reader lands on once inside the book (Reader.tsx's
+  // useTextAnnotations/useAnnotations builds that same key from the same
+  // ranges), rather than the note's own (unrelated) row id.
+  const href = `/read/${item.material.slug}?${new URLSearchParams({
     section: item.sectionId,
-    passage: item.passageId,
-    note: item.annotationId,
+    ...(passageId ? { passage: passageId } : {}),
+    note: rangesKey(item.note.ranges),
   }).toString()}`;
 
   return (
     <Link
       href={href}
-      aria-label={`Open in ${item.book.title}`}
+      aria-label={`Open in ${item.material.title}`}
       className="group flex cursor-pointer items-center gap-2.5 no-underline"
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={item.book.cover}
-        alt={item.book.title}
+        src={item.material.cover ?? ""}
+        alt={item.material.title}
         className="h-12 w-10 flex-none rounded-sm border border-[var(--reader-border)] object-cover"
       />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13.5px] font-serif leading-[1.6] font-semibold text-[var(--reader-text)]">
-          {item.book.title}
+          {item.material.title}
         </div>
         <div className="truncate text-[11.5px] font-medium text-[var(--reader-text-muted)]">
-          {item.book.author}
+          {item.material.author}
           {item.label && ` · ${item.label}`}
         </div>
       </div>

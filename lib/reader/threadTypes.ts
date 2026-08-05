@@ -1,4 +1,4 @@
-import type { NoteContent } from "@/stores/library-store";
+import type { NoteContent } from "@/lib/api/types";
 
 /** Cross-entry UI state one thread shares — which single menu/edit is
  * active at a time, and which single entry the thread's one shared

@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { avatarColor, avatarInitial } from "@/lib/reader/authorDisplay";
+import { avatarColor, avatarInitial, comradeName } from "@/lib/reader/authorDisplay";
 import { formatShortTimeAgo } from "@/lib/reader/timeAgo";
 
 /** Avatar + pseudonym + relative time — the identity row every note and
@@ -25,15 +25,16 @@ export default function AuthorRow({
   menu?: ReactNode;
 }) {
   const small = size === "small";
+  const displayName = comradeName(name);
   return (
     <div className="flex items-center gap-2">
       <span
-        style={{ background: avatarColor(name) }}
+        style={{ background: avatarColor(displayName) }}
         className={`flex flex-none items-center justify-center rounded-sm font-bold text-white ${
           small ? "h-4 w-4 text-[10px]" : "h-5 w-5 text-xs"
         }`}
       >
-        {avatarInitial(name)}
+        {avatarInitial(displayName)}
       </span>
       <div className="flex items-baseline gap-1.5">
         <span
@@ -41,7 +42,7 @@ export default function AuthorRow({
             small ? "text-[11px]" : "text-xs"
           }`}
         >
-          {name}
+          {displayName}
         </span>
         <span
           className={`font-medium text-[var(--reader-text-muted)] ${

@@ -169,10 +169,10 @@ export default function HomeInstallBanner() {
               <h2 className="m-0 mb-1 text-[15px] font-semibold text-sand-950">
                 Read anywhere. Install Ominira directly.
               </h2>
-              <p className="m-0 mb-3 text-sm font-normal leading-relaxed text-sand-600">
+              {/* <p className="m-0 mb-3 text-sm font-normal leading-relaxed text-sand-600">
                 We are a revolutionary movement. We won't put Ominira at the mercy of imperialist corporations like Apple & Google, gatekeepers who can deplatform us. This is why we are using something called a Progressive Web App (PWA). 
                 It works exactly like an app but they can't touch it.
-              </p>
+              </p> */}
               <button
                 type="button"
                 onClick={onLinkClick}

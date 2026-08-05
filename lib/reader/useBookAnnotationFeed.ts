@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import type { Passage, Section } from "@/lib/book/schema";
-import { useLibraryStore } from "@/stores/library-store";
+import { useAnnotations } from "./useAnnotations";
 import { buildAnnotationFeedGroups, type FeedSectionGroup } from "./annotationFeed";
 
 /** Which entries the panel actually renders — "all" is every highlight and
@@ -23,28 +23,22 @@ export type AnnotationFeedFilter = "all" | "notes" | "highlights";
  * redesign).
  */
 export function useBookAnnotationFeed({
-  bookId,
+  materialId,
   orderedSections,
   passageLookup,
 }: {
-  bookId: string;
+  materialId: string;
   orderedSections: Section[];
   passageLookup: { byId: Map<string, Passage>; sectionOf: Map<string, string> };
 }) {
-  const getAllForBook = useLibraryStore((s) => s.getAllForBook);
-  // Reference-stable except on a real annotation mutation — see
-  // getAllForBook's own doc comment on why this, not getAllForBook's
-  // result, is what gets subscribed to directly.
-  const annotationsByPassage = useLibraryStore((s) => s.books[bookId]?.annotationsByPassage);
+  const { allAnnotations } = useAnnotations(materialId);
 
   const [open, setOpen] = useState(false);
   const [filter, setFilter] = useState<AnnotationFeedFilter>("notes");
 
   const groups: FeedSectionGroup[] = useMemo(
-    () =>
-      buildAnnotationFeedGroups(getAllForBook(bookId), orderedSections, passageLookup.sectionOf, passageLookup.byId),
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- annotationsByPassage is the real dependency; getAllForBook reads the freshest store state itself when called.
-    [annotationsByPassage, bookId, orderedSections, passageLookup]
+    () => buildAnnotationFeedGroups(allAnnotations, orderedSections, passageLookup.sectionOf, passageLookup.byId),
+    [allAnnotations, orderedSections, passageLookup]
   );
 
   const visibleGroups: FeedSectionGroup[] = useMemo(() => {

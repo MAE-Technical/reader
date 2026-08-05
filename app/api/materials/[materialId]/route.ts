@@ -18,9 +18,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ mate
     : [];
   const sectionId = url.searchParams.get("sectionId") ?? undefined;
   const passagesOnly = url.searchParams.get("passagesOnly") === "true";
+  const fullContent = url.searchParams.get("fullContent") === "true";
 
   try {
-    const projected = await projectMaterial(row, { fields, sectionId, passagesOnly });
+    const projected = await projectMaterial(row, { fields, sectionId, passagesOnly, fullContent });
     return NextResponse.json(projected);
   } catch (err) {
     if (err instanceof MaterialSectionNotFoundError) return notFound();

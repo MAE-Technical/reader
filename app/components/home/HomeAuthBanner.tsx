@@ -40,7 +40,7 @@ export default function HomeAuthBanner() {
         >
           <div className="flex min-w-0 flex-row items-center gap-3">
             <img
-              src="/biko/2.jpg"
+              src="https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/2.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9hYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuLzIuanBnIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NTk2MTY0NSwiZXhwIjoxODE3NDk3NjQ1fQ.Cyp4d09BHolLgrQb1bk_ykc6nxdSFx9TUJFX9bzwokw"
               alt="Steve Biko"
               className="h-8 w-8 flex-none rounded-sm object-cover object-top grayscale"
             />

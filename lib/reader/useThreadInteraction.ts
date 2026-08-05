@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { useLibraryStore, type AnnotationRange, type NoteEntry } from "@/stores/library-store";
+import type { AnnotationRange, Note } from "@/lib/api/types";
+import { useCreateNote, useUpdateNote, useDeleteNote, useToggleReaction } from "@/lib/community/useNoteMutations";
+import { useRequireAuth } from "./useRequireAuth";
 import { topLevelNotes } from "./noteThread";
 import type { ThreadActions, ThreadUIState } from "./threadTypes";
 
@@ -7,22 +9,22 @@ import type { ThreadActions, ThreadUIState } from "./threadTypes";
  * Everything about how one highlight's thread behaves interactively —
  * which single composer/menu/edit is active (never more than one at a
  * time, across the whole thread), which top-level notes have their
- * replies expanded, and the store-backed mutations bound to this
+ * replies expanded, and the server-backed mutations bound to this
  * highlight's own `ranges`. Extracted out of NotesSidebar (the per-
  * highlight note panel) so the book-wide feed can give each highlight it
  * lists the exact same interactive thread — reply, edit, delete, react —
  * rather than a second, read-only implementation of the same thing.
  */
 export function useThreadInteraction({
-  bookId,
+  materialId,
   ranges,
   allNotes,
   initialEditingId,
   initialExpandAll,
 }: {
-  bookId: string;
+  materialId: string;
   ranges: AnnotationRange[];
-  allNotes: NoteEntry[];
+  allNotes: Note[];
   /** Deep-links straight into editing one specific existing entry, and
    * auto-expands its parent so editing a reply never opens into a
    * collapsed, invisible thread. Only the standalone note panel uses this
@@ -35,10 +37,11 @@ export function useThreadInteraction({
    * marker click leaves this unset (collapsed default). */
   initialExpandAll?: boolean;
 }) {
-  const addNote = useLibraryStore((s) => s.addNote);
-  const updateNoteEntry = useLibraryStore((s) => s.updateNoteEntry);
-  const deleteNoteEntry = useLibraryStore((s) => s.deleteNoteEntry);
-  const toggleNoteReaction = useLibraryStore((s) => s.toggleNoteReaction);
+  const createNote = useCreateNote(materialId);
+  const updateNote = useUpdateNote(materialId);
+  const deleteNote = useDeleteNote(materialId);
+  const toggleReaction = useToggleReaction(materialId);
+  const requireAuth = useRequireAuth();
 
   // Evaluated once at mount, same as editingId below — not a live
   // subscription, since allNotes/initialEditingId are set once per
@@ -64,10 +67,10 @@ export function useThreadInteraction({
     startEdit: (id) => setEditingId(id),
   };
   const actions: ThreadActions = {
-    reply: (parentId, content) => addNote(bookId, ranges, content, parentId),
-    saveEdit: (noteId, content) => updateNoteEntry(bookId, noteId, content),
-    delete: (noteId) => deleteNoteEntry(bookId, noteId),
-    toggleReaction: (noteId) => toggleNoteReaction(bookId, noteId),
+    reply: (parentId, content) => requireAuth(() => createNote.mutate({ ranges, content, parentId })),
+    saveEdit: (noteId, content) => requireAuth(() => updateNote.mutate({ noteId, content })),
+    delete: (noteId) => requireAuth(() => deleteNote.mutate(noteId)),
+    toggleReaction: (noteId) => requireAuth(() => toggleReaction.mutate(noteId)),
   };
 
   const toggleExpanded = (id: string) =>

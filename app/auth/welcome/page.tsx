@@ -4,10 +4,15 @@ import { useRouter } from "next/navigation";
 import Wordmark from "@/app/components/auth/Wordmark";
 import SunriseMark from "@/app/components/auth/SunriseMark";
 import AuthButton from "@/app/components/auth/AuthButton";
+import { useProfile } from "@/lib/auth/useProfile";
+import { useCompleteOnboarding } from "@/lib/auth/useCompleteOnboarding";
 
 export default function WelcomePage() {
   const router = useRouter();
-  const enter = () => router.push("/home");
+  const { data: reader } = useProfile();
+  const completeOnboarding = useCompleteOnboarding();
+  const enter = () => completeOnboarding.mutate(undefined, { onSuccess: () => router.push("/home") });
+  const pseudonym = reader?.pseudonym ?? "Comrade";
 
   return (
     <>
@@ -21,7 +26,7 @@ export default function WelcomePage() {
           <h1 className="font-serif text-4xl leading-tight font-semibold">
             You&rsquo;re in,
             <br />
-            Kofi Writes.
+            {pseudonym}.
           </h1>
           <p className="mt-5 text-[15px] leading-relaxed text-white/80">Welcome to Ominira.</p>
           <p className="mt-4 text-[15px] leading-relaxed text-white/80">
@@ -30,7 +35,9 @@ export default function WelcomePage() {
           <p className="mt-4 text-[15px] leading-relaxed text-white/80">The movement grows with you.</p>
           <div className="mt-8 h-px w-10 bg-white/25" />
         </div>
-        <AuthButton onClick={enter}>Enter Ominira</AuthButton>
+        <AuthButton onClick={enter} disabled={completeOnboarding.isPending}>
+          {completeOnboarding.isPending ? "Entering…" : "Enter Ominira"}
+        </AuthButton>
       </div>
 
       {/* Desktop: light, centered column, book illustration anchoring the bottom. */}
@@ -41,8 +48,8 @@ export default function WelcomePage() {
           <p className="mt-4 max-w-sm text-[15px] leading-relaxed text-[var(--reader-text-muted)]">
             Every reader deepens the well of our collective consciousness. The movement grows with you.
           </p>
-          <AuthButton fullWidth={false} onClick={enter} className="mt-7 px-10">
-            Welcome, Comrade
+          <AuthButton fullWidth={false} onClick={enter} disabled={completeOnboarding.isPending} className="mt-7 px-10">
+            {completeOnboarding.isPending ? "Entering…" : "Welcome, Comrade"}
           </AuthButton>
           <p className="mt-4 text-sm text-[var(--reader-text-muted)]">You&rsquo;re in good company.</p>
           <SunriseMark theme="light" book className="mt-10 w-full max-w-md" />

@@ -2,9 +2,10 @@
 
 import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useAudioStore } from "@/stores/audio-store";
-import { useLibraryStore } from "@/stores/library-store";
+import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useNarrationStore } from "@/stores/narration-store";
 import { buildSectionsById } from "@/lib/reader/sections";
+import { buildProgressShape, computeBookProgress } from "@/lib/reader/progress";
 import { activeLineIndex, activeWordIndex, buildKaraokeLines, type KaraokeLine } from "@/lib/audio/karaoke";
 import type { Narrator, Section } from "@/lib/book/schema";
 
@@ -28,17 +29,30 @@ const EMPTY_NARRATORS: Narrator[] = [];
  */
 export default function NarrationEngine() {
   const book = useAudioStore((s) => s.book);
+  const materialId = useAudioStore((s) => s.materialId);
   const audioPlaying = useAudioStore((s) => s.isPlaying);
   const audioCurrentTimeMs = useAudioStore((s) => s.currentTimeMs);
   const audioSpeed = useAudioStore((s) => s.speed);
 
-  const getPosition = useLibraryStore((s) => s.getPosition);
-  const setPosition = useLibraryStore((s) => s.setPosition);
-  const audioSectionId = useLibraryStore((s) => (book ? s.books[book.id]?.position?.sectionId : undefined));
+  const getPosition = useReadingPositionStore((s) => s.getPosition);
+  const setPosition = useReadingPositionStore((s) => s.setPosition);
+  const audioSectionId = useReadingPositionStore((s) =>
+    materialId ? s.positions[materialId]?.sectionId : undefined
+  );
 
   const sectionsById = useMemo(
     () => (book ? buildSectionsById(book.sections) : new Map<string, Section>()),
     [book]
+  );
+  const progressShape = useMemo(() => (book ? buildProgressShape(book) : null), [book]);
+  // Persisted alongside every position write below so reading-position-
+  // store's local mirror (and, once synced, the server's own
+  // CurrentReadingEntry.progressPercent) always reflects listen-mode
+  // progress too, not just plain reading's own useReadingProgress writes.
+  const progressPercentFor = useCallback(
+    (position: { sectionId: string; passageIndex: number }) =>
+      progressShape ? Math.round(computeBookProgress(progressShape, position) * 100) : 0,
+    [progressShape]
   );
 
   // One narration per book for now (per product decision) — always the
@@ -209,8 +223,8 @@ export default function NarrationEngine() {
   // Seeks to the resume passage's first word (reader-issues #2) when a
   // book/section/narrator combination with a track is freshly opened.
   useEffect(() => {
-    if (!book || !usesRecordedAudio || !audioSection) return;
-    const stored = getPosition(book.id);
+    if (!book || !materialId || !usesRecordedAudio || !audioSection) return;
+    const stored = getPosition(materialId);
     if (!stored || stored.sectionId !== audioSection.id) return;
     if (stored.audioTimeMs !== undefined) {
       seekAudio(stored.audioTimeMs);
@@ -220,7 +234,7 @@ export default function NarrationEngine() {
     const word = audioSection.audio?.words?.find((w) => w.passageId === resumePassageId);
     if (word) seekAudio(word.startMs);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.id, usesRecordedAudio, audioSection?.id]);
+  }, [book?.id, materialId, usesRecordedAudio, audioSection?.id]);
 
   // Podcast-style continuous narration: once the active section's track
   // ends, advance to the next spine section. If that section has no track
@@ -230,7 +244,7 @@ export default function NarrationEngine() {
   // concern (it watches narration-store's audioIndex) — this effect only
   // ever touches the shared position/audio clock, never any page's DOM.
   useEffect(() => {
-    if (!book || !usesRecordedAudio || !audioSectionTrack || !audioSection) return;
+    if (!book || !materialId || !usesRecordedAudio || !audioSectionTrack || !audioSection) return;
     if (audioCurrentTimeMs < audioSectionTrack.durationMs) return;
     const idx = book.spine.indexOf(audioSection.id);
     const nextId = book.spine[idx + 1];
@@ -238,9 +252,13 @@ export default function NarrationEngine() {
       useAudioStore.getState().pause();
       return;
     }
-    setPosition(book.id, { sectionId: nextId, passageIndex: 0, audioTimeMs: 0 });
+    setPosition(
+      materialId,
+      { sectionId: nextId, passageIndex: 0, audioTimeMs: 0 },
+      progressPercentFor({ sectionId: nextId, passageIndex: 0 })
+    );
     seekAudio(0);
-  }, [audioCurrentTimeMs, book, usesRecordedAudio, audioSectionTrack, audioSection, setPosition, seekAudio]);
+  }, [audioCurrentTimeMs, book, materialId, usesRecordedAudio, audioSectionTrack, audioSection, setPosition, seekAudio, progressPercentFor]);
 
   const karaokeLines: KaraokeLine[] = useMemo(() => {
     if (!usesRecordedAudio) return [];
@@ -270,30 +288,34 @@ export default function NarrationEngine() {
 
   // Persists resume position as playback advances (reader-issues #2).
   useEffect(() => {
-    if (!book || !usesRecordedAudio || !currentKaraokeLine || !audioSection) return;
+    if (!book || !materialId || !usesRecordedAudio || !currentKaraokeLine || !audioSection) return;
     const passageId = currentKaraokeLine.words[0]?.passageId;
     const passageIndex = audioSection.passages.findIndex((p) => p.id === passageId);
-    if (passageIndex >= 0)
-      setPosition(book.id, { sectionId: audioSection.id, passageIndex, audioTimeMs: audioCurrentTimeMs });
+    if (passageIndex >= 0) {
+      const position = { sectionId: audioSection.id, passageIndex, audioTimeMs: audioCurrentTimeMs };
+      setPosition(materialId, position, progressPercentFor(position));
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book?.id, usesRecordedAudio, currentKaraokeLine, audioSection?.id]);
+  }, [book?.id, materialId, usesRecordedAudio, currentKaraokeLine, audioSection?.id]);
 
   // Click-a-passage-to-narrate-from-there — a no-op when the target
   // section has no track for the current narrator.
   const seekToPassageForListening = useCallback(
     (sectionId: string, passageId: string) => {
-      if (!book) return;
+      if (!book || !materialId) return;
       const targetSection = sectionsById.get(sectionId);
       const targetTrack = targetSection?.audio?.narratorTracks.find((t) => t.narratorId === narratorId);
       if (!targetSection || !targetTrack) return;
       const passageIndex = targetSection.passages.findIndex((p) => p.id === passageId);
       const word = (targetSection.audio?.words ?? []).find((w) => w.passageId === passageId);
-      if (passageIndex >= 0)
-        setPosition(book.id, { sectionId, passageIndex, audioTimeMs: word?.startMs ?? 0 });
+      if (passageIndex >= 0) {
+        const position = { sectionId, passageIndex, audioTimeMs: word?.startMs ?? 0 };
+        setPosition(materialId, position, progressPercentFor(position));
+      }
       seekAudio(word?.startMs ?? 0);
       useAudioStore.getState().play();
     },
-    [book, sectionsById, narratorId, setPosition, seekAudio]
+    [book, materialId, sectionsById, narratorId, setPosition, seekAudio, progressPercentFor]
   );
 
   // Chapter-skip (player's prev/next-chapter buttons, not the ±15s seek) —
@@ -310,14 +332,15 @@ export default function NarrationEngine() {
   const canSkipToNextSection = sectionHasTrack(book?.spine[audioIndex + 1]);
   const skipSection = useCallback(
     (direction: -1 | 1) => {
-      if (!book) return;
+      if (!book || !materialId) return;
       const targetId = book.spine[audioIndex + direction];
       if (!sectionHasTrack(targetId)) return;
-      setPosition(book.id, { sectionId: targetId, passageIndex: 0, audioTimeMs: 0 });
+      const position = { sectionId: targetId, passageIndex: 0, audioTimeMs: 0 };
+      setPosition(materialId, position, progressPercentFor(position));
       seekAudio(0);
       useAudioStore.getState().play();
     },
-    [book, audioIndex, sectionHasTrack, setPosition, seekAudio]
+    [book, materialId, audioIndex, sectionHasTrack, setPosition, seekAudio, progressPercentFor]
   );
   const skipToPrevSection = useCallback(() => skipSection(-1), [skipSection]);
   const skipToNextSection = useCallback(() => skipSection(1), [skipSection]);
@@ -365,7 +388,7 @@ export default function NarrationEngine() {
   // counterpart above.
   const handleWordClick = useCallback(
     (passageId: string, wordIndex: number) => {
-      if (!book) return;
+      if (!book || !materialId) return;
       const sectionId = Array.from(sectionsById.values()).find((s) =>
         s.passages.some((p) => p.id === passageId)
       )?.id;
@@ -375,11 +398,12 @@ export default function NarrationEngine() {
       const passageIndex = targetSection.passages.findIndex((p) => p.id === passageId);
       if (passageIndex < 0) return;
       const word = (targetSection.audio?.words ?? []).filter((w) => w.passageId === passageId)[wordIndex];
-      setPosition(book.id, { sectionId, passageIndex, audioTimeMs: word?.startMs ?? 0 });
+      const position = { sectionId, passageIndex, audioTimeMs: word?.startMs ?? 0 };
+      setPosition(materialId, position, progressPercentFor(position));
       if (word) seekAudio(word.startMs);
       useAudioStore.getState().play();
     },
-    [book, sectionsById, narratorId, setPosition, seekAudio]
+    [book, materialId, sectionsById, narratorId, setPosition, seekAudio, progressPercentFor]
   );
 
   const handleSeek = useCallback((ms: number) => seekAudio(ms), [seekAudio]);

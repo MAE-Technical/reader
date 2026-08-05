@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Wordmark from "@/app/components/auth/Wordmark";
@@ -8,6 +9,9 @@ import AuthButton from "@/app/components/auth/AuthButton";
 import BackArrow from "@/app/components/auth/BackArrow";
 import TextField from "@/app/components/auth/TextField";
 import PasswordField from "@/app/components/auth/PasswordField";
+import { useLogin } from "@/lib/auth/useLogin";
+import { onboardingRoute } from "@/lib/auth/onboardingRoute";
+import { errorMessage } from "@/lib/api/client";
 
 function QuotePanel({ className = "" }: { className?: string }) {
   const router = useRouter();
@@ -21,7 +25,7 @@ function QuotePanel({ className = "" }: { className?: string }) {
           own first-step back: a direct/bookmarked visit has no in-app
           history to pop to. */}
       <div className="flex items-center gap-3">
-          <BackArrow onClick={() => router.back()} className="-ml-2 text-white hover:bg-sand-400" />
+          <BackArrow onClick={() => router.push("/")} className="-ml-2 text-white hover:bg-sand-400" />
           <div className="hidden shell:block">
             <Wordmark />
           </div>
@@ -38,6 +42,10 @@ function QuotePanel({ className = "" }: { className?: string }) {
 
 function LoginForm() {
   const router = useRouter();
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const login = useLogin();
+
   return (
     <div className="w-full max-w-sm">
       <h1 className="font-serif text-3xl font-semibold text-[var(--reader-text)]">Welcome back.</h1>
@@ -47,12 +55,37 @@ function LoginForm() {
         className="mt-8 space-y-5"
         onSubmit={(e) => {
           e.preventDefault();
-          router.push("/home");
+          login.mutate(
+            { email, password },
+            { onSuccess: ({ reader }) => router.push(onboardingRoute(reader)) }
+          );
         }}
       >
-        <TextField label="Email" name="email" type="email" placeholder="e.g. ama@example.com" />
+        {/* Deliberately generic (no field) — api-spec.md: login's 401 can't
+            point at one specific input without letting the response be used
+            to enumerate registered emails. Rendered as a banner above the
+            fields instead, still without navigating away. */}
+        {errorMessage(login.error) && (
+          <p className="rounded-sm border border-red-200 bg-red-50 px-3 py-2 text-[13px] font-medium text-red-500">
+            {errorMessage(login.error)}
+          </p>
+        )}
+        <TextField
+          label="Email"
+          name="email"
+          type="email"
+          placeholder="e.g. ama@example.com"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+        />
         <div>
-          <PasswordField label="Password" name="password" placeholder="Enter your password" />
+          <PasswordField
+            label="Password"
+            name="password"
+            placeholder="Enter your password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
           <div className="mt-2 text-right">
             <button type="button" className="cursor-pointer border-none bg-transparent p-0 text-xs font-bold text-brand-500">
               Forgot password?
@@ -60,7 +93,9 @@ function LoginForm() {
           </div>
         </div>
 
-        <AuthButton type="submit">Log in</AuthButton>
+        <AuthButton type="submit" disabled={login.isPending}>
+          {login.isPending ? "Logging in…" : "Log in"}
+        </AuthButton>
       </form>
 
       <div className="my-6 flex items-center gap-3">

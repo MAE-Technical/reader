@@ -4,7 +4,7 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import type { MaterialSummary } from "@/lib/api/types";
 
-const CONFIG_PATH = path.join(process.cwd(), "content", "survey-config.json");
+const CONFIG_PATH = path.join(process.cwd(), "config", "survey.json");
 
 export type SurveyCategory = { value: string; label: string };
 type RawSurveyConfig = { categories: SurveyCategory[]; readMaterialIds: string[] };

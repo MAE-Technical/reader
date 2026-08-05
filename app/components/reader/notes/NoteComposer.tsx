@@ -2,32 +2,19 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
+import Link from "next/link";
 import { ArrowRight, Loader2, Mic, Pause, Play, Square, X } from "lucide-react";
 import { LiveWaveform, WaveformBars } from "../Waveform";
 import { formatSeconds, useMeasuredWidth, useWaveformBars } from "./noteAudioUtils";
 import { useVoiceRecorder } from "./useVoiceRecorder";
+import { useUploadVoiceNote } from "@/lib/community/useUploadVoiceNote";
+import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 
 // Caps how tall the textarea will grow to fit a long note before it starts
 // scrolling internally instead — a chat-input pattern (Slack/iMessage-style),
 // so one very long note can't push the Save/mic row out past the panel's own
 // viewport.
 const MAX_COMPOSER_TEXTAREA_HEIGHT = 150;
-
-/** Ships a just-recorded draft's raw bytes to durable storage (see
- * app/api/voice-notes) and hands back the file URL that should actually be
- * saved as the NoteEntry's `content.audioUrl` — never the recorder's own
- * blob: URL, which only resolves for this tab's lifetime and would
- * otherwise vanish the moment the reader reloads or revisits the book. */
-async function uploadVoiceNote(blob: Blob): Promise<string> {
-  const res = await fetch("/api/voice-notes", {
-    method: "POST",
-    headers: { "Content-Type": blob.type || "audio/webm" },
-    body: blob,
-  });
-  if (!res.ok) throw new Error("Voice note upload failed");
-  const { url } = (await res.json()) as { url: string };
-  return url;
-}
 
 /** The text/voice composer — shared by every composing surface in the
  * thread panel: a brand-new top-level note, a reply to a note or another
@@ -70,12 +57,14 @@ export default function NoteComposer({
   excludeRef?: RefObject<HTMLElement | null>;
   onSave: (content: { kind: "text"; text: string } | { kind: "voice"; audioUrl: string; durationMs: number }) => void;
 }) {
+  const isAuthenticated = useIsAuthenticated();
   const [text, setText] = useState(initialText);
   const [expanded, setExpanded] = useState(!startCollapsed);
   const [isFocused, setIsFocused] = useState(false);
   const [isUploadingVoice, setIsUploadingVoice] = useState(false);
   const [uploadError, setUploadError] = useState(false);
   const [waveRef, waveWidth] = useMeasuredWidth<HTMLDivElement>();
+  const uploadVoiceNote = useUploadVoiceNote();
   const recorder = useVoiceRecorder();
   const recordedBars = useWaveformBars(recorder.audioBlob);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -118,7 +107,7 @@ export default function NoteComposer({
       setIsUploadingVoice(true);
       let audioUrl: string;
       try {
-        audioUrl = await uploadVoiceNote(recorder.audioBlob);
+        audioUrl = await uploadVoiceNote.mutateAsync(recorder.audioBlob);
       } catch {
         // Keep the draft intact so a flaky connection never costs the
         // reader their recording — same "fail safe, not destructive"
@@ -194,6 +183,41 @@ export default function NoteComposer({
     return () => document.removeEventListener("mousedown", onOutsideClick);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- handleCancel/onCancel close over stable identity per mount for this component's purposes; re-subscribing on hasUnsavedProgress/excludeRef is sufficient.
   }, [hasUnsavedProgress, excludeRef]);
+
+  // Signed-out readers never reach the actual pill/textarea at all — every
+  // mount of this composer (root, reply, or edit) is gated the same way,
+  // rather than each call site separately guessing whether to render one.
+  // This replaces the old behavior of letting the reader type a whole
+  // note only to have the save itself (useRequireAuth, deeper in
+  // useThreadInteraction/NotesSidebar) silently redirect them to /auth/login
+  // — an abrupt, easy-to-miss context switch away from whatever passage
+  // they were just reading. Same "Log in"/"Join us" copy and links as
+  // AppSidebar's own signed-out promo card, just without that one's
+  // dismiss button: this isn't a promo to dismiss, it's the actual reason
+  // there's nothing to compose into right now.
+  if (!isAuthenticated) {
+    return (
+      <div className="rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
+        <p className="m-0 mb-2 text-xs font-medium leading-relaxed text-[var(--reader-text-muted)]">
+          Only logged in members can post.
+        </p>
+        <div className="flex gap-4">
+          <Link
+            href="/auth/login"
+            className="text-[13px] font-medium text-[var(--reader-text-muted)] no-underline hover:text-[var(--reader-text)]"
+          >
+            Log in
+          </Link>
+          <Link
+            href="/auth/signup"
+            className="text-[13px] font-bold text-[var(--reader-accent)] no-underline hover:opacity-80"
+          >
+            Join us
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   if (!expanded) {
     return (

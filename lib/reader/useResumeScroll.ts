@@ -1,15 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import type { BookDocument, Section } from "@/lib/book/schema";
-import { useLibraryStore } from "@/stores/library-store";
+import { useReadingPositionStore } from "@/stores/reading-position-store";
 
 /**
  * Resumes a book where the reader last left off. Once the carousel's slides
  * have mounted, jumps straight to the saved section (no transition — the
  * reader never asked for this move visually) and scrolls to the saved
  * passage within that slide. The saved position itself (which section
- * narration/audio considers "current") lives in library-store and needs no
- * separate seeding here — the global narration engine (lib/audio/
- * NarrationEngine.tsx) reads the same per-book position directly.
+ * narration/audio considers "current") lives in reading-position-store,
+ * keyed by `materialId` (not `book.id` — see Reader.tsx's own doc comment),
+ * and needs no separate seeding here — the global narration engine
+ * (lib/audio/NarrationEngine.tsx) reads the same position directly.
  *
  * Returns whether the resume attempt (successful or not — an unsaved book
  * has nothing to resume) has finished, so a caller can hold off revealing
@@ -17,14 +18,15 @@ import { useLibraryStore } from "@/stores/library-store";
  *
  * `targetSectionId` (the book-detail page's chapter links, `?section=`)
  * overrides the saved position for this one jump — deliberately never
- * written back to library-store, so a reader just previewing a chapter link
- * doesn't clobber their real bookmark. `targetPassageId` (the home
- * community feed's deep links, `?passage=`) narrows that further to one
- * specific passage within the section, instead of always landing on the
- * section's first passage.
+ * written back to reading-position-store, so a reader just previewing a
+ * chapter link doesn't clobber their real bookmark. `targetPassageId` (the
+ * home community feed's deep links, `?passage=`) narrows that further to
+ * one specific passage within the section, instead of always landing on
+ * the section's first passage.
  */
 export function useResumeScroll({
   book,
+  materialId,
   sectionsById,
   orderedSections,
   goTo,
@@ -33,6 +35,7 @@ export function useResumeScroll({
   targetPassageId,
 }: {
   book: BookDocument;
+  materialId: string;
   sectionsById: Map<string, Section>;
   orderedSections: Section[];
   goTo: (index: number, opts?: { animate?: boolean }) => void;
@@ -40,13 +43,13 @@ export function useResumeScroll({
   targetSectionId?: string;
   targetPassageId?: string;
 }) {
-  const getPosition = useLibraryStore((s) => s.getPosition);
+  const getPosition = useReadingPositionStore((s) => s.getPosition);
   const hasScrolledToResumeRef = useRef(false);
   const [resumed, setResumed] = useState(false);
 
   useEffect(() => {
     if (hasScrolledToResumeRef.current) return;
-    const stored = targetSectionId ? { sectionId: targetSectionId, passageIndex: 0 } : getPosition(book.id);
+    const stored = targetSectionId ? { sectionId: targetSectionId, passageIndex: 0 } : getPosition(materialId);
     const sectionIndex = stored ? orderedSections.findIndex((s) => s.id === stored.sectionId) : -1;
     const passageId =
       targetPassageId ?? (stored ? sectionsById.get(stored.sectionId)?.passages[stored.passageIndex]?.id : undefined);
@@ -68,7 +71,7 @@ export function useResumeScroll({
     });
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, orderedSections.length, targetSectionId, targetPassageId]);
+  }, [book.id, materialId, orderedSections.length, targetSectionId, targetPassageId]);
 
   return resumed;
 }

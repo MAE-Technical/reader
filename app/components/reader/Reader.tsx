@@ -25,22 +25,23 @@ import {
   lineHeightFromScale,
   useReaderStore,
 } from "@/stores/reader-store";
-import { useLibraryStore } from "@/stores/library-store";
+import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useAudioStore } from "@/stores/audio-store";
 import { useNarrationStore } from "@/stores/narration-store";
-import { useReaderIdentityStore } from "@/stores/reader-identity-store";
 import { buildSectionsById } from "@/lib/reader/sections";
 import { useSectionCarousel } from "@/lib/reader/useSectionCarousel";
 import { useResumeScroll } from "@/lib/reader/useResumeScroll";
 import { useReadingProgress } from "@/lib/reader/useReadingProgress";
 import { useTextAnnotations } from "@/lib/reader/useTextAnnotations";
 import { useBookAnnotationFeed } from "@/lib/reader/useBookAnnotationFeed";
+import { useContinueReading } from "@/lib/auth/useContinueReading";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { sectionLabel } from "@/lib/reader/sectionHeading";
 
 export default function Reader({
   book,
+  materialId,
   targetSectionId,
   targetPassageId,
   targetNoteId,
@@ -48,6 +49,11 @@ export default function Reader({
   onClose,
 }: {
   book: BookDocument;
+  /** The book's real `materials.id` (UUID) — distinct from `book.id`
+   * (ingestion's own slug-like internal id, api-spec.md). Everything that
+   * reads/writes reading position (reading-position-store, audio-store's
+   * "now playing" slot) keys off this, never `book.id`. */
+  materialId: string;
   /** ?section=<id> from the book-detail page's chapter links — see
    * useResumeScroll's own doc comment for why this never touches the saved
    * resume position. */
@@ -103,7 +109,7 @@ export default function Reader({
     deleteSelection,
     onNoteMarkerClick,
     closeNotesPanel,
-  } = useTextAnnotations(book.id);
+  } = useTextAnnotations(materialId);
 
   const theme = useReaderStore((s) => s.theme);
   const setTheme = useReaderStore((s) => s.setTheme);
@@ -128,8 +134,8 @@ export default function Reader({
   // ReaderHeader's onListen does on click, fired instead on mount when the
   // book-detail page's Listen button is why we're here.
   useEffect(() => {
-    if (autoListen && !isListen) openBook(book);
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately fires once on mount only; autoListen/book are fixed for this page's lifetime, and isListen is read once as a mount-time guard, not tracked afterward.
+    if (autoListen && !isListen) openBook(book, materialId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately fires once on mount only; autoListen/book/materialId are fixed for this page's lifetime, and isListen is read once as a mount-time guard, not tracked afterward.
   }, []);
 
   const narrationAudioIndex = useNarrationStore((s) => s.audioIndex);
@@ -139,25 +145,22 @@ export default function Reader({
   // These stores skip automatic persist hydration (see their own comments)
   // specifically so the server and the client's first paint render
   // identical output — pulling in the real localStorage values here, once,
-  // right after mount, is what actually restores them. reader-identity-
-  // store's rehydrate must land before ensureReaderId, so a returning
-  // reader's existing id is reused rather than shadowed by a fresh one.
-  // `hydrated` gates the loading overlay below — without it, the reader
-  // would paint once with default theme/font/position and then visibly
-  // snap to the real persisted values a moment later.
+  // right after mount, is what actually restores them. `hydrated` gates the
+  // loading overlay below — without it, the reader would paint once with
+  // default theme/font/position and then visibly snap to the real
+  // persisted values a moment later.
   const [hydrated, setHydrated] = useState(false);
   useEffect(() => {
-    Promise.all([
-      useReaderStore.persist.rehydrate(),
-      useLibraryStore.persist.rehydrate(),
-      useReaderIdentityStore.persist.rehydrate(),
-    ])
+    Promise.all([useReaderStore.persist.rehydrate(), useReadingPositionStore.persist.rehydrate()])
       .catch(() => {}) // a storage read failure shouldn't hang the reader
-      .then(() => {
-        useReaderIdentityStore.getState().ensureReaderId();
-        setHydrated(true);
-      });
+      .then(() => setHydrated(true));
   }, []);
+
+  // Seeds reading-position-store's local mirror from the server (see
+  // useContinueReading's own doc comment) for a reader who opened this book
+  // directly rather than via the home feed's Continue Reading rail — the
+  // returned list itself isn't used here, only the hydration side effect.
+  useContinueReading();
 
   const fontSize = fontSizePxFromScale(fontSizeScale);
   const lineHeight = lineHeightFromScale(lineSpacingScale);
@@ -188,7 +191,7 @@ export default function Reader({
     return { byId, sectionOf };
   }, [orderedSections]);
 
-  const noteFeed = useBookAnnotationFeed({ bookId: book.id, orderedSections, passageLookup });
+  const noteFeed = useBookAnnotationFeed({ materialId, orderedSections, passageLookup });
 
   // Published so NowPlayingBar (rendered in the root layout, well outside
   // this tree) can pull its own right edge in on desktop — see
@@ -286,6 +289,7 @@ export default function Reader({
 
   const resumeReady = useResumeScroll({
     book,
+    materialId,
     sectionsById,
     orderedSections,
     goTo,
@@ -309,6 +313,7 @@ export default function Reader({
   // while isListen, which keeps owning its own audio-offset-aware writes).
   useReadingProgress({
     book,
+    materialId,
     mode: isListen ? "listen" : "read",
     activeSectionId,
     activeSection: sectionsById.get(activeSectionId),
@@ -388,11 +393,19 @@ export default function Reader({
   // A passage can hold more than one distinct highlight though, so landing
   // on the passage alone doesn't say which range was clicked — that's what
   // justJumpedAnnotationId + .reader-jump-flash (PassageContent.tsx,
-  // globals.css) are for: a one-shot flash on that one span, faded back to
-  // the ordinary steady wash a moment later. No toast; the flash itself is
-  // confirmation enough.
+  // globals.css) are for: the initial pulse is a one-shot 2.4s CSS
+  // animation, but it settles into (and holds, `animation-fill-mode:
+  // forwards`) the ordinary steady wash rather than fading out — so
+  // whichever panel sent the reader here (the book-wide feed's quote
+  // cards, or a deep link's own note thread) can keep that wash live for
+  // as long as *it* stays open, not just for the animation's own runtime.
+  // That's what the effect below this actually clears it on: neither panel
+  // still open, not a timer. No toast; the flash+held wash is confirmation
+  // enough on its own.
   const [justJumpedAnnotationId, setJustJumpedAnnotationId] = useState<string | null>(null);
-  const jumpFlashTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (!notesPanel && !noteFeed.open) setJustJumpedAnnotationId(null);
+  }, [notesPanel, noteFeed.open]);
   const jumpToFeedEntry = (entry: FeedEntry) => {
     goToSection(entry.sectionId, { animate: false });
     requestAnimationFrame(() => {
@@ -400,11 +413,7 @@ export default function Reader({
         ?.querySelector(`[data-annotation-id="${entry.annotation.id}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
-    if (jumpFlashTimeoutRef.current) clearTimeout(jumpFlashTimeoutRef.current);
     setJustJumpedAnnotationId(entry.annotation.id);
-    // Matches .reader-jump-flash's own 2.4s run (globals.css) — cleared
-    // just after it finishes rather than mid-flight.
-    jumpFlashTimeoutRef.current = setTimeout(() => setJustJumpedAnnotationId(null), 2400);
   };
 
   // Opens a specific annotation's thread exactly the way clicking its
@@ -456,9 +465,7 @@ export default function Reader({
         ?.querySelector(`[data-annotation-id="${targetNoteId}"]`)
         ?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
-    if (jumpFlashTimeoutRef.current) clearTimeout(jumpFlashTimeoutRef.current);
     setJustJumpedAnnotationId(targetNoteId);
-    jumpFlashTimeoutRef.current = setTimeout(() => setJustJumpedAnnotationId(null), 2400);
     openNoteMarker(targetPassageId, targetNoteId, { keepHeaderVisible: true, expandAll: true });
     // The centering scroll above is a *programmatic* jump, but
     // useSectionCarousel's own scroll listener (lib/reader/useSectionCarousel.ts)
@@ -558,7 +565,7 @@ export default function Reader({
           onToggleChapters={() => setChaptersOpen((o) => !o)}
           hasNarration={hasNarration}
           isListen={isListen}
-          onListen={() => openBook(book)}
+          onListen={() => openBook(book, materialId)}
           noteFeedCount={noteFeed.totalNoteCount}
           onToggleNoteFeed={() => {
             if (noteFeed.open) noteFeed.close();
@@ -739,7 +746,7 @@ export default function Reader({
           >
             {noteFeed.open && (
               <BookAnnotationFeedPanel
-                bookId={book.id}
+                materialId={materialId}
                 groups={noteFeed.groups}
                 filter={noteFeed.filter}
                 onFilterChange={noteFeed.setFilter}
@@ -761,7 +768,7 @@ export default function Reader({
                 // particular) can't leak from one thread's view into
                 // another's.
                 key={notesPanel.annotationId ?? JSON.stringify(notesPanel.ranges)}
-                bookId={book.id}
+                materialId={materialId}
                 passageId={notesPanel.passageId}
                 getPassageText={getPassageText}
                 annotationId={notesPanel.annotationId}

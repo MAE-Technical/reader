@@ -1,93 +1,38 @@
-import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
-import { CURRENT_READER_NAME } from "@/lib/reader/currentAuthor";
-import { libraryFileStorage } from "./libraryPersistStorage";
+import type { AnnotationRange, Highlight, Note, NoteContent } from "@/lib/api/types";
 
-export type NoteContent =
-  | { kind: "text"; text: string }
-  | { kind: "voice"; audioUrl: string; durationMs: number };
-
-/** Just a display pseudonym for now — no id, since there's nothing yet to
- * key it against (see currentAuthor.ts). Its own type rather than an
- * inline `{ name: string }` so call sites and NoteEntry read the same
- * name wherever an author appears. */
-export type NoteAuthor = { name: string };
-
-/** One passage's own slice of a highlight/note — `start`/`end` are plain-
- * text character offsets into that passage's own `Passage.text`, matching
- * how ingestion's own `marks` are addressed. */
-export type AnnotationRange = { passageId: string; start: number; end: number };
+// Re-exported so every existing call site (~15 files) keeps importing these
+// three from "@/stores/library-store" rather than churning every import
+// path in the same pass that already renames NoteEntry -> Note everywhere
+// (api-spec.md: "converge on the API's names instead of keeping two
+// client-side vocabularies" — plan.md's Phase 6). `Highlight` likewise.
+export type { AnnotationRange, NoteContent, Note, Highlight };
 
 /**
- * One independent note — always its own top-level record, keyed by its own
- * id and carrying its own `ranges` (a single drag-selection's worth, which
- * may span several passages). Never nested inside another record's mutable
- * array: adding a second note to the same passage/selection is always a
- * plain insert of a new row, so it can never resolve to — and clobber — an
- * existing one the way an "append to this shared object's notes[]" design
- * could if the lookup used to find that object ever landed on the wrong
- * one (or the wrong render's stale copy of it). Editing/deleting a note
- * always targets exactly one row, by its own id, never anything derived.
- */
-export type NoteEntry = {
-  id: string;
-  ranges: AnnotationRange[];
-  /** A top-level NoteEntry's own id — makes this row a reply to that note
-   * instead of a top-level entry in the thread. Absent means "replies
-   * directly to the highlighted passage itself." Deliberately two-tier
-   * flat, not arbitrary-depth: this always names a *top-level* note (one
-   * with no `parentId` of its own), even when the reader is replying to
-   * another reply — see `replyingToId` for that case. `addNote` resolves
-   * this itself, so no call site has to know the rule. A reply always
-   * carries the *same* `ranges` as its parent (and the whole thread) —
-   * replying doesn't select new book text, it responds to an idea already
-   * anchored to one span. */
-  parentId?: string;
-  /** Set only when this reply is addressed at a specific *other* reply
-   * within the same `parentId` thread, rather than the top-level note in
-   * general — purely a display label ("replying to Comrade X"), not a
-   * nesting pointer (see `parentId`). */
-  replyingToId?: string;
-  author: NoteAuthor;
-  /** Local, optimistic "affirm" count — this browser's own tally, not a
-   * synced total (no backend exists yet). */
-  reactionCount: number;
-  reactedByMe: boolean;
-  content: NoteContent;
-  savedAt: number;
-};
-
-/**
- * A highlighted span — likewise its own independent, id-keyed record, not
- * a flag riding on some other shared object. A given selection can carry a
- * Highlight, one or more NoteEntry rows, or both (per product decision:
- * "combine seamlessly") — neither requires the other to exist.
- */
-export type Highlight = {
-  id: string;
-  ranges: AnnotationRange[];
-  savedAt: number;
-};
-
-/**
- * Read-only, *computed* view combining whatever Highlight and/or NoteEntry
- * rows share one exact set of ranges — the shape the reading UI actually
- * wants (one marked span, one note thread underneath it), but never itself
- * the unit of storage or mutation. `id` is deterministic (derived from
- * `ranges`, see `rangesKey`), not a persisted uuid — every mutation
- * (addNote/updateNoteEntry/deleteNoteEntry/addHighlight/removeHighlight)
- * acts on a NoteEntry or Highlight row directly, by *its own* id;
- * `getForPassage` assembles this view fresh (see `recomputePassages`)
- * whenever the underlying rows for that passage actually change, and
- * caches it so it stays reference-stable in between — see the memoization
- * note on PassageText (components/PassageContent.tsx) for why that
- * stability matters.
+ * Read-only, *computed* view combining whatever Highlight and/or Note rows
+ * (both real server rows now, api-spec.md's shapes — never itself the unit
+ * of storage or mutation) share one exact set of ranges — the shape the
+ * reading UI actually wants (one marked span, one note thread underneath
+ * it). `id` is deterministic (derived from `ranges`, see `rangesKey`), not
+ * a persisted uuid — every mutation (create/delete highlight, create/edit/
+ * delete note) acts on a Highlight or Note row directly, by *its own*
+ * server-assigned id; `buildAnnotationsForPassage` assembles this view
+ * fresh from whatever TanStack Query currently holds for a material (see
+ * lib/reader/useAnnotations.ts), not from a store this module owns anymore
+ * — this file is pure functions now, no zustand `create()`, no persist.
+ * (History: this used to be the zustand store holding *all* local reading
+ * state — persist/localStorage-backed highlights+notes+position. Phase 6
+ * split it: position moved to stores/reading-position-store.ts, and
+ * highlights/notes became real server rows fetched via TanStack Query —
+ * this file kept only the grouping logic that turns raw Highlight[]/Note[]
+ * into the Annotation[] view components actually render, since that logic
+ * has nothing to do with where the raw rows come from.)
  *
  * `notes` is the *entire* thread, flattened — every reply at every depth,
  * not just the top-level ones — since every row in it shares this same
- * `ranges` regardless of nesting (see NoteEntry.parentId). Callers that care
+ * `ranges` regardless of nesting (see Note.parentId). Callers that care
  * about thread structure (NotesSidebar) group this flat list by `parentId`
- * themselves rather than this view baking in one fixed shape for it.
+ * themselves (lib/reader/noteThread.ts) rather than this view baking in one
+ * fixed shape for it.
  */
 export type Annotation = {
   id: string;
@@ -96,111 +41,43 @@ export type Annotation = {
   /** The underlying Highlight row's own id — only what removeHighlight
    * actually needs; absent when this group has no highlight, only notes. */
   highlightId?: string;
-  notes: NoteEntry[];
-  // Last activity in this group — a highlight toggle or any note
-  // added/edited/deleted. Individual notes also carry their own `savedAt`.
+  notes: Note[];
+  // Last activity in this group (ms epoch) — a highlight or any note
+  // created/edited, derived from the max `updatedAt` among every
+  // constituent row. Individual notes also carry their own `updatedAt`.
   savedAt: number;
 };
 
-/** Resume position within a book. `audioTimeMs` is only meaningful in
- * "listen" mode and only set once a recorded track has actually played;
- * absent it, listen-mode resume falls back to the passage's first word. */
-export type Position = { sectionId: string; passageIndex: number; audioTimeMs?: number };
-
-// Stable reference for "no annotations" — PassageText is memo()'d and reads
-// this on every passage in a section during ~2.6/s narration re-renders; a
-// fresh `[]` literal per call would compare unequal every time and defeat
-// that memoization for every unmarked passage.
-const EMPTY_ANNOTATIONS: Annotation[] = [];
-
-type RowIndex<T> = {
-  byId: Record<string, T>;
-  // Same object references as byId, just grouped by every passage each one
-  // touches — a row spanning 3 passages appears in 3 buckets here, all
-  // pointing at the one shared object.
-  byPassage: Record<string, T[]>;
-};
-
-function rangesKey(ranges: AnnotationRange[]): string {
+export function rangesKey(ranges: AnnotationRange[]): string {
   return ranges.map((r) => `${r.passageId}:${r.start}:${r.end}`).join("|");
 }
 
-function sameRanges(a: AnnotationRange[], b: AnnotationRange[]): boolean {
+export function sameRanges(a: AnnotationRange[], b: AnnotationRange[]): boolean {
   return a.length === b.length && a.every((r, i) => r.passageId === b[i].passageId && r.start === b[i].start && r.end === b[i].end);
 }
 
-// Rows never change their own `ranges` after creation (only content/
-// highlighted-ness do), so rebuilding bucket membership on every update is
-// unnecessary — this only ever replaces the row in place within whichever
-// buckets it already belongs to, or (for a brand-new row) adds it to each
-// bucket its ranges name.
-function upsertRow<T extends { id: string; ranges: AnnotationRange[] }>(index: RowIndex<T>, row: T): RowIndex<T> {
-  const byId = { ...index.byId, [row.id]: row };
-  const byPassage = { ...index.byPassage };
-  for (const r of row.ranges) {
-    const bucket = byPassage[r.passageId] ?? [];
-    const i = bucket.findIndex((x) => x.id === row.id);
-    byPassage[r.passageId] = i >= 0 ? bucket.map((x, j) => (j === i ? row : x)) : [...bucket, row];
-  }
-  return { byId, byPassage };
-}
-
-function removeRow<T extends { id: string; ranges: AnnotationRange[] }>(index: RowIndex<T>, id: string): RowIndex<T> {
-  const existing = index.byId[id];
-  if (!existing) return index;
-  const byId = { ...index.byId };
-  delete byId[id];
-  const byPassage = { ...index.byPassage };
-  for (const r of existing.ranges) {
-    byPassage[r.passageId] = (byPassage[r.passageId] ?? []).filter((x) => x.id !== id);
-  }
-  return { byId, byPassage };
-}
-
-function emptyRowIndex<T>(): RowIndex<T> {
-  return { byId: {}, byPassage: {} };
-}
-
-/** `rootId` plus every NoteEntry that replies to it, transitively — the
- * full set deleteNoteEntry needs to remove so a reply can never survive its
- * own parent's deletion. */
-function collectWithDescendants(byId: Record<string, NoteEntry>, rootId: string): string[] {
-  const all = Object.values(byId);
-  const ids = [rootId];
-  for (let i = 0; i < ids.length; i++) {
-    for (const n of all) {
-      if (n.parentId === ids[i]) ids.push(n.id);
-    }
-  }
-  return ids;
-}
-
-/** Groups whichever Highlight/NoteEntry rows touch `passageId` by their
- * exact shared `ranges` into the Annotation[] view PassageText/NotesSidebar
- * actually read. `highlights`/`notes` are that passage's full buckets
- * (each row's own `ranges` may reach into neighboring passages too — that's
- * irrelevant here beyond being part of the grouping key). */
-function buildAnnotationsForPassage(highlights: Highlight[], notes: NoteEntry[]): Annotation[] {
-  const groups = new Map<string, { ranges: AnnotationRange[]; highlightId?: string; notes: NoteEntry[]; savedAt: number }>();
+/** Groups whichever Highlight/Note rows touch one shared passage (see
+ * lib/reader/useAnnotations.ts, which buckets by passageId before calling
+ * this) by their exact shared `ranges` into the Annotation[] view
+ * PassageText/NotesSidebar actually read. A row's own `ranges` may reach
+ * into neighboring passages too — irrelevant here, beyond being part of
+ * the grouping key. */
+export function buildAnnotationsForPassage(highlights: Highlight[], notes: Note[]): Annotation[] {
+  const groups = new Map<string, { ranges: AnnotationRange[]; highlightId?: string; notes: Note[]; savedAt: number }>();
   for (const h of highlights) {
     const key = rangesKey(h.ranges);
     const g = groups.get(key) ?? { ranges: h.ranges, notes: [], savedAt: 0 };
     g.highlightId = h.id;
-    g.savedAt = Math.max(g.savedAt, h.savedAt);
+    g.savedAt = Math.max(g.savedAt, Date.parse(h.updatedAt));
     groups.set(key, g);
   }
   for (const n of notes) {
     const key = rangesKey(n.ranges);
     const g = groups.get(key) ?? { ranges: n.ranges, notes: [], savedAt: 0 };
     g.notes.push(n);
-    g.savedAt = Math.max(g.savedAt, n.savedAt);
+    g.savedAt = Math.max(g.savedAt, Date.parse(n.updatedAt));
     groups.set(key, g);
   }
-  // g.notes is already in stable creation order: upsertRow appends a
-  // brand-new NoteEntry to the end of its passage bucket but replaces an
-  // edited one in place (same index), so editing a note must never re-sort
-  // it to wherever its now-later savedAt would put it — it should stay put
-  // in the thread, exactly like the original nested-array design did.
   return Array.from(groups.entries()).map(([key, g]) => ({
     id: key,
     ranges: g.ranges,
@@ -210,316 +87,3 @@ function buildAnnotationsForPassage(highlights: Highlight[], notes: NoteEntry[])
     savedAt: g.savedAt,
   }));
 }
-
-/**
- * Everything this reader has done with one book — resume position and
- * private highlights/notes — nested under a single `books[bookId]` entry
- * rather than split across parallel stores, so a future sync layer has
- * exactly one per-book blob to ship (tagged with `readerId` from
- * reader-identity-store) instead of stitching several together. Whether
- * the reader is currently *listening* to a book isn't part of this at all
- * — that's audio-store's single global "now playing" slot, not a per-book
- * flag, which is what lets it survive navigating off this book's page.
- */
-type BookState = {
-  position: Position | undefined;
-  highlights: RowIndex<Highlight>;
-  notes: RowIndex<NoteEntry>;
-  // Cached grouping of highlights/notes into the Annotation[] view, kept in
-  // lockstep by every mutation below (recomputePassages) rather than
-  // derived fresh on every read — getForPassage is a plain lookup so its
-  // result stays reference-stable across renders that don't touch this
-  // passage, which is what lets PassageText's memo() actually skip work.
-  annotationsByPassage: Record<string, Annotation[]>;
-  // Bumped on every write below — a coarse "this book entry changed"
-  // signal for a future last-write-wins sync. Notes/highlights also carry
-  // their own per-item `savedAt`, which stays the finer-grained signal.
-  updatedAt: number;
-};
-
-function emptyBookState(): BookState {
-  return {
-    position: undefined,
-    highlights: emptyRowIndex(),
-    notes: emptyRowIndex(),
-    annotationsByPassage: {},
-    updatedAt: Date.now(),
-  };
-}
-
-/** Rebuilds the Annotation[] cache for exactly `passageIds`, leaving every
- * other passage's cached array untouched (same reference) — call this
- * after `book.highlights`/`book.notes` have already been updated, with the
- * set of passageIds the mutation's ranges touched. */
-function recomputePassages(book: BookState, passageIds: Iterable<string>): Record<string, Annotation[]> {
-  const next = { ...book.annotationsByPassage };
-  for (const passageId of passageIds) {
-    const groups = buildAnnotationsForPassage(
-      book.highlights.byPassage[passageId] ?? [],
-      book.notes.byPassage[passageId] ?? []
-    );
-    if (groups.length) next[passageId] = groups;
-    else delete next[passageId];
-  }
-  return next;
-}
-
-type LibraryState = {
-  books: Record<string, BookState>;
-  /** False until this store's real data has actually been pulled from
-   * localStorage (see `skipHydration` below — this store never
-   * auto-hydrates, a caller has to explicitly call `persist.rehydrate()`,
-   * normally once on mount). Every write action below checks this first
-   * and no-ops otherwise — without that guard, a write that lands before
-   * hydration completes (e.g. reading-progress's own scroll-position
-   * writes, which fire independently of hydration state) targets `books`
-   * while it's still at its default empty value, and persist's middleware
-   * immediately writes that — highlights and notes included — back to
-   * localStorage, permanently overwriting whatever was really saved there.
-   * This isn't hypothetical: it's exactly what happened during dev, when
-   * editing this file caused hot-reload to recreate the store fresh
-   * (without re-running the mount-only rehydrate() call), and a scroll
-   * event landed in the gap. Failing safe (drop the write, log it) beats
-   * failing destructive (silently erase real data). */
-  hasHydrated: boolean;
-
-  getPosition: (bookId: string) => Position | undefined;
-  setPosition: (bookId: string, position: Position) => void;
-
-  getForPassage: (bookId: string, passageId: string) => Annotation[];
-  /** Every Annotation in a book, flattened across passages and deduped by
-   * id (a multi-passage annotation's ranges land it in more than one
-   * passage's bucket, same object reference) — for the book-wide
-   * annotation feed, not per-passage rendering.
-   *
-   * Do not subscribe to this directly as a reactive selector
-   * (`useLibraryStore(s => s.getAllForBook(id))`) — it allocates a fresh
-   * array on every call, so that would rebuild (and re-render everything
-   * watching it) on *every* store write, including `setPosition`, which
-   * fires on every scroll tick and never touches annotations. Instead,
-   * subscribe to the already reference-stable
-   * `books[bookId]?.annotationsByPassage` and call this inside a
-   * `useMemo` keyed on that reference (see useBookAnnotationFeed). */
-  getAllForBook: (bookId: string) => Annotation[];
-  rangeFor: (annotation: Annotation, passageId: string) => AnnotationRange | undefined;
-  /** True when `a` and `b` name exactly the same passages/offsets, in the
-   * same order — used to detect "the reader re-selected an
-   * already-highlighted span" so the tooltip's Highlight button can toggle
-   * it off instead of creating an overlapping duplicate, and to find
-   * whatever thread already lives at a fresh selection so the notes panel
-   * can show it (not needed to *add* a note — see `addNote`). */
-  sameRanges: (a: AnnotationRange[], b: AnnotationRange[]) => boolean;
-  addHighlight: (bookId: string, ranges: AnnotationRange[]) => void;
-  // Un-highlighting simply deletes the Highlight row — it never touches any
-  // NoteEntry rows at the same ranges, which is exactly the point of
-  // keeping them as separate records: a noted range surviving a highlight
-  // toggle is now just "the Highlight row is gone, the NoteEntry rows
-  // aren't," not a special case this function has to know about.
-  removeHighlight: (bookId: string, highlightId: string) => void;
-  /** Always inserts a brand-new, independent NoteEntry row — appending a
-   * note to an existing thread and starting a brand-new one are the same
-   * operation, because there is no shared parent object to find-or-create;
-   * the thread is just "every NoteEntry whose ranges match," assembled by
-   * `getForPassage`, not something this call has to resolve. `parentId`
-   * makes this a reply to another note instead of a top-level entry —
-   * omitted, it replies directly to the highlighted passage. Pass whichever
-   * note the reader actually tapped "Reply" on, root or reply — it's
-   * resolved to its own top-level note internally (stamping `replyingToId`
-   * when that target wasn't already the root), so the two-tier-flat rule
-   * (see NoteEntry.parentId) never has to be enforced by the caller. */
-  addNote: (bookId: string, ranges: AnnotationRange[], content: NoteContent, parentId?: string) => void;
-  /** Edits one specific existing note entry in place, by its own id. */
-  updateNoteEntry: (bookId: string, noteId: string, content: NoteContent) => void;
-  /** Deletes one note and its entire reply subtree, at any depth — a reply
-   * can't meaningfully outlive the note it's replying to. */
-  deleteNoteEntry: (bookId: string, noteId: string) => void;
-  /** Flips this reader's own reaction on one note/reply, ±1 on its local
-   * `reactionCount` — optimistic and purely local, no backend to reconcile
-   * against yet. */
-  toggleNoteReaction: (bookId: string, noteId: string) => void;
-};
-
-/**
- * Private, single-author per-book reading state — same stub-repository
- * shape as the rest of this app's client stores (localStorage today,
- * swappable for a real backend later without callers changing).
- */
-export const useLibraryStore = create<LibraryState>()(
-  persist(
-    (set, get) => ({
-      books: {},
-      hasHydrated: false,
-
-      getPosition: (bookId) => get().books[bookId]?.position,
-      setPosition: (bookId, position) =>
-        set((s) => {
-          if (!s.hasHydrated) return {};
-          const book = s.books[bookId] ?? emptyBookState();
-          return { books: { ...s.books, [bookId]: { ...book, position, updatedAt: Date.now() } } };
-        }),
-
-      getForPassage: (bookId, passageId) => get().books[bookId]?.annotationsByPassage[passageId] ?? EMPTY_ANNOTATIONS,
-      getAllForBook: (bookId) => {
-        const book = get().books[bookId];
-        if (!book) return EMPTY_ANNOTATIONS;
-        const byId = new Map<string, Annotation>();
-        for (const group of Object.values(book.annotationsByPassage)) {
-          for (const a of group) if (!byId.has(a.id)) byId.set(a.id, a);
-        }
-        return byId.size ? Array.from(byId.values()) : EMPTY_ANNOTATIONS;
-      },
-      rangeFor: (annotation, passageId) => annotation.ranges.find((r) => r.passageId === passageId),
-      sameRanges,
-
-      addHighlight: (bookId, ranges) =>
-        set((s) => {
-          if (!s.hasHydrated) return {};
-          const book = s.books[bookId] ?? emptyBookState();
-          const highlight: Highlight = { id: crypto.randomUUID(), ranges, savedAt: Date.now() };
-          const highlights = upsertRow(book.highlights, highlight);
-          const nextBook: BookState = { ...book, highlights, updatedAt: Date.now() };
-          nextBook.annotationsByPassage = recomputePassages(nextBook, new Set(ranges.map((r) => r.passageId)));
-          return { books: { ...s.books, [bookId]: nextBook } };
-        }),
-      removeHighlight: (bookId, highlightId) =>
-        set((s) => {
-          if (!s.hasHydrated) return {};
-          const book = s.books[bookId];
-          const existing = book?.highlights.byId[highlightId];
-          if (!book || !existing) return {};
-          const highlights = removeRow(book.highlights, highlightId);
-          const nextBook: BookState = { ...book, highlights, updatedAt: Date.now() };
-          nextBook.annotationsByPassage = recomputePassages(nextBook, new Set(existing.ranges.map((r) => r.passageId)));
-          return { books: { ...s.books, [bookId]: nextBook } };
-        }),
-      addNote: (bookId, ranges, content, parentId) =>
-        set((s) => {
-          if (!s.hasHydrated) return {};
-          const book = s.books[bookId] ?? emptyBookState();
-          // Flatten to two tiers regardless of what was tapped: replying to
-          // a reply still stores parentId as the *top-level* note (never
-          // another reply's id), and remembers the specific reply that was
-          // actually addressed in replyingToId, purely for the "replying to
-          // Comrade X" label — see NoteEntry.parentId's doc comment.
-          const parent = parentId ? book.notes.byId[parentId] : undefined;
-          const isReplyToReply = Boolean(parent?.parentId);
-          const note: NoteEntry = {
-            id: crypto.randomUUID(),
-            ranges,
-            parentId: isReplyToReply ? parent!.parentId : parentId,
-            replyingToId: isReplyToReply ? parentId : undefined,
-            author: { name: CURRENT_READER_NAME },
-            reactionCount: 0,
-            reactedByMe: false,
-            content,
-            savedAt: Date.now(),
-          };
-          const notes = upsertRow(book.notes, note);
-          const nextBook: BookState = { ...book, notes, updatedAt: Date.now() };
-          nextBook.annotationsByPassage = recomputePassages(nextBook, new Set(ranges.map((r) => r.passageId)));
-          return { books: { ...s.books, [bookId]: nextBook } };
-        }),
-      updateNoteEntry: (bookId, noteId, content) =>
-        set((s) => {
-          if (!s.hasHydrated) return {};
-          const book = s.books[bookId];
-          const existing = book?.notes.byId[noteId];
-          if (!book || !existing) return {};
-          const notes = upsertRow(book.notes, { ...existing, content, savedAt: Date.now() });
-          const nextBook: BookState = { ...book, notes, updatedAt: Date.now() };
-          nextBook.annotationsByPassage = recomputePassages(nextBook, new Set(existing.ranges.map((r) => r.passageId)));
-          return { books: { ...s.books, [bookId]: nextBook } };
-        }),
-      deleteNoteEntry: (bookId, noteId) =>
-        set((s) => {
-          if (!s.hasHydrated) return {};
-          const book = s.books[bookId];
-          const existing = book?.notes.byId[noteId];
-          if (!book || !existing) return {};
-          let notes = book.notes;
-          for (const id of collectWithDescendants(book.notes.byId, noteId)) notes = removeRow(notes, id);
-          const nextBook: BookState = { ...book, notes, updatedAt: Date.now() };
-          nextBook.annotationsByPassage = recomputePassages(nextBook, new Set(existing.ranges.map((r) => r.passageId)));
-          return { books: { ...s.books, [bookId]: nextBook } };
-        }),
-      toggleNoteReaction: (bookId, noteId) =>
-        set((s) => {
-          if (!s.hasHydrated) return {};
-          const book = s.books[bookId];
-          const existing = book?.notes.byId[noteId];
-          if (!book || !existing) return {};
-          const reactedByMe = !existing.reactedByMe;
-          const notes = upsertRow(book.notes, {
-            ...existing,
-            reactedByMe,
-            reactionCount: existing.reactionCount + (reactedByMe ? 1 : -1),
-          });
-          const nextBook: BookState = { ...book, notes, updatedAt: Date.now() };
-          nextBook.annotationsByPassage = recomputePassages(nextBook, new Set(existing.ranges.map((r) => r.passageId)));
-          return { books: { ...s.books, [bookId]: nextBook } };
-        }),
-    }),
-    {
-      // Bumped from v3: NoteEntry gained author/reactionCount/reactedByMe/
-      // replyingToId for the community-thread redesign. Pre-launch, so a
-      // fresh key just orphans old test data (same convention v1→v2→v3
-      // already established) rather than writing a one-time shape
-      // migration for data nobody depends on yet.
-      name: "ominira-library-v4",
-      // Rudimentary local-file persistence (data/library.json via
-      // app/api/library-data) instead of localStorage, so this can later
-      // swap to a real backend behind that same API without every caller
-      // of this store changing. See libraryPersistStorage.ts.
-      storage: createJSONStorage(() => libraryFileStorage),
-      // Same SSR-hydration-mismatch reasoning as the reader's other client
-      // stores — inline highlight washes/markers and listen-mode render on
-      // first paint, so they can't read localStorage before the server and
-      // the client's first render agree. Rehydrated explicitly post-mount
-      // in Reader.tsx.
-      skipHydration: true,
-      // annotationsByPassage itself is never persisted at all — it's purely
-      // a derived cache, and `merge` below rebuilds it from whatever
-      // highlights/notes actually made it into storage, so it can never
-      // drift out of sync with them. Voice notes persist like any other
-      // note now that their `content.audioUrl` is a durable /voice-notes/
-      // file URL (see app/api/voice-notes), not a blob: URL scoped to the
-      // recording tab's lifetime.
-      partialize: (s) => ({
-        books: Object.fromEntries(
-          Object.entries(s.books).map(([bookId, book]) => [
-            bookId,
-            { position: book.position, highlights: book.highlights, notes: book.notes, updatedAt: book.updatedAt },
-          ])
-        ),
-      }),
-      // Rebuilds each book's annotationsByPassage cache from its persisted
-      // highlights/notes on rehydrate, since that cache is intentionally
-      // never itself persisted (see partialize above) — skipping this would
-      // leave every returning reader's books with an empty cache and no
-      // markers/highlights rendered at all despite the underlying data
-      // being right there.
-      merge: (persistedState, currentState) => {
-        const persisted = persistedState as { books?: Record<string, Omit<BookState, "annotationsByPassage">> } | undefined;
-        const books = { ...currentState.books };
-        for (const [bookId, pBook] of Object.entries(persisted?.books ?? {})) {
-          const book: BookState = { ...pBook, annotationsByPassage: {} };
-          const touched = new Set<string>();
-          for (const h of Object.values(book.highlights.byId)) for (const r of h.ranges) touched.add(r.passageId);
-          for (const n of Object.values(book.notes.byId)) for (const r of n.ranges) touched.add(r.passageId);
-          book.annotationsByPassage = recomputePassages(book, touched);
-          books[bookId] = book;
-        }
-        return { ...currentState, books };
-      },
-      // Flips `hasHydrated` true once `merge` above has actually applied
-      // (or, on a storage read failure, once persist gives up trying) — see
-      // LibraryState.hasHydrated's own doc comment for why every write
-      // action checks this first. Fires on error too: a session that can
-      // never read its real data still needs to be able to write new data
-      // rather than staying locked out for good.
-      onRehydrateStorage: () => () => {
-        useLibraryStore.setState({ hasHydrated: true });
-      },
-    }
-  )
-);

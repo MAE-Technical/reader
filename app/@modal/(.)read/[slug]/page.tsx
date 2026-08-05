@@ -1,6 +1,30 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import ReaderModal from "@/app/components/reader/ReaderModal";
-import { BookNotFoundError, getBookDocument } from "@/lib/book/repository";
+import { getBookDocumentFromMaterial, MaterialNotFoundError } from "@/lib/materials/toBookDocument";
+import { getMaterialDetail } from "@/lib/materials/detail";
+import { PLATFORM_NAME } from "@/lib/config/platform";
+
+// Same cheap DB-only metadata as app/read/[slug]/page.tsx's own
+// generateMetadata — kept in sync so the tab title still reflects the book
+// being read even when this intercepted overlay, not the hard-navigation
+// page, is what's actually mounted.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  let material;
+  try {
+    material = await getMaterialDetail(slug);
+  } catch {
+    return { title: "Book not found" };
+  }
+  const { title, author, description } = material;
+  const desc = description || `${title} by ${author} — read or listen on ${PLATFORM_NAME}.`;
+  return { title, description: desc };
+}
 
 /** Same server-side load as app/read/[slug]/page.tsx, deliberately
  * duplicated rather than shared — this is the one other place a book gets
@@ -22,14 +46,16 @@ export default async function ReadBookModalPage({
   const { slug } = await params;
   const { section, passage, note } = await searchParams;
 
-  let book;
+  let book, materialId;
   try {
-    book = await getBookDocument(slug);
+    ({ book, materialId } = await getBookDocumentFromMaterial(slug));
   } catch (err) {
-    if (err instanceof BookNotFoundError) {
+    if (err instanceof MaterialNotFoundError) {
       notFound();
     }
     throw err;
   }
-  return <ReaderModal book={book} targetSectionId={section} targetPassageId={passage} targetNoteId={note} />;
+  return (
+    <ReaderModal book={book} materialId={materialId} targetSectionId={section} targetPassageId={passage} targetNoteId={note} />
+  );
 }

@@ -1,13 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, Play } from "lucide-react";
-import type { BookDocument } from "@/lib/book/schema";
-import { useLibraryStore } from "@/stores/library-store";
-import { buildProgressShape, computeBookProgress } from "@/lib/reader/progress";
-import { buildOutlineRows } from "@/lib/reader/outline";
-import { sectionLabel } from "@/lib/reader/sectionHeading";
+import type { MaterialDetail } from "@/lib/materials/detail";
+import { useReadingPositionStore } from "@/stores/reading-position-store";
+import { useContinueReading } from "@/lib/auth/useContinueReading";
+import { buildTocOutlineRows } from "@/lib/reader/tocOutline";
 import ShareButton from "./ShareButton";
 import ReaderLink from "../ReaderLink";
 
@@ -18,42 +17,36 @@ const COLLAPSED_CHAPTER_LIMIT = 8;
  * cover, title/author, progress and CTAs together, followed directly by the
  * book's outline — no tabs, no separate notes section. One view, not one
  * managed from two different responsive layouts.
+ *
+ * Served entirely from `materials.detail`'s DB-only fields (api-spec.md's
+ * own worked example for this exact page) — no `BookDocument`, no Storage
+ * round trip. Progress comes from reading-position-store's
+ * `progressPercentByMaterial`, itself already server-computed
+ * (`CurrentReadingEntry.progressPercent`) and mirrored locally by
+ * useContinueReading — not recomputed here from spine/passage counts.
  */
-export default function BookDetailView({ book }: { book: BookDocument }) {
-  const position = useLibraryStore((s) => s.getPosition(book.id));
+export default function BookDetailView({ material }: { material: MaterialDetail }) {
+  // Ensures the position mirror is populated even for a reader who lands
+  // straight on this page (a shared link, a search-engine hit) without ever
+  // visiting /home first — see useContinueReading's own hydration effect.
+  // The returned list itself isn't needed here, only its side effect.
+  useContinueReading();
+  const pct = Math.round(useReadingPositionStore((s) => s.progressPercentByMaterial[material.id] ?? 0));
+  const position = useReadingPositionStore((s) => s.positions[material.id]);
   const [showAllChapters, setShowAllChapters] = useState(false);
 
-  // library-store skips automatic persist hydration (see its own doc
-  // comment) — rehydrated here the same way Reader.tsx/LibraryView do,
-  // since this page reads a real saved position for its own progress bar.
-  useEffect(() => {
-    useLibraryStore.persist.rehydrate();
-  }, []);
-
-  const progressShape = useMemo(() => buildProgressShape(book), [book]);
-  const pct = Math.round(computeBookProgress(progressShape, position) * 100);
-  const hasNarration = book.narrators.length > 0;
+  const hasNarration = material.narratorCount > 0;
   // `position` is one shared resume record for both reading and listening
-  // (see stores/library-store.ts's Position type) — reading never writes
-  // `audioTimeMs`, only NarrationEngine does (always, even at 0ms when
-  // playback starts), so its presence is what actually distinguishes "has
-  // listened before" from "has only ever read this book."
+  // (see stores/reading-position-store.ts's Position type) — reading never
+  // writes `audioTimeMs`, only NarrationEngine does (always, even at 0ms
+  // when playback starts), so its presence is what actually distinguishes
+  // "has listened before" from "has only ever read this book."
   const hasListened = position?.audioTimeMs !== undefined;
 
   // Exactly the same rows the reader's own TOC drawer (ChaptersDrawer) shows
-  // — group rows for Parts, leaf rows for every chapter, in the tree's own
-  // order — so this page can't drift into a different, incomplete notion of
-  // "the book's contents" than the one used while actually reading.
-  //
-  // Deliberately NOT split by Section.kind (front/body/back) — across the
-  // real ingested corpus that field is unreliable (most books tag nearly
-  // everything "unknown", so a body chapter and a title page are often
-  // indistinguishable by kind alone). Splitting on it previously scattered
-  // real chapters into a "front matter" bucket and stripped their part
-  // grouping. The tree's own hierarchy is the only structure this data
-  // reliably carries: a row with children is a Part (colored), a leaf is a
-  // chapter (muted) — nothing else is inferred.
-  const outlineRows = useMemo(() => buildOutlineRows(book.sections), [book.sections]);
+  // (there, off the full Section[] tree — see lib/reader/outline.ts) — group
+  // rows for Parts, leaf rows for every chapter, in the tree's own order.
+  const outlineRows = useMemo(() => buildTocOutlineRows(material.sections), [material.sections]);
   const totalChapterCount = useMemo(() => outlineRows.filter((r) => !r.isGroup).length, [outlineRows]);
   const visibleOutlineRows = useMemo(() => {
     if (showAllChapters || totalChapterCount <= COLLAPSED_CHAPTER_LIMIT) return outlineRows;
@@ -69,10 +62,7 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
     return rows;
   }, [outlineRows, showAllChapters, totalChapterCount]);
 
-  const metaLine = [
-    book.metadata.publishedYear ? String(book.metadata.publishedYear) : null,
-    `${book.metadata.pageCountEstimate} pages`,
-  ]
+  const metaLine = [material.publishedYear ? String(material.publishedYear) : null, `${material.pageCountEstimate ?? 0} pages`]
     .filter(Boolean)
     .join(" · ");
 
@@ -86,12 +76,12 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
         >
           <ArrowLeft size={20} />
         </Link>
-        <ShareButton title={book.metadata.title} text={`${book.metadata.title} by ${book.metadata.author}`} />
+        <ShareButton title={material.title} text={`${material.title} by ${material.author}`} />
       </div>
 
       <div className="relative mb-8 rounded-sm overflow-hidden bg-[var(--reader-surface-hover)]">
         <img
-          src={book.metadata.cover}
+          src={material.cover ?? ""}
           alt=""
           aria-hidden="true"
           className="absolute -inset-8 h-[calc(100%+64px)] w-[calc(100%+64px)] scale-110 object-cover opacity-40 blur-[50px]"
@@ -100,15 +90,15 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
           <div className="flex flex-col items-start gap-5 shell:flex-row shell:items-center shell:gap-9">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={book.metadata.cover}
-              alt={book.metadata.title}
+              src={material.cover ?? ""}
+              alt={material.title}
               className="aspect-[2/3] w-36 flex-none rounded-xs object-cover shadow-lg shell:w-56"
             />
             <div className="min-w-0 flex-1">
               <h1 className="font-serif text-2xl font-semibold leading-tight text-[var(--reader-text)] shell:text-3xl">
-                {book.metadata.title}
+                {material.title}
               </h1>
-              <div className="mt-1.5 text-base font-medium text-[var(--reader-text-muted)]">{book.metadata.author}</div>
+              <div className="mt-1.5 text-base font-medium text-[var(--reader-text-muted)]">{material.author}</div>
               {metaLine && <div className="mt-2.5 text-xs text-[var(--reader-text-subtle)]">{metaLine}</div>}
 
               <div className="mt-3.5">
@@ -125,7 +115,7 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
               </div>
               <div className="mt-3.5 grid max-w-[250px] gap-3">
               <ReaderLink
-                href={`/read/${book.slug}`}
+                href={`/read/${material.slug}`}
                 className="rounded-md bg-brand-500 px-5 py-2.5 text-center text-sm font-semibold text-white no-underline hover:bg-brand-600"
               >
                 {pct > 0 ? "Resume reading" : "Start reading"}
@@ -141,7 +131,7 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
                 // targetPassageId already do for "jump to this chapter"/
                 // "open this note" links.
                 <ReaderLink
-                  href={`/read/${book.slug}?listen=1`}
+                  href={`/read/${material.slug}?listen=1`}
                   className="flex items-center cursor-pointer justify-center gap-2 rounded-md border border-[var(--reader-border)] bg-transparent px-5 py-2.5 text-sm font-semibold text-[var(--reader-text)] no-underline hover:bg-[var(--reader-surface)]"
                 >
                   <Play size={16} />
@@ -166,12 +156,12 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
                 key={row.section.id}
                 className="mb-0.5 mt-4 px-2.5 text-[11px] font-semibold uppercase tracking-wider text-brand-500 first:mt-0"
               >
-                {sectionLabel(row.section)}
+                {row.section.label}
               </div>
             );
           }
-          const hasContent = row.section.passages.length > 0;
-          const label = sectionLabel(row.section);
+          const hasContent = row.section.passageCount > 0;
+          const label = row.section.label;
           if (!hasContent) {
             return (
               <div key={row.section.id} className="truncate px-2.5 py-2 text-sm font-medium text-[var(--reader-text-muted)] opacity-50">
@@ -182,7 +172,7 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
           return (
             <ReaderLink
               key={row.section.id}
-              href={`/read/${book.slug}?section=${row.section.id}`}
+              href={`/read/${material.slug}?section=${row.section.id}`}
               className="block truncate rounded-xs px-2.5 py-2 text-sm font-medium text-[var(--reader-text-muted)] no-underline hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)]"
             >
               {label}

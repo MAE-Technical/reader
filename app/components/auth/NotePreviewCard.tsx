@@ -12,7 +12,7 @@ const SAMPLE_BOOK = {
   title: "The Wretched of the Earth",
   author: "Frantz Fanon",
   label: "Conclusion",
-  cover: "/wofecover.jpeg",
+  cover: "https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/sample_book_cover.jpeg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9hYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuL3NhbXBsZV9ib29rX2NvdmVyLmpwZWciLCJzY29wZSI6ImRvd25sb2FkIiwiaWF0IjoxNzg1OTU1MjgxLCJleHAiOjE4MTc0OTEyODF9.iBggdIp2U5EN7F86P2MTPrsMYaK4UyWvFykfdmBHd1A",
 };
 
 const SAMPLE_QUOTE = "Each generation must, out of relative obscurity, discover its mission, fulfill it, or betray it.";
@@ -33,7 +33,9 @@ const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
  * own /covers/*.jpg assets, since this book isn't actually in the library.
  */
 export default function NotePreviewCard({ pseudonym }: { pseudonym: string }) {
-  const name = `Comrade ${pseudonym.trim() || "Kofi Writes"}`;
+  // AuthorRow itself now applies the "Comrade " prefix (comradeName) — pass
+  // the bare pseudonym so this preview doesn't double it up.
+  const name = pseudonym.trim() || "Kofi Writes";
   const [reacted, setReacted] = useState(false);
   const [savedAt] = useState(() => Date.now() - TWO_HOURS_MS);
 

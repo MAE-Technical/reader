@@ -50,11 +50,13 @@ const EXIT_ANIMATION_MS = 220;
  * standalone /read/[slug] page. */
 export default function ReaderModal({
   book,
+  materialId,
   targetSectionId,
   targetPassageId,
   targetNoteId,
 }: {
   book: BookDocument;
+  materialId: string;
   targetSectionId?: string;
   targetPassageId?: string;
   targetNoteId?: string;
@@ -134,6 +136,7 @@ export default function ReaderModal({
       <div className={`h-full w-full ${closing ? "reader-modal-panel-exit" : "reader-modal-panel-enter"}`}>
         <Reader
           book={book}
+          materialId={materialId}
           targetSectionId={targetSectionId}
           targetPassageId={targetPassageId}
           targetNoteId={targetNoteId}

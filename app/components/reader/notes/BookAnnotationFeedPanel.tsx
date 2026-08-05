@@ -29,7 +29,7 @@ function sectionGroupElementId(sectionId: string): string {
  * Opening the panel scrolls once to wherever the reader currently is in
  * the book; browsing the feed itself never re-scrolls on its own. */
 export default function BookAnnotationFeedPanel({
-  bookId,
+  materialId,
   groups,
   filter,
   onFilterChange,
@@ -41,7 +41,7 @@ export default function BookAnnotationFeedPanel({
   panelType,
   onClose,
 }: {
-  bookId: string;
+  materialId: string;
   groups: FeedSectionGroup[];
   filter: AnnotationFeedFilter;
   onFilterChange: (filter: AnnotationFeedFilter) => void;
@@ -123,7 +123,7 @@ export default function BookAnnotationFeedPanel({
                 {group.entries.map((entry) => (
                   <FeedHighlightThread
                     key={entry.annotation.id}
-                    bookId={bookId}
+                    materialId={materialId}
                     entry={entry}
                     getPassageText={getPassageText}
                     onJump={onJump}

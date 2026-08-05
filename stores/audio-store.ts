@@ -23,6 +23,12 @@ type AudioState = {
    * narration" nudge, without owning the player's DOM itself anymore. */
   playerHeight: number;
   book: BookDocument | null;
+  /** The same book's real `materials.id` (UUID) — kept alongside `book`
+   * rather than derived from it, since `book.id` is ingestion's own
+   * slug-like internal id (api-spec.md: deliberately distinct from
+   * materialId). NarrationEngine reads/writes reading-position-store by
+   * this, not `book.id`. */
+  materialId: string | null;
 
   play: () => void;
   pause: () => void;
@@ -34,10 +40,10 @@ type AudioState = {
   /** Starts (or switches) listen mode to this book and begins playback —
    * the engine's own resume-position effect immediately reconciles
    * currentTimeMs against whatever was last saved for it. */
-  openBook: (book: BookDocument) => void;
+  openBook: (book: BookDocument, materialId: string) => void;
   /** Exits listen mode entirely — resume position is left untouched in
-   * library-store, so reopening the book later picks up where playback
-   * left off instead of restarting. */
+   * reading-position-store, so reopening the book later picks up where
+   * playback left off instead of restarting. */
   closePlayer: () => void;
 };
 
@@ -54,6 +60,7 @@ export const useAudioStore = create<AudioState>()(
       speed: 1,
       playerHeight: 0,
       book: null,
+      materialId: null,
 
       play: () => set({ isPlaying: true }),
       pause: () => set({ isPlaying: false }),
@@ -66,8 +73,8 @@ export const useAudioStore = create<AudioState>()(
       setNarratorId: (narratorId) => set({ narratorId, currentTimeMs: 0 }),
       setSpeed: (speed) => set({ speed }),
       setPlayerHeight: (playerHeight) => set({ playerHeight }),
-      openBook: (book) => set({ book, currentTimeMs: 0, isPlaying: true }),
-      closePlayer: () => set({ book: null, isPlaying: false }),
+      openBook: (book, materialId) => set({ book, materialId, currentTimeMs: 0, isPlaying: true }),
+      closePlayer: () => set({ book: null, materialId: null, isPlaying: false }),
     }),
     {
       name: "ominira-audio-prefs",

@@ -57,6 +57,23 @@ export type CurrentReadingEntry = {
   updatedAt: string;
 };
 
+/**
+ * `materials.toc`'s own shape (api-spec.md § Materials) — deliberately
+ * lighter than `lib/book/schema.ts`'s `Section`: `label`/`passageCount` are
+ * *resolved* values computed once at publish time, specifically so a
+ * DB-only consumer (the book-detail page) never needs passage content to
+ * render a chapter list or a progress bar.
+ */
+export type TocSection = {
+  id: string;
+  label: string | null;
+  kind: "front" | "body" | "back" | "unknown";
+  passageCount: number;
+  children: TocSection[];
+  audioDurationMs?: number;
+  narratorIds?: string[];
+};
+
 export type ReaderProfile = {
   id: string;
   email: string;

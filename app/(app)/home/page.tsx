@@ -1,14 +1,11 @@
-import { listBooks } from "@/lib/book/repository";
-import { toCommunityBookMeta } from "@/lib/home/communityBook";
-import { toLibraryBookSummary } from "@/app/components/shell/libraryBook";
+import type { Metadata } from "next";
 import HomeCommunityFeed from "@/app/components/home/HomeCommunityFeed";
 
-export default async function HomePage() {
-  const books = await listBooks();
-  return (
-    <HomeCommunityFeed
-      booksMeta={books.map(toCommunityBookMeta)}
-      continueReadingBooks={books.map(toLibraryBookSummary)}
-    />
-  );
+export const metadata: Metadata = {
+  title: "Home",
+  description: "Pick up where you left off and see what comrades are discussing across the library right now.",
+};
+
+export default function HomePage() {
+  return <HomeCommunityFeed />;
 }

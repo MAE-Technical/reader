@@ -1,8 +1,16 @@
+import type { Metadata } from "next";
 import { listBooks } from "@/lib/book/repository";
 import { computeAudioStatus, firstNarratorTrackSrc } from "@/lib/audio/status";
 import AudioAdminTable, { type AudioAdminRow } from "./AudioAdminTable";
 
 export const dynamic = "force-dynamic";
+
+// Internal ingestion tool, not a reader-facing page — kept out of search
+// results rather than given a public-facing description.
+export const metadata: Metadata = {
+  title: "Audio Admin",
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminAudioPage() {
   const books = await listBooks();

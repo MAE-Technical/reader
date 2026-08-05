@@ -1,49 +1,56 @@
 "use client";
 
-import { useEffect } from "react";
+import { useState } from "react";
 import AppHeader from "@/app/components/shell/AppHeader";
-import { useLibraryStore } from "@/stores/library-store";
-import { useCommunityFeed } from "@/lib/home/useCommunityFeed";
-import type { CommunityBookMeta } from "@/lib/home/communityBook";
-import type { LibraryBookSummary } from "@/app/components/shell/libraryBook";
+import SearchModal from "@/app/components/SearchModal";
+import { useCommunityFeed, type CommunityFeedSort } from "@/lib/community/useCommunityFeed";
 import ContinueReadingRail from "./ContinueReadingRail";
+import TopBooksRail from "./TopBooksRail";
 import CommunityFeedSortToggle from "./CommunityFeedSortToggle";
 import CommunityNoteCard from "./CommunityNoteCard";
 import HomeAuthBanner from "./HomeAuthBanner";
 import HomeInstallBanner from "./HomeInstallBanner";
 
-/** The home page's real content — a "continue reading" shelf, then every
- * note the local reader has left across their whole library, newest first
- * by default. Same page-composition shape as LibraryView (AppHeader, then
- * a page heading + a filter control, then the content). */
-export default function HomeCommunityFeed({
-  booksMeta,
-  continueReadingBooks,
-}: {
-  booksMeta: CommunityBookMeta[];
-  continueReadingBooks: LibraryBookSummary[];
-}) {
-  // library-store skips automatic persist hydration (see its own doc
-  // comment) so the server and first client paint agree — rehydrated here
-  // the same way LibraryView/Reader.tsx already do.
-  useEffect(() => {
-    useLibraryStore.persist.rehydrate();
-  }, []);
-  // Gates the empty-state message specifically — without this, a reader
-  // who *does* have notes would see a false "No notes yet" flash before
-  // localStorage finishes loading a moment later.
-  const hasHydrated = useLibraryStore((s) => s.hasHydrated);
+/** Stand-in for a CommunityNoteCard while `GET /api/community/notes` is
+ * still in flight — same rounded-card footprint (border, padding, roughly
+ * a card's worth of lines) so the feed's layout doesn't jump once real
+ * cards swap in, and so this reads as "loading," not as an empty state. */
+function CommunityNoteCardSkeleton() {
+  return (
+    <div className="animate-pulse rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-4">
+      <div className="mb-3 h-3 w-2/3 rounded-full bg-[var(--reader-surface-hover)]" />
+      <div className="mb-2 h-3 w-full rounded-full bg-[var(--reader-surface-hover)]" />
+      <div className="mb-4 h-3 w-4/5 rounded-full bg-[var(--reader-surface-hover)]" />
+      <div className="h-2.5 w-1/3 rounded-full bg-[var(--reader-surface-hover)]" />
+    </div>
+  );
+}
 
-  const { items, sort, setSort } = useCommunityFeed(booksMeta);
+/** The home page's real content — a "continue reading" shelf, then the
+ * global community feed (`GET /api/community/notes`), newest or top-
+ * reacted first. Same page-composition shape as LibraryView (AppHeader,
+ * then a page heading + a filter control, then the content). */
+export default function HomeCommunityFeed() {
+  const [sort, setSort] = useState<CommunityFeedSort>("recent");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const { data, isLoading } = useCommunityFeed(sort);
+  const items = data?.items ?? [];
 
   return (
     <div className="pb-10">
-      <AppHeader />
+      <AppHeader onSearchFocus={() => setSearchOpen(true)} />
+
+      {searchOpen && (
+        <div className="fixed inset-0 z-50">
+          <SearchModal onClose={() => setSearchOpen(false)} />
+        </div>
+      )}
 
       <HomeAuthBanner />
       <HomeInstallBanner />
 
-      <ContinueReadingRail books={continueReadingBooks} />
+      <ContinueReadingRail />
+      <TopBooksRail />
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
@@ -55,7 +62,15 @@ export default function HomeCommunityFeed({
         {items.length > 0 && <CommunityFeedSortToggle mode={sort} onChange={setSort} />}
       </div>
 
-      {!hasHydrated ? null : items.length === 0 ? (
+      {isLoading ? (
+        <div className="columns-1 gap-5 lg:columns-2">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="mb-5 break-inside-avoid">
+              <CommunityNoteCardSkeleton />
+            </div>
+          ))}
+        </div>
+      ) : items.length === 0 ? (
         <p className="text-sm text-[var(--reader-text-muted)]">No notes yet — annotate a passage to start the discourse.</p>
       ) : (
         // A 2-column masonry on desktop (CSS multi-column, not CSS Grid —

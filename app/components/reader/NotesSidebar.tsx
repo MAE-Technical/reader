@@ -2,7 +2,13 @@
 
 import { useState } from "react";
 import { EllipsisVertical, Share, Trash2 } from "lucide-react";
-import { useLibraryStore, type AnnotationRange } from "@/stores/library-store";
+import type { AnnotationRange } from "@/lib/api/types";
+import { sameRanges } from "@/stores/library-store";
+import { useSessionStore } from "@/stores/session-store";
+import { useAnnotations } from "@/lib/reader/useAnnotations";
+import { useDeleteHighlight } from "@/lib/materials/useHighlightMutations";
+import { useCreateNote, useDeleteNote } from "@/lib/community/useNoteMutations";
+import { useRequireAuth } from "@/lib/reader/useRequireAuth";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { topLevelNotes, repliesFor, sortNotes, type NoteSortMode } from "@/lib/reader/noteThread";
 import { useThreadInteraction } from "@/lib/reader/useThreadInteraction";
@@ -14,7 +20,7 @@ import Quote from "./notes/Quote";
 import OverflowMenu from "./notes/OverflowMenu";
 
 type Props = {
-  bookId: string;
+  materialId: string;
   /** The passage this panel was opened from — one of possibly several the
    * annotation's ranges touch. */
   passageId: string;
@@ -44,7 +50,7 @@ type Props = {
 const DANGER_COLOR = "#f26b6b";
 
 function EditPanel({
-  bookId,
+  materialId,
   passageId,
   getPassageText,
   annotationId,
@@ -55,14 +61,16 @@ function EditPanel({
   onClose,
   onShare,
 }: Props) {
-  const annotations = useLibraryStore((s) => s.getForPassage(bookId, passageId));
-  const sameRanges = useLibraryStore((s) => s.sameRanges);
-  const addNote = useLibraryStore((s) => s.addNote);
-  const deleteNoteEntry = useLibraryStore((s) => s.deleteNoteEntry);
-  const removeHighlight = useLibraryStore((s) => s.removeHighlight);
+  const { annotationsByPassage } = useAnnotations(materialId);
+  const annotations = annotationsByPassage[passageId] ?? [];
+  const createNote = useCreateNote(materialId);
+  const deleteNote = useDeleteNote(materialId);
+  const deleteHighlight = useDeleteHighlight(materialId);
+  const requireAuth = useRequireAuth();
+  const readerId = useSessionStore((s) => s.readerId);
 
   // A brand-new thread has no annotationId yet — after its first note is
-  // saved, the store creates one, but this component only has the ranges
+  // saved, the server creates one, but this component only has the ranges
   // it asked for, so it re-finds "the annotation it just made" by those
   // same ranges rather than an id it was never given.
   const existing = annotationId
@@ -74,7 +82,7 @@ function EditPanel({
   const quoteText = quoteForRanges(ranges, getPassageText);
 
   // The whole thread, flat — every top-level note and every reply, two
-  // tiers only (see NoteEntry.parentId). Which top-level notes show their
+  // tiers only (see Note.parentId). Which top-level notes show their
   // replies expanded is local UI state below, not part of this data.
   const allNotes = existing?.notes ?? [];
   const roots = topLevelNotes(allNotes);
@@ -89,7 +97,7 @@ function EditPanel({
   const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const { ui, actions, expandedIds, toggleExpanded } = useThreadInteraction({
-    bookId,
+    materialId,
     ranges,
     allNotes,
     initialEditingId: editingNoteId,
@@ -98,10 +106,15 @@ function EditPanel({
 
   const handleDeleteAnnotation = () => {
     if (!existing) return;
-    if (existing.highlightId) removeHighlight(bookId, existing.highlightId);
-    // Deleting every top-level note already cascades to its replies (see
-    // deleteNoteEntry) — no need to also walk the rest of allNotes here.
-    for (const note of roots) deleteNoteEntry(bookId, note.id);
+    if (existing.highlightId) deleteHighlight.mutate(existing.highlightId);
+    // Own root notes only — same reasoning as useTextAnnotations'
+    // deleteSelection: a co-located note from another reader is never
+    // this action's to remove. Deleting every own top-level note already
+    // cascades to its replies server-side (parent_id on delete cascade) —
+    // no need to also walk the rest of allNotes here.
+    for (const note of roots) {
+      if (note.author.readerId === readerId) deleteNote.mutate(note.id);
+    }
     onClose();
   };
 
@@ -216,7 +229,7 @@ function EditPanel({
               initialText=""
               placeholder="Share your thoughts…"
               startCollapsed
-              onSave={(content) => addNote(bookId, ranges, content)}
+              onSave={(content) => requireAuth(() => createNote.mutate({ ranges, content }))}
             />
           )}
         </>

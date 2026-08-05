@@ -1,6 +1,30 @@
 import { notFound } from "next/navigation";
+import type { Metadata } from "next";
 import Reader from "@/app/components/reader/Reader";
-import { BookNotFoundError, getBookDocument } from "@/lib/book/repository";
+import { getBookDocumentFromMaterial, MaterialNotFoundError } from "@/lib/materials/toBookDocument";
+import { getMaterialDetail } from "@/lib/materials/detail";
+import { PLATFORM_NAME } from "@/lib/config/platform";
+
+// Deliberately uses the cheap DB-only getMaterialDetail rather than
+// getBookDocumentFromMaterial (which pulls the full Section[] tree,
+// including a Storage read for every passage) — a <title>/description tag
+// only ever needs metadata, never the book's actual text.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>;
+}): Promise<Metadata> {
+  const { slug } = await params;
+  let material;
+  try {
+    material = await getMaterialDetail(slug);
+  } catch {
+    return { title: "Book not found" };
+  }
+  const { title, author, description } = material;
+  const desc = description || `${title} by ${author} — read or listen on ${PLATFORM_NAME}.`;
+  return { title, description: desc };
+}
 
 export default async function ReadBookPage({
   params,
@@ -23,19 +47,20 @@ export default async function ReadBookPage({
   const { slug } = await params;
   const { section, passage, note, listen } = await searchParams;
 
-  let book;
+  let book, materialId;
   try {
-    book = await getBookDocument(slug);
+    ({ book, materialId } = await getBookDocumentFromMaterial(slug));
   } catch (err) {
-    if (err instanceof BookNotFoundError) {
+    if (err instanceof MaterialNotFoundError) {
       notFound();
     }
-    // BookValidationError and anything unexpected surface through error.tsx
+    // Schema/parse errors and anything unexpected surface through error.tsx
     throw err;
   }
   return (
     <Reader
       book={book}
+      materialId={materialId}
       targetSectionId={section}
       targetPassageId={passage}
       targetNoteId={note}

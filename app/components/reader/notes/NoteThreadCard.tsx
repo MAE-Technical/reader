@@ -2,8 +2,8 @@
 
 import type { ReactNode } from "react";
 import { EllipsisVertical } from "lucide-react";
-import type { NoteEntry } from "@/stores/library-store";
-import { isOwnNote } from "@/lib/reader/currentAuthor";
+import type { Note } from "@/lib/api/types";
+import { useIsOwnNote } from "@/lib/reader/currentAuthor";
 import AuthorRow from "./AuthorRow";
 import NoteContent from "./NoteContent";
 import ReactionButton from "./ReactionButton";
@@ -45,15 +45,15 @@ export default function NoteThreadCard({
   /** The highlighted excerpt this note is attached to — home feed only,
    * same reasoning as `header`. */
   quote?: string;
-  note: NoteEntry;
+  note: Note;
   /** This note's own replies, already chronological. */
-  replies: NoteEntry[];
+  replies: Note[];
   expanded: boolean;
   onToggleExpand: () => void;
   ui: ThreadUIState;
   actions: ThreadActions;
 }) {
-  const own = isOwnNote(note);
+  const own = useIsOwnNote(note);
   const isEditing = ui.editingId === note.id;
   const isMenuOpen = ui.activeMenuFor === note.id;
 
@@ -69,8 +69,8 @@ export default function NoteThreadCard({
 
       <div className="flex flex-col gap-2">
         <AuthorRow
-          name={note.author.name}
-          savedAt={note.savedAt}
+          name={note.author.pseudonym}
+          savedAt={Date.parse(note.updatedAt)}
           menu={
             <div className="relative ml-auto flex-none">
               <button
@@ -120,7 +120,7 @@ export default function NoteThreadCard({
         <div className="ml-1 flex flex-col gap-4 border-l-2 border-[var(--reader-border)] pl-4">
           {replies.map((reply) => {
             const replyingToName = reply.replyingToId
-              ? replies.find((r) => r.id === reply.replyingToId)?.author.name
+              ? replies.find((r) => r.id === reply.replyingToId)?.author.pseudonym
               : undefined;
             return <ReplyEntry key={reply.id} reply={reply} replyingToName={replyingToName} ui={ui} actions={actions} />;
           })}
@@ -144,7 +144,7 @@ export default function NoteThreadCard({
                 initialText=""
                 placeholder={
                   ui.activeComposerFor
-                    ? `Reply to ${replies.find((r) => r.id === ui.activeComposerFor)?.author.name}…`
+                    ? `Reply to ${replies.find((r) => r.id === ui.activeComposerFor)?.author.pseudonym}…`
                     : "Add your thoughts…"
                 }
                 startCollapsed

@@ -1,5 +1,12 @@
 import { useCallback, useState } from "react";
-import { useLibraryStore, type Annotation, type AnnotationRange } from "@/stores/library-store";
+import type { AnnotationRange } from "@/lib/api/types";
+import { sameRanges, type Annotation } from "@/stores/library-store";
+import { useSessionStore } from "@/stores/session-store";
+import { useAnnotations } from "./useAnnotations";
+import { useCreateHighlight, useDeleteHighlight } from "@/lib/materials/useHighlightMutations";
+import { useDeleteNote } from "@/lib/community/useNoteMutations";
+import { useRequireAuth } from "./useRequireAuth";
+import { topLevelNotes } from "./noteThread";
 import { computeSelectionRanges } from "./annotationSelection";
 
 export type SelectionAnchor = { top: number; bottom: number; left: number; right: number };
@@ -36,17 +43,26 @@ export type NotesPanelState = {
  * Selecting text is the *only* way to start a highlight or note (per
  * product decision) — there's no separate "add" affordance on unmarked
  * passages, so this hook has no "create from nothing" entry point beyond
- * onTextSelect.
+ * onTextSelect. Highlight/note *data* comes from useAnnotations (real
+ * server rows via TanStack Query); this hook owns only the interaction
+ * state on top of it plus the two mutations a selection itself can
+ * trigger (toggling a highlight, deleting a whole annotation).
  */
-export function useTextAnnotations(bookId: string) {
-  const getForPassage = useLibraryStore((s) => s.getForPassage);
-  const sameRanges = useLibraryStore((s) => s.sameRanges);
-  const addHighlight = useLibraryStore((s) => s.addHighlight);
-  const removeHighlight = useLibraryStore((s) => s.removeHighlight);
-  const deleteNoteEntry = useLibraryStore((s) => s.deleteNoteEntry);
+export function useTextAnnotations(materialId: string) {
+  const { annotationsByPassage } = useAnnotations(materialId);
+  const createHighlight = useCreateHighlight(materialId);
+  const deleteHighlight = useDeleteHighlight(materialId);
+  const deleteNote = useDeleteNote(materialId);
+  const requireAuth = useRequireAuth();
+  const readerId = useSessionStore((s) => s.readerId);
 
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [notesPanel, setNotesPanel] = useState<NotesPanelState | null>(null);
+
+  const getForPassage = useCallback(
+    (passageId: string): Annotation[] => annotationsByPassage[passageId] ?? [],
+    [annotationsByPassage]
+  );
 
   // Called from the active section's own onMouseUp (not per-passage) so a
   // drag that crosses paragraph boundaries is captured as one selection
@@ -77,50 +93,62 @@ export function useTextAnnotations(bookId: string) {
   // affordance for removing a highlight, matching "selection is the only
   // mechanism" (no separate click-to-cancel menu on marked text).
   // existing.highlightId (the underlying Highlight row's own id) is what
-  // removeHighlight needs — existing.id is the grouped view's deterministic
-  // range-derived key, not a real row id.
+  // deleteHighlight actually needs — existing.id is the grouped view's
+  // deterministic range-derived key, not a real row id.
   const highlightSelection = useCallback(() => {
     if (!selection) return;
     const { ranges } = selection;
-    const existing = getForPassage(bookId, ranges[0].passageId).find((a) => a.highlighted && sameRanges(a.ranges, ranges));
-    if (existing?.highlightId) removeHighlight(bookId, existing.highlightId);
-    else addHighlight(bookId, ranges);
+    const existing = getForPassage(ranges[0].passageId).find((a) => a.highlighted && sameRanges(a.ranges, ranges));
+    requireAuth(() => {
+      if (existing?.highlightId) deleteHighlight.mutate(existing.highlightId);
+      else createHighlight.mutate(ranges);
+    });
     setSelection(null);
-  }, [selection, bookId, getForPassage, sameRanges, removeHighlight, addHighlight]);
+  }, [selection, getForPassage, deleteHighlight, createHighlight, requireAuth]);
 
   // Adding a note always inserts a brand-new, independent note row — there
   // is no shared parent object to find-or-create, so a re-selection of an
   // already-noted range and a selection with nothing on it yet both just
-  // call addNote with the current ranges (see library-store's addNote).
-  // The panel still looks up whatever thread already lives at this exact
-  // selection so it has something to *display* above the composer, but
-  // that lookup is purely for rendering, not for routing the save.
+  // create a fresh note with the current ranges (see NotesSidebar/
+  // FeedHighlightThread's own composer onSave). The panel still looks up
+  // whatever thread already lives at this exact selection so it has
+  // something to *display* above the composer, but that lookup is purely
+  // for rendering, not for routing the save.
   const noteFromSelection = useCallback(() => {
     if (!selection) return;
     const { ranges } = selection;
-    const existing = getForPassage(bookId, ranges[0].passageId).find((a) => sameRanges(a.ranges, ranges));
+    const existing = getForPassage(ranges[0].passageId).find((a) => sameRanges(a.ranges, ranges));
     setNotesPanel({ passageId: ranges[0].passageId, annotationId: existing?.id, ranges });
     setSelection(null);
-  }, [selection, bookId, getForPassage, sameRanges]);
+  }, [selection, getForPassage]);
 
   // Whatever highlight/note thread already lives at the exact ranges of the
   // *current* selection — purely for deciding whether the selection pill
   // should offer a Delete action at all (undefined = nothing here yet).
   const existingForSelection = selection
-    ? getForPassage(bookId, selection.ranges[0].passageId).find((a) => sameRanges(a.ranges, selection.ranges))
+    ? getForPassage(selection.ranges[0].passageId).find((a) => sameRanges(a.ranges, selection.ranges))
     : undefined;
 
-  // Removes everything at this selection in one action — the highlight
-  // wash (if any) and every note in its thread (if any) — rather than only
-  // the highlight flag the way re-selecting and hitting Highlight again
-  // does. Makes deleting a highlight/note discoverable via an explicit icon
-  // on the pill instead of relying on that toggle-by-re-selecting behavior.
+  // Removes everything *this reader owns* at this selection in one action —
+  // their own highlight (if any) and every root note they themselves
+  // authored (if any), never another reader's public note that just
+  // happens to share this exact selection's ranges (deleting a highlight/
+  // note is always own-content-only — the server enforces this too, a 403
+  // for anything else, but filtering here avoids firing doomed requests).
+  // Only the *root* notes are deleted explicitly: DELETE /api/community/
+  // notes/{id} cascades to that note's own replies server-side
+  // (parent_id on delete cascade, models-spec.md), so deleting every own
+  // root already removes that reader's whole sub-thread.
   const deleteSelection = useCallback(() => {
     if (!selection || !existingForSelection) return;
-    if (existingForSelection.highlightId) removeHighlight(bookId, existingForSelection.highlightId);
-    for (const note of existingForSelection.notes) deleteNoteEntry(bookId, note.id);
+    requireAuth(() => {
+      if (existingForSelection.highlightId) deleteHighlight.mutate(existingForSelection.highlightId);
+      for (const note of topLevelNotes(existingForSelection.notes)) {
+        if (note.author.readerId === readerId) deleteNote.mutate(note.id);
+      }
+    });
     setSelection(null);
-  }, [selection, existingForSelection, bookId, removeHighlight, deleteNoteEntry]);
+  }, [selection, existingForSelection, deleteHighlight, deleteNote, requireAuth, readerId]);
 
   // Clicking any existing mark (highlight-only or noted) — opens its thread
   // directly, no intermediate menu. Removing a highlight or deleting a note
@@ -152,12 +180,12 @@ export function useTextAnnotations(bookId: string) {
   // brand-new thread. Splicing in this synthetic, unsaved-but-highlighted
   // entry keeps the exact same wash a real Highlight would have produced —
   // gone the moment the panel closes, whether or not anything was actually
-  // saved, since it's never written to the store. Only for a *fresh*
+  // saved, since it's never written to the server. Only for a *fresh*
   // thread (no `annotationId` yet) — one already backed by a real
   // Annotation is already rendering correctly on its own.
   const getForPassageWithPending = useCallback(
     (passageId: string): Annotation[] => {
-      const real = getForPassage(bookId, passageId);
+      const real = getForPassage(passageId);
       if (!notesPanel || notesPanel.annotationId || !notesPanel.ranges) return real;
       const range = notesPanel.ranges.find((r) => r.passageId === passageId);
       if (!range) return real;
@@ -170,7 +198,7 @@ export function useTextAnnotations(bookId: string) {
       };
       return [...real, pending];
     },
-    [getForPassage, bookId, notesPanel]
+    [getForPassage, notesPanel]
   );
 
   return {

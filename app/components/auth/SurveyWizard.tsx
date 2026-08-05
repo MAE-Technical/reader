@@ -6,7 +6,9 @@ import Wordmark from "./Wordmark";
 import AuthButton from "./AuthButton";
 import BackArrow from "./BackArrow";
 import PillGroup from "@/app/components/PillGroup";
-import type { LibraryBookSummary } from "@/app/components/shell/libraryBook";
+import type { MaterialSummary } from "@/lib/api/types";
+import { useSurveySubmit } from "@/lib/auth/useSurveySubmit";
+import { onboardingRoute } from "@/lib/auth/onboardingRoute";
 
 const TOTAL_STEPS = 2;
 
@@ -27,17 +29,18 @@ const INTERESTS = [
   { value: "spirituality", label: "Spirituality" },
 ];
 
-export default function SurveyWizard({ books }: { books: LibraryBookSummary[] }) {
+export default function SurveyWizard({ materials }: { materials: MaterialSummary[] }) {
   const router = useRouter();
   const [step, setStep] = useState(0);
-  const [readSlugs, setReadSlugs] = useState<Set<string>>(new Set());
+  const [readMaterialIds, setReadMaterialIds] = useState<Set<string>>(new Set());
   const [interests, setInterests] = useState<Set<string>>(new Set());
+  const survey = useSurveySubmit();
 
-  const toggleRead = (slug: string) =>
-    setReadSlugs((prev) => {
+  const toggleRead = (materialId: string) =>
+    setReadMaterialIds((prev) => {
       const next = new Set(prev);
-      if (next.has(slug)) next.delete(slug);
-      else next.add(slug);
+      if (next.has(materialId)) next.delete(materialId);
+      else next.add(materialId);
       return next;
     });
   const toggleInterest = (value: string) =>
@@ -50,7 +53,10 @@ export default function SurveyWizard({ books }: { books: LibraryBookSummary[] })
 
   const goNext = () => {
     if (step === 1) {
-      router.push("/auth/welcome");
+      survey.mutate(
+        { interests: Array.from(interests), readMaterialIds: Array.from(readMaterialIds) },
+        { onSuccess: ({ reader }) => router.push(onboardingRoute(reader)) }
+      );
     } else {
       setStep(1);
     }
@@ -89,26 +95,26 @@ export default function SurveyWizard({ books }: { books: LibraryBookSummary[] })
 
             <div className="om-scroll mt-6 max-h-[50vh] overflow-y-auto pr-1">
               <div className="flex flex-col gap-3">
-                {books.map((book) => {
-                  const checked = readSlugs.has(book.slug);
+                {materials.map((material) => {
+                  const checked = readMaterialIds.has(material.id);
                   return (
                     <label
-                      key={book.slug}
+                      key={material.id}
                       className={`flex cursor-pointer items-center gap-3 rounded-sm border p-3 transition-colors ${
                         checked ? "border-brand-400 bg-brand-50/40" : "border-sand-300"
                       }`}
                     >
-                      <img src={book.cover} alt="" className="h-14 w-10 flex-none rounded-sm object-cover" />
+                      <img src={material.cover ?? ""} alt="" className="h-14 w-10 flex-none rounded-sm object-cover" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-serif text-[15px] font-semibold text-[var(--reader-text)]">
-                          {book.title}
+                          {material.title}
                         </div>
-                        <div className="truncate text-xs text-[var(--reader-text-muted)]">{book.author}</div>
+                        <div className="truncate text-xs text-[var(--reader-text-muted)]">{material.author}</div>
                       </div>
                       <input
                         type="checkbox"
                         checked={checked}
-                        onChange={() => toggleRead(book.slug)}
+                        onChange={() => toggleRead(material.id)}
                         className="h-5 w-5 flex-none accent-brand-500"
                       />
                     </label>
@@ -135,9 +141,13 @@ export default function SurveyWizard({ books }: { books: LibraryBookSummary[] })
               <PillGroup options={INTERESTS} selected={Array.from(interests)} onSelect={toggleInterest} />
             </div>
 
+            {survey.error && (
+              <p className="mt-4 text-center text-[13px] font-medium text-red-500">{survey.error.message}</p>
+            )}
+
             <div className="mt-6 flex justify-center">
-              <AuthButton className="shell:w-60 shell:px-10" onClick={goNext}>
-                Continue
+              <AuthButton className="shell:w-60 shell:px-10" onClick={goNext} disabled={survey.isPending}>
+                {survey.isPending ? "Saving…" : "Continue"}
               </AuthButton>
             </div>
           </div>

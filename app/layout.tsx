@@ -1,9 +1,11 @@
 import type { Metadata, Viewport } from "next";
 import { Source_Serif_4, Manrope, Literata } from "next/font/google";
+import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
 import NowPlayingBar from "./components/NowPlayingBar";
 import ThemeProvider from "./components/ThemeProvider";
+import QueryProvider from "./components/QueryProvider";
 import NarrationEngine from "@/lib/audio/NarrationEngine";
 import { PLATFORM_NAME, PLATFORM_URL } from "@/lib/config/platform";
 
@@ -83,11 +85,24 @@ export default function RootLayout({
       className={`${sourceSerif.variable} ${manrope.variable} ${literata.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col font-sans">
-        <ThemeProvider>{children}</ThemeProvider>
-        {modal}
-        <ServiceWorkerRegistration />
-        <NarrationEngine />
-        <NowPlayingBar />
+        <QueryProvider>
+          <ThemeProvider>{children}</ThemeProvider>
+          {modal}
+          <ServiceWorkerRegistration />
+          <NarrationEngine />
+          <NowPlayingBar />
+          {/* `mode` is explicit (rather than relying on the "auto" default)
+           * so a local `bun run dev` never reports as production even if
+           * NODE_ENV gets overridden by tooling — only a real production
+           * build sends events; every other mode just console-logs them. */}
+          <Analytics
+            mode={
+              process.env.NODE_ENV === "production"
+                ? "production"
+                : "development"
+            }
+          />
+        </QueryProvider>
       </body>
     </html>
   );

@@ -13,6 +13,9 @@ import TextField from "@/app/components/auth/TextField";
 import PasswordField from "@/app/components/auth/PasswordField";
 import SelectField from "@/app/components/auth/SelectField";
 import NotePreviewCard from "@/app/components/auth/NotePreviewCard";
+import { useSignup } from "@/lib/auth/useSignup";
+import { onboardingRoute } from "@/lib/auth/onboardingRoute";
+import { ApiError, fieldError } from "@/lib/api/client";
 
 const INTRO_STEPS = ["intro-library", "intro-features"] as const;
 const FORM_STEPS = ["form-account", "form-pseudonym", "form-location"] as const;
@@ -72,15 +75,38 @@ export default function SignupPage() {
   const [pseudonym, setPseudonym] = useState("");
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+  const signup = useSignup();
 
   const steps = [...INTRO_STEPS, ...FORM_STEPS];
   const clampedStep = Math.min(step, steps.length - 1);
   const current = steps[clampedStep];
   const formStepIndex = FORM_STEPS.indexOf(current as (typeof FORM_STEPS)[number]);
 
+  // A field error can belong to an earlier step than the one the reader
+  // submitted from (signup only actually posts once, from the last step) —
+  // jump back to whichever step owns the offending field so the inline
+  // error (rendered on that step's own TextField) is actually visible,
+  // rather than a silent failure on the location step.
+  const stepForField: Record<string, number> = {
+    fullName: FORM_STEPS.indexOf("form-account"),
+    email: FORM_STEPS.indexOf("form-account"),
+    password: FORM_STEPS.indexOf("form-account"),
+    pseudonym: FORM_STEPS.indexOf("form-pseudonym"),
+  };
+
   const goNext = () => {
     if (clampedStep === steps.length - 1) {
-      router.push("/auth/survey");
+      signup.mutate(
+        { fullName, email, password, pseudonym, city: city || undefined, country: country || undefined },
+        {
+          onSuccess: ({ reader }) => router.push(onboardingRoute(reader)),
+          onError: (err) => {
+            if (err instanceof ApiError && err.field && err.field in stepForField) {
+              setStep(INTRO_STEPS.length + stepForField[err.field]);
+            }
+          },
+        }
+      );
     } else {
       setStep(clampedStep + 1);
     }
@@ -189,6 +215,7 @@ export default function SignupPage() {
                   placeholder="e.g. Ama Mensah"
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
+                  error={fieldError(signup.error, "fullName")}
                 />
                 <TextField
                   label="Email"
@@ -196,12 +223,14 @@ export default function SignupPage() {
                   placeholder="e.g. ama@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  error={fieldError(signup.error, "email")}
                 />
                 <PasswordField
                   label="Password"
                   placeholder="Create a password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
+                  error={fieldError(signup.error, "password")}
                 />
                 <AuthButton type="submit" className={DESKTOP_AUTO_BUTTON}>
                   Continue
@@ -230,6 +259,7 @@ export default function SignupPage() {
                 hint={`${pseudonym.length}/20`}
                 value={pseudonym}
                 onChange={(e) => setPseudonym(e.target.value)}
+                error={fieldError(signup.error, "pseudonym")}
               />
               <NotePreviewCard pseudonym={pseudonym} />
               <AuthButton className={DESKTOP_AUTO_BUTTON} onClick={goNext}>
@@ -265,8 +295,16 @@ export default function SignupPage() {
                   </option>
                 ))}
               </SelectField>
-              <AuthButton className={DESKTOP_AUTO_BUTTON} onClick={goNext}>
-                Create my account
+              {/* A non-field error (e.g. a network failure, or a 400 with
+                  no field the server didn't attribute to one input) has
+                  nowhere else to render — shown here since this is always
+                  the step the reader is on when the request actually
+                  fires. */}
+              {signup.error && !(signup.error instanceof ApiError && signup.error.field) && (
+                <p className="text-[13px] font-medium text-red-500">{signup.error.message}</p>
+              )}
+              <AuthButton className={DESKTOP_AUTO_BUTTON} onClick={goNext} disabled={signup.isPending}>
+                {signup.isPending ? "Creating account…" : "Create my account"}
               </AuthButton>
             </div>
           </div>

@@ -1,8 +1,9 @@
 "use client";
 
 import { EllipsisVertical } from "lucide-react";
-import type { NoteEntry } from "@/stores/library-store";
-import { isOwnNote } from "@/lib/reader/currentAuthor";
+import type { Note } from "@/lib/api/types";
+import { useIsOwnNote } from "@/lib/reader/currentAuthor";
+import { comradeName } from "@/lib/reader/authorDisplay";
 import AuthorRow from "./AuthorRow";
 import NoteContent from "./NoteContent";
 import ReactionButton from "./ReactionButton";
@@ -26,12 +27,12 @@ export default function ReplyEntry({
   ui,
   actions,
 }: {
-  reply: NoteEntry;
+  reply: Note;
   replyingToName?: string;
   ui: ThreadUIState;
   actions: ThreadActions;
 }) {
-  const own = isOwnNote(reply);
+  const own = useIsOwnNote(reply);
   const isEditing = ui.editingId === reply.id;
   const isTargeted = ui.activeComposerFor === reply.id;
   const isMenuOpen = ui.activeMenuFor === reply.id;
@@ -39,8 +40,8 @@ export default function ReplyEntry({
   return (
     <div className="flex flex-col gap-1.5">
       <AuthorRow
-        name={reply.author.name}
-        savedAt={reply.savedAt}
+        name={reply.author.pseudonym}
+        savedAt={Date.parse(reply.updatedAt)}
         size="small"
         menu={
           <div className="relative ml-auto flex-none">
@@ -70,7 +71,7 @@ export default function ReplyEntry({
       />
       {replyingToName && (
         <div className="w-fit font-serif italic text-[12px] text-[var(--reader-text-muted)]">
-          — in reply to {replyingToName}
+          — in reply to {comradeName(replyingToName)}
         </div>
       )}
       {isEditing ? (

@@ -1,6 +1,6 @@
 "use client";
 
-import type { NoteContent as NoteContentValue } from "@/stores/library-store";
+import type { NoteContent as NoteContentValue } from "@/lib/api/types";
 import VoiceNoteView from "./VoiceNoteView";
 
 /** One note/reply's actual content — text or voice — with no author,

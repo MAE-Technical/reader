@@ -38,7 +38,7 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
   return (
     <div ref={ref} className={`relative overflow-hidden rounded-sm bg-sand-950 text-white ${className}`}>
       <img
-        src="/biko/1.jpg"
+        src="https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/1.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9hYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuLzEuanBnIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NTk2MTYxNSwiZXhwIjoxODE3NDk3NjE1fQ.nfpRFQZlQ0nuGjC_6XVXYFPoVDbD_j9LRGazC_LntfI"
         alt=""
         aria-hidden="true"
         className="absolute inset-0 h-full w-full object-cover object-[48%_30%] grayscale contrast-110 brightness-90"

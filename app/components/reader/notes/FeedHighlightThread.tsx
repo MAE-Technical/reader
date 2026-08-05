@@ -1,6 +1,7 @@
 "use client";
 
-import { useLibraryStore } from "@/stores/library-store";
+import { useCreateNote } from "@/lib/community/useNoteMutations";
+import { useRequireAuth } from "@/lib/reader/useRequireAuth";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { topLevelNotes, repliesFor, sortNotes } from "@/lib/reader/noteThread";
 import { useThreadInteraction } from "@/lib/reader/useThreadInteraction";
@@ -18,21 +19,22 @@ import NoteComposer from "./NoteComposer";
  * belongs to is the enclosing feed's own divider's job (see
  * BookAnnotationFeedPanel), not repeated per card. */
 export default function FeedHighlightThread({
-  bookId,
+  materialId,
   entry,
   getPassageText,
   onJump,
 }: {
-  bookId: string;
+  materialId: string;
   entry: FeedEntry;
   getPassageText: (passageId: string) => string;
   onJump: (entry: FeedEntry) => void;
 }) {
-  const addNote = useLibraryStore((s) => s.addNote);
+  const createNote = useCreateNote(materialId);
+  const requireAuth = useRequireAuth();
   const { annotation } = entry;
   const excerpt = quoteForRanges(annotation.ranges, getPassageText);
   const { ui, actions, expandedIds, toggleExpanded } = useThreadInteraction({
-    bookId,
+    materialId,
     ranges: annotation.ranges,
     allNotes: annotation.notes,
   });
@@ -70,7 +72,7 @@ export default function FeedHighlightThread({
           initialText=""
           placeholder="Add to the discourse…"
           startCollapsed
-          onSave={(content) => addNote(bookId, annotation.ranges, content)}
+          onSave={(content) => requireAuth(() => createNote.mutate({ ranges: annotation.ranges, content }))}
         />
       )}
     </div>
