@@ -40,7 +40,11 @@ export default function ChapterNavFooter({
 
   return (
     <div
-      style={{ bottom: bottomOffsetPx }}
+      // Reserves the home-indicator safe area on notched iPhones instead of
+      // running the tap targets flush to the very edge of the screen —
+      // AppBottomNav (the app shell's own bottom bar) already does the same
+      // via env(safe-area-inset-bottom); this footer just never had it.
+      style={{ bottom: bottomOffsetPx, paddingBottom: "env(safe-area-inset-bottom)" }}
       className={`absolute left-0 right-0 z-10 flex border-t border-[var(--reader-border)] bg-[var(--reader-surface)] transition-[transform,opacity] duration-200 ease-out ${
         visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
       }`}

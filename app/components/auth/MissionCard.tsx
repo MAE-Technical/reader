@@ -62,11 +62,16 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:max-w-sm">
-          <AuthButton variant="outline" onClick={() => router.push("/auth/login")}>
+        {/* Side by side at every width, each sized to its own label rather
+            than stretched to fill a grid column — a stacked, full-width
+            pair read as an oversized wall of button on a phone-width card;
+            two compact, right-sized buttons sit on the photo the way a
+            caption's CTAs would, not a form. */}
+        <div className="flex flex-row flex-wrap gap-3">
+          <AuthButton variant="outline" fullWidth={false} onClick={() => router.push("/auth/login")}>
             Log in
           </AuthButton>
-          <AuthButton variant="solid" onClick={() => router.push("/auth/signup")}>
+          <AuthButton variant="solid" fullWidth={false} onClick={() => router.push("/auth/signup")}>
             Join the movement
           </AuthButton>
         </div>

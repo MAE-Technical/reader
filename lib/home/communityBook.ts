@@ -2,17 +2,18 @@ import type { BookDocument } from "@/lib/book/schema";
 import { buildPassageIndex, buildSectionsById } from "@/lib/reader/sections";
 import { sectionLabel } from "@/lib/reader/sectionHeading";
 
-/** Just enough of a book to place a note on the home community feed and
- * quote what it's actually attached to — flat passageId->sectionId,
- * sectionId->label, and passageId->text lookups, rather than the full
- * content tree. `passageText` does mean every passage's plain text
- * reaches the client (not just the ones with notes on them — the server
- * doesn't know which those are; that's client-only localStorage data),
- * but that's no more than what already ships the moment any one of these
- * books is opened in the reader itself, and it's what makes an excerpt
- * always computable the exact same way the reader computes one
- * (quoteForRanges) — no dependency on a note having been created (or
- * viewed) after some particular point in time. */
+/** Just enough of a book to place a note on the home community feed —
+ * flat passageId->sectionId and sectionId->label lookups, so a card can
+ * show which chapter its note belongs to and jump there. Deliberately
+ * *not* every passage's own text anymore (a `passageText` map used to live
+ * here too) — that meant every book's entire content shipped with every
+ * single /home load regardless of whether any of it was ever quoted, which
+ * stopped being a rounding error the moment the library grew past a couple
+ * of short books (a home page north of 7MB, large enough to blow past
+ * Turbopack dev's own per-Suspense-boundary RSC stream). A feed card's own
+ * excerpt is a dummy placeholder for now (see communityFeed.ts's
+ * DUMMY_EXCERPT_PLACEHOLDER) until a real community-feed API endpoint
+ * exists to fetch it from. */
 export type CommunityBookMeta = {
   id: string;
   slug: string;
@@ -21,7 +22,6 @@ export type CommunityBookMeta = {
   cover: string;
   sectionOfPassage: Record<string, string>;
   sectionLabels: Record<string, string>;
-  passageText: Record<string, string>;
 };
 
 export function toCommunityBookMeta(book: BookDocument): CommunityBookMeta {
@@ -29,10 +29,8 @@ export function toCommunityBookMeta(book: BookDocument): CommunityBookMeta {
   const passageIndex = buildPassageIndex(book.sections);
 
   const sectionOfPassage: Record<string, string> = {};
-  const passageText: Record<string, string> = {};
-  for (const [passageId, { sectionId, passage }] of passageIndex) {
+  for (const [passageId, { sectionId }] of passageIndex) {
     sectionOfPassage[passageId] = sectionId;
-    passageText[passageId] = passage.text;
   }
 
   const sectionLabels: Record<string, string> = {};
@@ -49,6 +47,5 @@ export function toCommunityBookMeta(book: BookDocument): CommunityBookMeta {
     cover: book.metadata.cover,
     sectionOfPassage,
     sectionLabels,
-    passageText,
   };
 }

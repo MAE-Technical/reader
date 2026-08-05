@@ -25,11 +25,25 @@ export function useVoiceRecorder() {
   const recordTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordStartRef = useRef(0);
   const draftAudioRef = useRef<HTMLAudioElement | null>(null);
+  // Kept alive across recordings, not re-requested each time — see
+  // startRecording's own comment on why.
+  const streamRef = useRef<MediaStream | null>(null);
 
   useEffect(
     () => () => {
       if (recordTimerRef.current) clearInterval(recordTimerRef.current);
       if (audioUrl) URL.revokeObjectURL(audioUrl);
+      // The one place the mic actually gets released — composer unmount,
+      // not "recording stopped." Safari (particularly iOS/PWA) treats a
+      // stream whose every track has been stopped as needing a brand-new
+      // permission grant on the next getUserMedia call, even mid-session
+      // with the site-level permission still "Allow" — that's what used to
+      // reprompt on every single recording, since the old code stopped the
+      // stream's tracks as soon as each recording did. Leaving the stream
+      // open in between and only tearing it down here (component going
+      // away for good) is what lets every recording after the first reuse
+      // the same already-granted stream with no further prompt.
+      streamRef.current?.getTracks().forEach((t) => t.stop());
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -38,14 +52,17 @@ export function useVoiceRecorder() {
   const startRecording = async () => {
     setMicError(false);
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      let stream = streamRef.current;
+      if (!stream || stream.getAudioTracks().some((t) => t.readyState === "ended")) {
+        stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+      }
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (e) => {
         if (e.data.size > 0) chunksRef.current.push(e.data);
       };
       recorder.onstop = () => {
-        stream.getTracks().forEach((t) => t.stop());
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
         setAudioBlob(blob);
         setAudioUrl(URL.createObjectURL(blob));

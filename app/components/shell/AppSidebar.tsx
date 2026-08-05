@@ -72,10 +72,10 @@ export default function AppSidebar() {
               key={href}
               href={href}
               onClick={onNavClick}
-              className={`flex items-center gap-3 rounded-sm px-2.5 py-[9px] no-underline transition-colors ${
+              className={`flex items-center gap-3 rounded-sm px-2.5 py-[9px] text-sm font-semibold no-underline transition-colors ${
                 active
-                  ? "bg-[var(--reader-accent)]/10 text-[var(--reader-accent)] text-[15px] font-semibold"
-                  : "text-[var(--reader-text-muted)] text-sm font-medium hover:bg-[var(--reader-surface-hover)]"
+                  ? "bg-[var(--reader-accent)]/10 text-[var(--reader-accent)] text-[15px]"
+                  : "text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
               }`}
             >
               <Icon size={19} />

@@ -14,7 +14,10 @@ type Props = {
    * into a plain close button, since "back" would otherwise describe a
    * page navigation that isn't actually happening here (see Reader.tsx's
    * own doc comment on this prop). Absent on the standalone /read/[slug]
-   * route, which keeps the existing Link. */
+   * route, which keeps the existing Link. Deliberately the *only* thing
+   * that picks X vs. the back arrow — same on mobile and desktop, an
+   * overlay is always X and a standalone page is always back, regardless
+   * of viewport. */
   onClose?: () => void;
   bookSlug: string;
   bookTitle: string;
@@ -157,7 +160,7 @@ export default function ReaderHeader({
           </button>
         </Tooltip>
 
-        {hasNarration && !isListen && (
+        {!hasNarration && !isListen && (
           <Tooltip label="Listen to this book" side="bottom">
             <button onClick={onListen} aria-label="Listen to this book" className={iconButtonClass}>
               <Play size={16} />

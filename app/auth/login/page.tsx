@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Wordmark from "@/app/components/auth/Wordmark";
 import SunriseMark from "@/app/components/auth/SunriseMark";
 import AuthButton from "@/app/components/auth/AuthButton";
+import BackArrow from "@/app/components/auth/BackArrow";
 import TextField from "@/app/components/auth/TextField";
 import PasswordField from "@/app/components/auth/PasswordField";
 
@@ -26,6 +27,14 @@ function LoginForm() {
   const router = useRouter();
   return (
     <div className="w-full max-w-sm">
+      {/* Same BackArrow as the signup/survey wizard's own StepHeader — login
+          is the one auth screen a reader can also land on directly (its own
+          link on the home feed/sidebar), but it should still feel like a
+          step they can back out of, not a dead end. Goes to "/" (redirects
+          to /home) rather than router.back(), same reasoning as signup's
+          own first-step back: a direct/bookmarked visit has no in-app
+          history to pop to. */}
+      <BackArrow onClick={() => router.push("/")} className="-ml-2 mb-4" />
       <h1 className="font-serif text-3xl font-semibold text-[var(--reader-text)]">Welcome back.</h1>
       <p className="mt-2 font-literata text-[14px] font-medium text-[var(--reader-text-muted)]">Log in to continue your consciousness journey.</p>
 

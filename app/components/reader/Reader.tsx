@@ -19,6 +19,7 @@ import Loader from "../Loader";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
 import {
   FONT_FAMILY_VARS,
+  FONT_SIZE_PX_RANGE,
   contentWidthPxFromScale,
   fontSizePxFromScale,
   lineHeightFromScale,
@@ -490,12 +491,31 @@ export default function Reader({
   // (like the header) that only surfaces once the reader reaches the
   // bottom of the section, so the last bit of text isn't covered when it
   // slides into view.
-  const contentBottomPad = isMobile ? 88 : 96;
+  // Bumped from 88 — ChapterNavFooter now also pads itself for the
+  // home-indicator safe area on notched phones, so it can render a bit
+  // taller there than this used to assume.
+  const contentBottomPad = isMobile ? 104 : 96;
+  // The reader's own font-size scale (fontSize above) is one shared px
+  // value across every breakpoint — a book read at the same nominal size on
+  // a phone still feels noticeably larger than on desktop, both because
+  // there's less surrounding whitespace to offset it against and because
+  // it's typically held closer. A small flat trim on mobile only (not a
+  // rescale of the whole slider) brings passage text back in line with how
+  // it reads on desktop, without changing what "40" on the size control
+  // means for anyone on a larger screen.
+  const passageFontSize = isMobile ? Math.max(FONT_SIZE_PX_RANGE.min, fontSize - 1.5) : fontSize;
 
   return (
     <div
       data-reader-theme={theme}
-      className="w-full h-screen box-border flex flex-col overflow-hidden relative font-sans"
+      // h-dvh, not h-screen (100vh): mobile Safari's 100vh is the height
+      // with its own bottom toolbar collapsed, i.e. taller than what's
+      // actually visible while that toolbar is showing — this container's
+      // real height came out larger than the visible viewport, so
+      // ChapterNavFooter (absolute, pinned to *its* bottom edge) rendered
+      // partly or fully below the fold behind Safari's own chrome. 100dvh
+      // tracks the actual visible viewport live as the toolbar shows/hides.
+      className="w-full h-dvh box-border flex flex-col overflow-hidden relative font-sans"
     >
       <div className="flex-1 min-h-0 relative overflow-hidden">
         <ReaderHeader
@@ -564,7 +584,7 @@ export default function Reader({
               notesIndexSectionId={notesIndexSectionId}
               notesIndexGroups={notesIndexGroups}
               getAnnotations={getAnnotations}
-              fontSize={fontSize}
+              fontSize={passageFontSize}
               lineHeight={lineHeight}
               fontFamilyVar={fontFamilyVar}
               notesById={notesById}

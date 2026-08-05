@@ -1,7 +1,16 @@
 import type { Annotation, AnnotationRange, NoteEntry } from "@/stores/library-store";
-import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { topLevelNotes, repliesFor } from "@/lib/reader/noteThread";
 import type { CommunityBookMeta } from "./communityBook";
+
+// TEMP(api-migration): a book's actual passage text no longer ships with
+// CommunityBookMeta (see its own doc comment — that was the multi-MB-per-
+// book payload blowing up /home). Real excerpts belong behind a real
+// community-feed API endpoint, which doesn't exist yet — this placeholder
+// stands in until it does, so this file has exactly one line to change
+// (below) rather than a fetch/cache layer to build now and immediately
+// throw away once that endpoint lands.
+const DUMMY_EXCERPT_PLACEHOLDER =
+  "…the passage this note is attached to — real excerpt text will come from the community feed API once it exists.";
 
 export type CommunityFeedItem = {
   note: NoteEntry;
@@ -12,10 +21,8 @@ export type CommunityFeedItem = {
   /** Chapter/section label only — same reasoning as the per-book feed:
    * this app has no per-passage page numbers anywhere. */
   label: string;
-  /** The highlighted passage's own text — computed with the exact same
-   * quoteForRanges the reader itself uses, against the book's shipped
-   * passageText map, so it's always correct regardless of when the note
-   * was created. */
+  /** TEMP(api-migration): DUMMY_EXCERPT_PLACEHOLDER above, not the real
+   * quoted passage — see that constant's own comment. */
   excerpt: string;
   annotationId: string;
   /** The annotation's own ranges — needed so a home-feed card can add a
@@ -43,7 +50,6 @@ export function buildCommunityFeedItems(
       const sectionId = meta.sectionOfPassage[passageId];
       if (!sectionId) continue;
       const label = meta.sectionLabels[sectionId] ?? "";
-      const excerpt = quoteForRanges(annotation.ranges, (id) => meta.passageText[id] ?? "");
       for (const note of topLevelNotes(annotation.notes)) {
         items.push({
           note,
@@ -52,7 +58,7 @@ export function buildCommunityFeedItems(
           passageId,
           sectionId,
           label,
-          excerpt,
+          excerpt: DUMMY_EXCERPT_PLACEHOLDER,
           annotationId: annotation.id,
           ranges: annotation.ranges,
           replies: repliesFor(annotation.notes, note.id),

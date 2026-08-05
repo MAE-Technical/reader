@@ -93,6 +93,13 @@ export async function listLocalBookSlugs(): Promise<string[]> {
  * Lists every published book for the library index. A book that fails to
  * read or validate is skipped (and logged) rather than taking the whole
  * listing down — one bad file/object shouldn't 500 the homepage.
+ *
+ * Plain sequential reads off local disk, no caching layer — this is a
+ * placeholder repository backed by JSON fixtures, about to be replaced by
+ * real API/database calls once those modules exist. Optimizing this
+ * implementation now (response caching, parallel fan-out, etc.) is work
+ * that gets thrown away with it; keeping it as the simplest version that
+ * obviously works is what actually matters until then.
  */
 export async function listBooks(): Promise<BookDocument[]> {
   let slugs: string[];

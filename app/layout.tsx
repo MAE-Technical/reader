@@ -29,7 +29,7 @@ const literata = Literata({
 
 export const metadata: Metadata = {
   title: "Ominira",
-  description: "A reading and listening companion",
+  description: "Raise your consciousness.",
   applicationName: "Ominira",
   manifest: "/manifest.json",
   appleWebApp: {

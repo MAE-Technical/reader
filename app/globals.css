@@ -92,6 +92,26 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* iOS Safari zooms the whole page in on focus whenever the focused form
+   field's computed font-size is under 16px — TextField/SearchModal/
+   NoteComposer/etc. all set 14px for visual consistency with their
+   surrounding UI, which is exactly what triggers it, and the reader is then
+   stuck pinch-zoomed back out by hand. 16px is the one font-size that opts a
+   field out of that behavior; there's no way to keep a smaller *rendered*
+   size and still avoid it, so this bumps every text field to 16px, but only
+   below the point where nothing at this app's breakpoints still needs the
+   smaller size to fit (mirrors the effect of a mobile-only class on each
+   input without having to touch every one of them individually — plain
+   element + attribute selectors so it doesn't have to fight each
+   component's own arbitrary-value Tailwind class on specificity). */
+@media (max-width: 767px) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
 /* Long-press callout ("Copy/Look Up/Save Image"...) suppressed on anything
    that isn't the passage text itself — chrome buttons, gutter markers, the
    selection pill, drawer rows. Paired with Tailwind's select-text/select-

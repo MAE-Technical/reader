@@ -201,7 +201,7 @@ export default function AccountView() {
               A curated library of Pan-African and revolutionary political thought — free to browse.
             </p>
             <p className="mt-2 mb-0 text-xs font-medium text-[var(--reader-text-muted)]">
-              A reading and listening companion.
+              Raise your consciousness.
             </p>
             <p className="mt-1 mb-0 text-xs font-medium text-[var(--reader-text-subtle)]">Ominira · v{APP_VERSION}</p>
           </div>
@@ -234,7 +234,7 @@ export default function AccountView() {
 
           <div className="border-t border-[var(--reader-border)] pt-3.5 text-center">
             <p className="m-0 text-xs font-medium text-[var(--reader-text-muted)]">
-              A reading and listening companion.
+            Raise your consciousness.
             </p>
             <p className="mt-1 mb-0 text-xs font-medium text-[var(--reader-text-subtle)]">Ominira · v{APP_VERSION}</p>
           </div>

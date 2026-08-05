@@ -49,18 +49,26 @@ export default function HomeAuthBanner() {
               <span className="font-semibold not-italic text-[var(--reader-text-muted)]">— Steve Biko</span>
             </span>
           </div>
-          <div className="flex flex-none gap-2">
+          <div className="flex flex-none flex-row items-center gap-2">
+            {/* Was border-brand-400/text-brand-400 — a static rust-orange
+                that only clears ~3.5:1 against this bar's --reader-surface,
+                borderline even at bold/text-xs and the reason "Log in" read
+                as barely-there next to the solid "Join us" beside it. A
+                filled tint plus the theme-aware --reader-accent (already
+                brighter in dark theme, per globals.css) gives it real
+                contrast in both themes without going full-solid, which
+                would make the two buttons compete for primary billing. */}
             <button
               type="button"
               onClick={goToLogin}
-              className="cursor-pointer rounded-sm border border-brand-400 bg-transparent px-3 py-1.5 text-xs font-bold text-brand-400 transition-colors hover:bg-brand-500/10"
+              className="cursor-pointer rounded-sm border border-[var(--reader-border)] bg-white px-3 py-1.5 text-xs font-bold whitespace-nowrap text-brand-400 transition-colors hover:bg-white/95"
             >
               Log in
             </button>
             <button
               type="button"
               onClick={goToSignup}
-              className="cursor-pointer rounded-sm border border-brand-500 bg-brand-500 px-3 py-1.5 text-xs font-bold text-white transition-colors hover:bg-brand-600"
+              className="cursor-pointer rounded-sm border border-brand-500 bg-brand-500 px-3 py-1.5 text-xs font-bold whitespace-nowrap text-white transition-colors hover:bg-brand-600"
             >
               Join us
             </button>
