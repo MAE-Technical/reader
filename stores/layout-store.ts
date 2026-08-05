@@ -12,9 +12,23 @@ type LayoutState = {
   /** AppBottomNav's own rendered height (mobile tab bar), in px. */
   bottomNavHeight: number;
   setBottomNavHeight: (px: number) => void;
+  /**
+   * Whether the reader's own notes/annotation-feed panel is currently open
+   * at its desktop "side" width (Reader.tsx's `notesPanel || noteFeed.open`
+   * — the same condition that drives its `shell:w-95`/`shell:w-0` toggle).
+   * On mobile that panel is a `fixed` bottom sheet stacked above everything
+   * (z-70), so it never needs this; on desktop it's a plain flex sibling
+   * with no elevation of its own, so NowPlayingBar reads this to pull its
+   * own right edge in (the same `w-95` width, so it can't drift out of
+   * sync) and avoid running underneath it.
+   */
+  readerPanelOpen: boolean;
+  setReaderPanelOpen: (open: boolean) => void;
 };
 
 export const useLayoutStore = create<LayoutState>((set) => ({
   bottomNavHeight: 0,
   setBottomNavHeight: (bottomNavHeight) => set({ bottomNavHeight }),
+  readerPanelOpen: false,
+  setReaderPanelOpen: (readerPanelOpen) => set({ readerPanelOpen }),
 }));

@@ -54,7 +54,7 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
           <span aria-hidden="true" className="select-none font-literata text-[40px] leading-[0.4] text-white">
             &ldquo;
           </span>
-          <blockquote className="m-0 font-serif text-[15px] font-medium leading-snug text-white">
+          <blockquote className="m-0 font-serif text-[15px] font-bold leading-snug text-white">
             The most potent weapon in the hands of the oppressor is the mind of the oppressed.
           </blockquote>
           <p className="m-0 mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">

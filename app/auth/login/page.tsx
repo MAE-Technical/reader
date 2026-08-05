@@ -10,9 +10,22 @@ import TextField from "@/app/components/auth/TextField";
 import PasswordField from "@/app/components/auth/PasswordField";
 
 function QuotePanel({ className = "" }: { className?: string }) {
+  const router = useRouter();
   return (
     <div className={`flex flex-col bg-sand-950 px-6 py-10 text-white shell:px-10 shell:py-14 ${className}`}>
-      <Wordmark />
+      {/* Same BackArrow as the signup/survey wizard's own StepHeader — login
+          is the one auth screen a reader can also land on directly (its own
+          link on the home feed/sidebar), but it should still feel like a
+          step they can back out of, not a dead end. Goes to "/" (redirects
+          to /home) rather than router.back(), same reasoning as signup's
+          own first-step back: a direct/bookmarked visit has no in-app
+          history to pop to. */}
+      <div className="flex items-center gap-3">
+          <BackArrow onClick={() => router.back()} className="-ml-2 text-white hover:bg-sand-400" />
+          <div className="hidden shell:block">
+            <Wordmark />
+          </div>
+        </div>
       <blockquote className="mt-6 font-serif text-2xl leading-[1.25] font-medium shell:mt-10 shell:text-[28px]">
         The decolonization of the mind is as necessary as the decolonization of the land.
       </blockquote>
@@ -27,14 +40,6 @@ function LoginForm() {
   const router = useRouter();
   return (
     <div className="w-full max-w-sm">
-      {/* Same BackArrow as the signup/survey wizard's own StepHeader — login
-          is the one auth screen a reader can also land on directly (its own
-          link on the home feed/sidebar), but it should still feel like a
-          step they can back out of, not a dead end. Goes to "/" (redirects
-          to /home) rather than router.back(), same reasoning as signup's
-          own first-step back: a direct/bookmarked visit has no in-app
-          history to pop to. */}
-      <BackArrow onClick={() => router.push("/")} className="-ml-2 mb-4" />
       <h1 className="font-serif text-3xl font-semibold text-[var(--reader-text)]">Welcome back.</h1>
       <p className="mt-2 font-literata text-[14px] font-medium text-[var(--reader-text-muted)]">Log in to continue your consciousness journey.</p>
 

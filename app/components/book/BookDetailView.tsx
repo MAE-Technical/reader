@@ -2,15 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ArrowLeft, Play } from "lucide-react";
 import type { BookDocument } from "@/lib/book/schema";
 import { useLibraryStore } from "@/stores/library-store";
-import { useAudioStore } from "@/stores/audio-store";
 import { buildProgressShape, computeBookProgress } from "@/lib/reader/progress";
 import { buildOutlineRows } from "@/lib/reader/outline";
 import { sectionLabel } from "@/lib/reader/sectionHeading";
 import ShareButton from "./ShareButton";
+import ReaderLink from "../ReaderLink";
 
 const COLLAPSED_CHAPTER_LIMIT = 8;
 
@@ -21,9 +20,7 @@ const COLLAPSED_CHAPTER_LIMIT = 8;
  * managed from two different responsive layouts.
  */
 export default function BookDetailView({ book }: { book: BookDocument }) {
-  const router = useRouter();
   const position = useLibraryStore((s) => s.getPosition(book.id));
-  const openBook = useAudioStore((s) => s.openBook);
   const [showAllChapters, setShowAllChapters] = useState(false);
 
   // library-store skips automatic persist hydration (see its own doc
@@ -127,24 +124,29 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
                 )}
               </div>
               <div className="mt-3.5 grid max-w-[250px] gap-3">
-              <Link
+              <ReaderLink
                 href={`/read/${book.slug}`}
                 className="rounded-md bg-brand-500 px-5 py-2.5 text-center text-sm font-semibold text-white no-underline hover:bg-brand-600"
               >
                 {pct > 0 ? "Resume reading" : "Start reading"}
-              </Link>
+              </ReaderLink>
 
               {hasNarration && (
-                <button
-                  onClick={() => {
-                    openBook(book);
-                    router.push(`/read/${book.slug}`);
-                  }}
-                  className="flex items-center cursor-pointer justify-center gap-2 rounded-md border border-[var(--reader-border)] bg-transparent px-5 py-2.5 text-sm font-semibold text-[var(--reader-text)] hover:bg-[var(--reader-surface)]"
+                // ?listen=1 rather than calling openBook(book) directly —
+                // this is a real navigation (ReaderLink), and audio-store's
+                // `book` field isn't persisted (only `speed` is), so
+                // setting it before the page unloads would just lose it.
+                // Reader.tsx picks the flag up on mount and calls openBook
+                // itself instead, the same handoff targetSectionId/
+                // targetPassageId already do for "jump to this chapter"/
+                // "open this note" links.
+                <ReaderLink
+                  href={`/read/${book.slug}?listen=1`}
+                  className="flex items-center cursor-pointer justify-center gap-2 rounded-md border border-[var(--reader-border)] bg-transparent px-5 py-2.5 text-sm font-semibold text-[var(--reader-text)] no-underline hover:bg-[var(--reader-surface)]"
                 >
                   <Play size={16} />
                   {hasListened ? "Continue playing" : "Listen (audiobook)"}
-                </button>
+                </ReaderLink>
               )}
             </div>
             </div>
@@ -178,13 +180,13 @@ export default function BookDetailView({ book }: { book: BookDocument }) {
             );
           }
           return (
-            <Link
+            <ReaderLink
               key={row.section.id}
               href={`/read/${book.slug}?section=${row.section.id}`}
               className="block truncate rounded-xs px-2.5 py-2 text-sm font-medium text-[var(--reader-text-muted)] no-underline hover:bg-[var(--reader-surface-hover)] hover:text-[var(--reader-text)]"
             >
               {label}
-            </Link>
+            </ReaderLink>
           );
         })}
 

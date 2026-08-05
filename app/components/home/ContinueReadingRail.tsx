@@ -1,17 +1,17 @@
 "use client";
 
-import Link from "next/link";
 import { useShallow } from "zustand/react/shallow";
 import { useLibraryStore } from "@/stores/library-store";
 import { computeBookProgress } from "@/lib/reader/progress";
 import type { LibraryBookSummary } from "@/app/components/shell/libraryBook";
+import ReaderLink from "@/app/components/ReaderLink";
 
 function ContinueReadingCard({ book }: { book: LibraryBookSummary }) {
   const position = useLibraryStore((s) => s.getPosition(book.id));
   const pct = Math.round(computeBookProgress(book.progress, position) * 100);
 
   return (
-    <Link
+    <ReaderLink
       href={`/read/${book.slug}`}
       className="flex w-60 md:w-70 flex-none gap-3 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3 no-underline"
     >
@@ -35,7 +35,7 @@ function ContinueReadingCard({ book }: { book: LibraryBookSummary }) {
           <div className="text-[11px] font-medium text-[var(--reader-text-muted)]">{pct}% complete</div>
         </div>
       </div>
-    </Link>
+    </ReaderLink>
   );
 }
 

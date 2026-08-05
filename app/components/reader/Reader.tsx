@@ -26,6 +26,7 @@ import {
   useReaderStore,
 } from "@/stores/reader-store";
 import { useLibraryStore } from "@/stores/library-store";
+import { useLayoutStore } from "@/stores/layout-store";
 import { useAudioStore } from "@/stores/audio-store";
 import { useNarrationStore } from "@/stores/narration-store";
 import { useReaderIdentityStore } from "@/stores/reader-identity-store";
@@ -43,6 +44,7 @@ export default function Reader({
   targetSectionId,
   targetPassageId,
   targetNoteId,
+  autoListen,
   onClose,
 }: {
   book: BookDocument;
@@ -58,6 +60,13 @@ export default function Reader({
    * specific annotation's thread once the reader has landed, the same as
    * clicking its inline marker would (see the deep-link effect below). */
   targetNoteId?: string;
+  /** ?listen=1 — the book-detail page's own Listen button hands this
+   * intent off through the URL rather than calling openBook itself,
+   * because getting here now means a real navigation (see its own
+   * hardNavigate comment), and audio-store's `book` field isn't persisted
+   * across one (only `speed` is). Acted on once, below, the same as
+   * ReaderHeader's own onListen={() => openBook(book)}. */
+  autoListen?: boolean;
   /** Present only when Reader is mounted inside the (.)read/[slug] modal
    * (ReaderModal.tsx) rather than as the standalone /read/[slug] page —
    * swaps the header's "back to home" link for a plain close button, so
@@ -114,6 +123,14 @@ export default function Reader({
   const anyPlayerActive = audioStoreBook !== null;
   const hasNarration = book.narrators.length > 0;
   const isListen = audioStoreBook?.id === book.id;
+
+  // See autoListen's own doc comment above — a one-time echo of what
+  // ReaderHeader's onListen does on click, fired instead on mount when the
+  // book-detail page's Listen button is why we're here.
+  useEffect(() => {
+    if (autoListen && !isListen) openBook(book);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- deliberately fires once on mount only; autoListen/book are fixed for this page's lifetime, and isListen is read once as a mount-time guard, not tracked afterward.
+  }, []);
 
   const narrationAudioIndex = useNarrationStore((s) => s.audioIndex);
   const narrationAudioSection = useNarrationStore((s) => s.audioSection);
@@ -172,6 +189,17 @@ export default function Reader({
   }, [orderedSections]);
 
   const noteFeed = useBookAnnotationFeed({ bookId: book.id, orderedSections, passageLookup });
+
+  // Published so NowPlayingBar (rendered in the root layout, well outside
+  // this tree) can pull its own right edge in on desktop — see
+  // layout-store's own doc comment on readerPanelOpen. Same condition that
+  // drives the notes-panel wrapper's shell:w-95/shell:w-0 toggle below, so
+  // the two can't drift out of sync with each other.
+  const setReaderPanelOpen = useLayoutStore((s) => s.setReaderPanelOpen);
+  useEffect(() => {
+    setReaderPanelOpen(!!notesPanel || noteFeed.open);
+    return () => setReaderPanelOpen(false);
+  }, [notesPanel, noteFeed.open, setReaderPanelOpen]);
 
   // Endnote/bibliography sections (e.g. "Notes") ingest one of two shapes —
   // bare chapter-divider headings (one per citing chapter, note bodies

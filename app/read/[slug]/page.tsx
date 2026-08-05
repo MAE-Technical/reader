@@ -14,10 +14,14 @@ export default async function ReadBookPage({
   // feed's cards, narrowing that further to one exact passage and
   // (optionally, paired with it) opening that annotation's thread once
   // the reader has landed.
-  searchParams: Promise<{ section?: string; passage?: string; note?: string }>;
+  // ?listen=1 — set by the book-detail page's own Listen button, which now
+  // reaches this page via a real navigation (see its own hardNavigate
+  // comment) rather than the router.push+openBook() it used when this was
+  // a soft one — this is how it hands that intent off instead.
+  searchParams: Promise<{ section?: string; passage?: string; note?: string; listen?: string }>;
 }) {
   const { slug } = await params;
-  const { section, passage, note } = await searchParams;
+  const { section, passage, note, listen } = await searchParams;
 
   let book;
   try {
@@ -29,5 +33,13 @@ export default async function ReadBookPage({
     // BookValidationError and anything unexpected surface through error.tsx
     throw err;
   }
-  return <Reader book={book} targetSectionId={section} targetPassageId={passage} targetNoteId={note} />;
+  return (
+    <Reader
+      book={book}
+      targetSectionId={section}
+      targetPassageId={passage}
+      targetNoteId={note}
+      autoListen={listen === "1"}
+    />
+  );
 }
