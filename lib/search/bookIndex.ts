@@ -1,5 +1,6 @@
 import MiniSearch from "minisearch";
 import type { BookDocument, Section } from "@/lib/book/schema";
+import { sectionLabel } from "@/lib/reader/sectionHeading";
 
 export type SearchDoc = {
   id: string; // passage id
@@ -28,7 +29,14 @@ export function buildBookIndex(book: BookDocument): MiniSearch<SearchDoc> {
     section.passages.map((p) => ({
       id: p.id,
       sectionId: section.id,
-      sectionTitle: section.title ?? book.metadata.title,
+      // Most sections have no `title` of their own (see sectionLabel's own
+      // doc comment) — its first heading passage is the real chapter name
+      // everywhere else in the reader already reads this from. Plain
+      // `section.title ?? book.metadata.title` skipped that fallback
+      // entirely, so a result almost always showed the *book* title twice
+      // (once as the title, once where the chapter name belonged) instead
+      // of the actual chapter.
+      sectionTitle: sectionLabel(section) ?? book.metadata.title,
       text: p.text,
     }))
   );

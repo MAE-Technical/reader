@@ -89,7 +89,7 @@ export default function SurveyWizard({ materials }: { materials: MaterialSummary
             <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
               Have you read any of these books?
             </h1>
-            <p className="mt-3 font-literata text-[14px] font-medium text-[var(--reader-text-muted)]">
+            <p className="mt-3 font-literata text-[14px] text-[var(--reader-text-muted)]">
               You can choose as many as you&rsquo;ve read or none if you haven&rsquo;t read any.
             </p>
 
@@ -133,7 +133,7 @@ export default function SurveyWizard({ materials }: { materials: MaterialSummary
             <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
               What are you interested in reading?
             </h1>
-            <p className="mt-3 font-literata text-[14px] font-medium text-[var(--reader-text-muted)]">
+            <p className="mt-3 font-literata text-[14px] text-[var(--reader-text-muted)]">
               Select the categories you&rsquo;re most interested in.
             </p>
 

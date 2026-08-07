@@ -1,5 +1,68 @@
-import { useSessionStore } from "@/stores/session-store";
+import { useSessionStore, type Session } from "@/stores/session-store";
 import type { ApiErrorCode } from "@/lib/api/errors";
+
+// Refresh a bit before the access token's actual expiry, not exactly at it —
+// leaves room for the request that's about to use this token to still land
+// server-side before it goes stale.
+const REFRESH_MARGIN_MS = 60_000;
+
+// Concurrent calls into getValidAccessToken while a refresh is already in
+// flight all await this same promise rather than each firing their own
+// POST /api/auth/refresh — a burst of queries on app load (or reconnect)
+// refreshes the session exactly once, not once per query.
+let refreshPromise: Promise<Session | null> | null = null;
+
+async function refreshSession(refreshToken: string): Promise<Session | null> {
+  try {
+    const res = await fetch("/api/auth/refresh", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+    });
+    if (!res.ok) return null;
+    const data = (await res.json()) as { session: Session };
+    return data.session;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The access token stored in session-store lives far shorter than a reader
+ * should have to stay actively signed in for (Supabase's own default is
+ * ~1h) — this is what actually keeps a reader logged in across days/weeks:
+ * transparently exchanges the long-lived refresh token for a new access
+ * token whenever the stored one is expired or about to be, updating
+ * session-store in place. A refresh token that's itself no longer valid
+ * (revoked, or truly stale) clears the session outright, same as an
+ * explicit log-out — there's nothing left worth retrying.
+ */
+export async function ensureFreshSession(): Promise<string | undefined> {
+  const session = useSessionStore.getState().session;
+  if (!session) return undefined;
+
+  const expiresAtMs = Date.parse(session.expiresAt);
+  const stillFresh = !Number.isNaN(expiresAtMs) && expiresAtMs - Date.now() > REFRESH_MARGIN_MS;
+  if (stillFresh) return session.accessToken;
+
+  if (!refreshPromise) {
+    refreshPromise = refreshSession(session.refreshToken).finally(() => {
+      refreshPromise = null;
+    });
+  }
+  const refreshed = await refreshPromise;
+
+  const readerId = useSessionStore.getState().readerId;
+  if (refreshed && readerId) {
+    useSessionStore.getState().setSession(readerId, refreshed);
+    return refreshed.accessToken;
+  }
+  // The refresh token itself is no good any more — nothing left to try;
+  // treat this exactly like an explicit sign-out rather than silently
+  // keeping a dead session around.
+  useSessionStore.getState().clearSession();
+  return undefined;
+}
 
 /** Client-side mirror of lib/api/errors.ts's `{ error: { code, message,
  * field } }` shape (api-spec.md's Conventions) — thrown instead of returned
@@ -40,7 +103,7 @@ type ApiFetchOptions = {
  */
 export async function apiFetch<T>(path: string, options: ApiFetchOptions = {}): Promise<T> {
   const { method, json, body, headers } = options;
-  const accessToken = useSessionStore.getState().session?.accessToken;
+  const accessToken = await ensureFreshSession();
 
   const res = await fetch(`/api${path}`, {
     method: method ?? (json !== undefined || body !== undefined ? "POST" : "GET"),

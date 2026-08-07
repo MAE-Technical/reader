@@ -4,9 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { getNames } from "country-list";
-import { BookOpen, Headphones, Users } from "lucide-react";
 import Wordmark from "@/app/components/auth/Wordmark";
-import SunriseMark from "@/app/components/auth/SunriseMark";
 import AuthButton from "@/app/components/auth/AuthButton";
 import BackArrow from "@/app/components/auth/BackArrow";
 import TextField from "@/app/components/auth/TextField";
@@ -14,17 +12,17 @@ import PasswordField from "@/app/components/auth/PasswordField";
 import SelectField from "@/app/components/auth/SelectField";
 import NotePreviewCard from "@/app/components/auth/NotePreviewCard";
 import { useSignup } from "@/lib/auth/useSignup";
+import { useCheckAvailability } from "@/lib/auth/useCheckAvailability";
 import { onboardingRoute } from "@/lib/auth/onboardingRoute";
 import { ApiError, fieldError } from "@/lib/api/client";
 
-const INTRO_STEPS = ["intro-library", "intro-features"] as const;
+// The old "A library. A space. A movement." / "What you get with Ominira"
+// slides were dropped from this flow (both mobile and desktop) — they
+// duplicated the marketing copy already on the pre-signup landing, adding
+// two taps before a reader could even start the form.
 const FORM_STEPS = ["form-account", "form-pseudonym", "form-location"] as const;
 
-const FEATURES = [
-  { icon: BookOpen, title: "The full library", desc: "Essential texts from Pan-African and revolutionary thinkers, curated with care." },
-  { icon: Headphones, title: "Listen in the Voices of History", desc: "High-quality audio that honors the words and context." },
-  { icon: Users, title: "Read Alongside Comrades", desc: "See notes, discussions, and voices from readers across the world." },
-];
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const COUNTRIES = [...getNames().sort((a, b) => a.localeCompare(b)), "Other"];
 
@@ -41,27 +39,9 @@ function StepHeader({ formStepIndex, onBack }: { formStepIndex: number; onBack: 
           <Wordmark />
         </div>
       </div>
-      {formStepIndex >= 0 && (
-        <div className="mt-6 text-xs font-bold tracking-[0.1em] text-brand-500">
-          STEP {formStepIndex + 1} OF {FORM_STEPS.length}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function FeatureList() {
-  return (
-    <div className="divide-y divide-[var(--reader-border)]">
-      {FEATURES.map(({ icon: Icon, title, desc }) => (
-        <div key={title} className="flex gap-4 py-4 first:pt-0">
-          <Icon size={22} className="mt-0.5 flex-none text-brand-500" strokeWidth={1.5} />
-          <div>
-            <div className="font-serif text-base font-semibold text-[var(--reader-text)]">{title}</div>
-            <div className="mt-1 text-[13px] leading-relaxed text-[var(--reader-text-muted)]">{desc}</div>
-          </div>
-        </div>
-      ))}
+      <div className="mt-6 text-xs font-bold tracking-[0.1em] text-brand-500">
+        STEP {formStepIndex + 1} OF {FORM_STEPS.length}
+      </div>
     </div>
   );
 }
@@ -77,10 +57,8 @@ export default function SignupPage() {
   const [country, setCountry] = useState("");
   const signup = useSignup();
 
-  const steps = [...INTRO_STEPS, ...FORM_STEPS];
-  const clampedStep = Math.min(step, steps.length - 1);
-  const current = steps[clampedStep];
-  const formStepIndex = FORM_STEPS.indexOf(current as (typeof FORM_STEPS)[number]);
+  const clampedStep = Math.min(step, FORM_STEPS.length - 1);
+  const current = FORM_STEPS[clampedStep];
 
   // A field error can belong to an earlier step than the one the reader
   // submitted from (signup only actually posts once, from the last step) —
@@ -94,15 +72,49 @@ export default function SignupPage() {
     pseudonym: FORM_STEPS.indexOf("form-pseudonym"),
   };
 
+  // Each field is validated (format, then server-checked availability) as
+  // the reader types, so "Continue" only ever advances once the step it's
+  // leaving is actually complete and correct — no more discovering a taken
+  // email/pseudonym only after filling out every later step too.
+  const emailFormatValid = EMAIL_RE.test(email);
+  const emailAvailability = useCheckAvailability("email", email, emailFormatValid);
+  const emailAvailable = emailFormatValid && emailAvailability.available === true;
+
+  const pseudonymFormatValid = pseudonym.trim().length > 0 && pseudonym.length <= 20;
+  const pseudonymAvailability = useCheckAvailability("pseudonym", pseudonym, pseudonymFormatValid);
+  const pseudonymAvailable = pseudonymFormatValid && pseudonymAvailability.available === true;
+
+  const accountStepValid = fullName.trim().length > 0 && emailAvailable && password.length >= 8;
+  const pseudonymStepValid = pseudonymAvailable;
+
+  const emailError =
+    fieldError(signup.error, "email") ??
+    (email.length > 0 && !emailFormatValid
+      ? "Enter a valid email address."
+      : emailFormatValid && emailAvailability.available === false
+      ? "This email is already registered."
+      : undefined);
+  const passwordError =
+    fieldError(signup.error, "password") ??
+    (password.length > 0 && password.length < 8 ? "Password must be at least 8 characters." : undefined);
+  const pseudonymError =
+    fieldError(signup.error, "pseudonym") ??
+    (pseudonymFormatValid && pseudonymAvailability.available === false
+      ? "That pseudonym is taken — try another."
+      : undefined);
+
+  const canContinue = current === "form-account" ? accountStepValid : current === "form-pseudonym" ? pseudonymStepValid : true;
+
   const goNext = () => {
-    if (clampedStep === steps.length - 1) {
+    if (!canContinue) return;
+    if (clampedStep === FORM_STEPS.length - 1) {
       signup.mutate(
         { fullName, email, password, pseudonym, city: city || undefined, country: country || undefined },
         {
           onSuccess: ({ reader }) => router.push(onboardingRoute(reader)),
           onError: (err) => {
             if (err instanceof ApiError && err.field && err.field in stepForField) {
-              setStep(INTRO_STEPS.length + stepForField[err.field]);
+              setStep(stepForField[err.field]);
             }
           },
         }
@@ -118,78 +130,11 @@ export default function SignupPage() {
       setStep(clampedStep - 1);
     }
   };
-  // Desktop combines both intro slides into one screen (see below), so its
-  // Continue skips straight past the mobile-only second slide.
-  const skipIntro = () => setStep(INTRO_STEPS.length);
 
   return (
     <div className="min-h-screen bg-[var(--reader-bg)] px-6 py-8 shell:px-16 shell:py-16 xl:px-24">
-      <StepHeader formStepIndex={formStepIndex} onBack={goBack} />
+      <StepHeader formStepIndex={clampedStep} onBack={goBack} />
       <div className="mx-auto w-full max-w-3xl">
-        {(current === "intro-library" || current === "intro-features") && (
-          <>
-            <div className="flex flex-col shell:hidden">
-              {current === "intro-library" ? (
-                <>
-                  <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
-                    A library.
-                    <br />
-                    A space.
-                    <br />
-                    A movement.
-                  </h1>
-                  <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-[var(--reader-text-muted)]">
-                    <p>Ominira is a curated library of Pan-African and revolutionary political thought.</p>
-                    <p>We make these ideas accessible, alive, and in conversation.</p>
-                    <p>Together, we raise political consciousness and organize our future.</p>
-                  </div>
-                  <SunriseMark theme="light" book className="mt-6 w-full" />
-                </>
-              ) : (
-                <>
-                  <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
-                    What you get with Ominira
-                  </h1>
-                  <div className="mt-6">
-                    <FeatureList />
-                  </div>
-                </>
-              )}
-              <AuthButton className="mt-6" onClick={goNext}>
-                Continue
-              </AuthButton>
-            </div>
-
-            <div className="hidden shell:grid shell:grid-cols-2 shell:items-start shell:gap-16">
-              <div>
-                <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
-                  A library.
-                  <br />
-                  A space.
-                  <br />
-                  A movement.
-                </h1>
-                <div className="mt-4 space-y-3 text-[15px] leading-relaxed text-[var(--reader-text-muted)]">
-                  <p>Ominira is a curated library of Pan-African and revolutionary political thought.</p>
-                  <p>We make these ideas accessible, alive, and in conversation.</p>
-                  <p>Together, we raise political consciousness and organize our future.</p>
-                </div>
-              </div>
-              <div>
-                <h2 className="font-serif text-2xl leading-tight font-semibold text-[var(--reader-text)]">
-                  What you get with Ominira
-                </h2>
-                <div className="mt-6">
-                  <FeatureList />
-                </div>
-              </div>
-            </div>
-            <AuthButton className={`mt-8 hidden shell:block ${DESKTOP_AUTO_BUTTON}`} onClick={skipIntro}>
-              Continue
-            </AuthButton>
-          </>
-        )}
-
         {current === "form-account" && (
           <div className="grid gap-8 shell:grid-cols-[minmax(0,1fr)_360px] shell:items-start">
             <div>
@@ -198,7 +143,7 @@ export default function SignupPage() {
                 <br />
                 you started.
               </h1>
-              <p className="mt-3 font-literata text-[14px] font-medium text-[var(--reader-text-muted)]">
+              <p className="mt-3 font-literata text-[14px] text-[var(--reader-text-muted)]">
                 Enter your details below to create your account.
               </p>
             </div>
@@ -223,16 +168,17 @@ export default function SignupPage() {
                   placeholder="e.g. ama@example.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  error={fieldError(signup.error, "email")}
+                  error={emailError}
+                  hint={emailAvailability.isChecking ? "Checking…" : undefined}
                 />
                 <PasswordField
                   label="Password"
                   placeholder="Create a password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  error={fieldError(signup.error, "password")}
+                  error={passwordError}
                 />
-                <AuthButton type="submit" className={DESKTOP_AUTO_BUTTON}>
+                <AuthButton type="submit" className={DESKTOP_AUTO_BUTTON} disabled={!accountStepValid}>
                   Continue
                 </AuthButton>
               </form>
@@ -256,13 +202,13 @@ export default function SignupPage() {
                 label="Pseudonym"
                 placeholder="e.g. Kofi Writes"
                 maxLength={20}
-                hint={`${pseudonym.length}/20`}
+                hint={pseudonymAvailability.isChecking ? "Checking…" : `${pseudonym.length}/20`}
                 value={pseudonym}
                 onChange={(e) => setPseudonym(e.target.value)}
-                error={fieldError(signup.error, "pseudonym")}
+                error={pseudonymError}
               />
               <NotePreviewCard pseudonym={pseudonym} />
-              <AuthButton className={DESKTOP_AUTO_BUTTON} onClick={goNext}>
+              <AuthButton className={DESKTOP_AUTO_BUTTON} onClick={goNext} disabled={!pseudonymStepValid}>
                 Continue
               </AuthButton>
             </div>
@@ -276,7 +222,7 @@ export default function SignupPage() {
                 Where are you reading from?
               </h1>
               <div className="mt-6 flex gap-3">
-                <p className="font-literata text-[14px] font-medium leading-relaxed text-[var(--reader-text-muted)]">
+                <p className="font-literata text-[14px] leading-relaxed text-[var(--reader-text-muted)]">
                   We don&rsquo;t track your location. We only ask for your city and country so that we can show comrades that they&rsquo;re studying with other Africans from across the globe.
                 </p>
               </div>

@@ -4,9 +4,9 @@ import { useMemo, useState } from "react";
 import AppHeader from "./AppHeader";
 import CategoryPills, { DEFAULT_CATEGORIES } from "./CategoryPills";
 import BookCard from "./BookCard";
+import SearchModal from "@/app/components/SearchModal";
 import type { MaterialSummary } from "@/lib/api/types";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
-import { useMaterialsSearch } from "@/lib/materials/useMaterialsSearch";
 import { apiFetch } from "@/lib/api/client";
 
 type Props = {
@@ -21,25 +21,13 @@ export default function LibraryView({ materials, initialNextCursor }: Props) {
   const [items, setItems] = useState(materials);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
   const [category, setCategory] = useState<string>(DEFAULT_CATEGORIES[0]);
 
   // Populates reading-position-store's local mirror (progress bars on every
   // card below read it) for a reader who lands straight on /library without
   // ever visiting /home first — see useContinueReading's own doc comment.
   useContinueReading();
-
-  // A real, catalog-wide query (GET /api/materials?search=, same as
-  // SearchModal's home-page mode) — never a client-side filter over
-  // whatever page happens to be loaded. That distinction matters here
-  // specifically: this page only ever holds however many pages of the
-  // (engagement-ranked) browse list "Load more" has pulled in so far, and
-  // a book with 30 comrades discussing it that just hasn't clawed its way
-  // onto page one yet still needs to turn up by title/author regardless.
-  const { results: searchResults, isSearching } = useMaterialsSearch(query, {
-    category: category !== "All" ? category : null,
-  });
-  const isSearchMode = query.trim().length > 0;
 
   // Browse mode only: "All" is the only category any book currently
   // matches (see CategoryPills's own comment), so there's nothing yet a
@@ -50,8 +38,6 @@ export default function LibraryView({ materials, initialNextCursor }: Props) {
     if (category === "All") return items;
     return items.filter((material) => material.categories.includes(category));
   }, [items, category]);
-
-  const visible = isSearchMode ? searchResults : browseItems;
 
   async function loadMore() {
     if (!nextCursor || isLoadingMore) return;
@@ -71,7 +57,18 @@ export default function LibraryView({ materials, initialNextCursor }: Props) {
 
   return (
     <div className="pb-10">
-      <AppHeader searchValue={query} onSearchChange={setQuery} />
+      {/* Same AppHeader/SearchModal pairing as the home page (HomeCommunityFeed)
+          — focusing the field opens the modal rather than filtering this
+          page's own grid in place, so a typed query always shows results
+          the same way (and with the same relevance order) everywhere in
+          the app it can be entered. */}
+      <AppHeader onSearchFocus={() => setSearchOpen(true)} />
+
+      {searchOpen && (
+        <div className="fixed inset-0 z-50">
+          <SearchModal onClose={() => setSearchOpen(false)} />
+        </div>
+      )}
 
       <h1 className="mt-1 mb-4 font-serif text-2xl font-semibold text-[var(--reader-text)]">Library</h1>
 
@@ -79,26 +76,19 @@ export default function LibraryView({ materials, initialNextCursor }: Props) {
         <CategoryPills selected={category} onSelect={setCategory} />
       </div>
 
-      {isSearchMode && isSearching && visible.length === 0 ? null : visible.length === 0 ? (
+      {browseItems.length === 0 ? (
         <p className="text-sm text-[var(--reader-text-muted)]">
-          {isSearchMode
-            ? "No books match your search."
-            : items.length === 0
-              ? "No books ingested yet."
-              : `No books tagged "${category}" yet.`}
+          {items.length === 0 ? "No books ingested yet." : `No books tagged "${category}" yet.`}
         </p>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4">
-            {visible.map((material) => (
+            {browseItems.map((material) => (
               <BookCard key={material.id} material={material} />
             ))}
           </div>
 
-          {/* Only browse mode paginates — a typed query already reaches the
-              whole catalog in one shot (useMaterialsSearch), so there's no
-              further page to load underneath it. */}
-          {!isSearchMode && nextCursor && (
+          {nextCursor && (
             <div className="mt-8 flex justify-center">
               <button
                 type="button"

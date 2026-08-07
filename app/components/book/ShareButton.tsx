@@ -30,9 +30,10 @@ export default function ShareButton({ title, text }: { title: string; text?: str
     <button
       onClick={onClick}
       aria-label="Share this book"
-      className="flex flex-none cursor-pointer items-center justify-center text-[var(--reader-text)]"
+      className="flex flex-none cursor-pointer items-center gap-1.5 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3 py-2 text-xs font-semibold text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface-hover)]"
     >
-      {copied ? <Check size={20} /> : <Share size={20} />}
+      {copied ? <Check size={15} /> : <Share size={15} />}
+      {copied ? "Copied" : "Share"}
     </button>
   );
 }

@@ -30,14 +30,30 @@ type Props = {
    * library-wide branch below. Every in-reader call site (Reader.tsx) still
    * passes this, keeping that book-scoped passage search unchanged. */
   book?: BookDocument;
-  currentSectionId?: string;
   onNavigate?: (sectionId: string, passageId: string) => void;
   onClose?: () => void;
 };
 
-export default function SearchModal({ book, currentSectionId, onNavigate, onClose }: Props) {
+/** Same rounded-row footprint as a real result (SearchModal's own two
+ * result-row shapes below) so the list doesn't jump once results swap in —
+ * shown while `isSearching` is true, i.e. only in the library-wide
+ * (backend-search) mode. Book-scoped search is a synchronous in-memory
+ * MiniSearch query (see searchBook), so it never has a loading state to
+ * skeleton. */
+function ResultRowSkeleton() {
+  return (
+    <div className="flex items-center gap-3 py-3 border-b border-[var(--reader-border)] animate-pulse">
+      <div className="h-14 w-11 flex-none rounded-sm bg-[var(--reader-surface-hover)]" />
+      <div className="min-w-0 flex-1">
+        <div className="mb-2 h-3 w-2/3 rounded-full bg-[var(--reader-surface-hover)]" />
+        <div className="h-2.5 w-2/5 rounded-full bg-[var(--reader-surface-hover)]" />
+      </div>
+    </div>
+  );
+}
+
+export default function SearchModal({ book, onNavigate, onClose }: Props) {
   const [query, setQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"all" | "chapter" | "notes" | "discourse">("all");
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
@@ -48,42 +64,17 @@ export default function SearchModal({ book, currentSectionId, onNavigate, onClos
   }, []);
 
   // Book-scoped passage search (in-reader only) vs. library-wide book
-  // search (home page only) — mutually exclusive, gated on whether a
-  // `book` was actually passed in. buildBookIndex/searchBook below are
-  // no-ops (never called) whenever `book` is undefined.
+  // search (home page + library page) — mutually exclusive, gated on
+  // whether a `book` was actually passed in. buildBookIndex/searchBook
+  // below are no-ops (never called) whenever `book` is undefined. Neither
+  // branch splits into tabs (chapter/notes/discourse) any more — one
+  // unified, relevance-ordered result list either way: MiniSearch's own
+  // `.search()` already returns book results ranked highest-scoring first
+  // (searchBook does no re-sorting of its own), and the library-wide branch
+  // is ranked server-side (lib/materials/list.ts's relevanceScore).
   const index = useMemo(() => (book ? buildBookIndex(book) : null), [book]);
-  const allResults = useMemo(() => (index ? searchBook(index, query) : []), [index, query]);
-  const chapterResults = useMemo(
-    () => allResults.filter((r) => r.sectionId === currentSectionId),
-    [allResults, currentSectionId]
-  );
+  const results: SearchResult[] = useMemo(() => (index ? searchBook(index, query) : []), [index, query]);
   const { results: libraryResults, isSearching } = useMaterialsSearch(book ? "" : query, { limit: 20 });
-  // Notes and cross-reader discourse aren't backed by real data yet — this
-  // only searches the book itself, per reader.md's MVP search scope.
-  const notesResults: SearchResult[] = [];
-  const discourseResults: SearchResult[] = [];
-
-  const counts = {
-    all: allResults.length,
-    chapter: chapterResults.length,
-    notes: notesResults.length,
-    discourse: discourseResults.length,
-  };
-
-  const resultsByTab: Record<typeof activeTab, SearchResult[]> = {
-    all: allResults,
-    chapter: chapterResults,
-    notes: notesResults,
-    discourse: discourseResults,
-  };
-  const filtered = resultsByTab[activeTab];
-
-  const tabs: { id: typeof activeTab; label: string }[] = [
-    { id: "all", label: `All (${counts.all})` },
-    { id: "chapter", label: `In this chapter (${counts.chapter})` },
-    { id: "notes", label: `Notes (${counts.notes})` },
-    { id: "discourse", label: `Discourse (${counts.discourse})` },
-  ];
 
   return (
     <div
@@ -121,28 +112,10 @@ export default function SearchModal({ book, currentSectionId, onNavigate, onClos
           </span>
         </div>
 
-        {book && (
-          <div className="flex gap-2 px-5 py-3 border-b border-[var(--reader-border)] flex-none overflow-x-auto">
-            {tabs.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTab(t.id)}
-                className={`flex-none py-1.5 px-3.5 rounded-full border text-sm font-medium whitespace-nowrap cursor-pointer ${
-                  activeTab === t.id
-                    ? "bg-brand-500 text-white border-brand-500"
-                    : "bg-transparent text-[var(--reader-text)] border-[var(--reader-border)]"
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
-
         <div className="om-scroll flex-1 overflow-y-auto px-5 py-4">
           {book ? (
             <>
-              {filtered.map((r) => (
+              {results.map((r) => (
                 <div
                   key={r.passageId}
                   onClick={() => {
@@ -151,21 +124,26 @@ export default function SearchModal({ book, currentSectionId, onNavigate, onClos
                   }}
                   className="py-3 border-b border-[var(--reader-border)] cursor-pointer"
                 >
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-sm font-semibold text-[var(--reader-text)]">
+                  {/* Stacked on mobile (each of title/author/section gets
+                      its own line — there's rarely room for all three side
+                      by side on a phone-width modal), but from md up they
+                      sit inline and wrap only if they actually don't fit —
+                      not a fixed vertical stack regardless of width. */}
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                    <span className="font-serif text-xs font-semibold text-[var(--reader-text)]">
                       {book.metadata.title}
                     </span>
-                    <span className="text-sm text-[var(--reader-text-muted)]">— {book.metadata.author}</span>
+                    <span className="text-xs text-[var(--reader-text-muted)]">{book.metadata.author}</span>
+                    <span className="text-xs font-medium text-[var(--reader-text-muted)]">
+                      {r.sectionTitle}
+                    </span>
                   </div>
-                  <div className="text-xs font-medium text-[var(--reader-text-muted)] my-0.5 mb-1.5">
-                    {r.sectionTitle}
-                  </div>
-                  <span className="text-[15px] leading-[1.65] font-serif text-[var(--reader-text)]">
+                  <p className="mt-1.5 font-literata text-[14px] leading-[1.65] text-[var(--reader-text)]">
                     {highlight(r.text, query)}
-                  </span>
+                  </p>
                 </div>
               ))}
-              {query.trim() && filtered.length === 0 && (
+              {query.trim() && results.length === 0 && (
                 <p className="text-sm text-[var(--reader-text-muted)] text-center py-10">
                   No results for &ldquo;{query}&rdquo;.
                 </p>
@@ -173,29 +151,31 @@ export default function SearchModal({ book, currentSectionId, onNavigate, onClos
             </>
           ) : (
             <>
-              {libraryResults.map((material) => (
-                <Link
-                  key={material.id}
-                  href={`/book/${material.slug}`}
-                  onClick={() => onClose?.()}
-                  className="flex items-center gap-3 py-3 border-b border-[var(--reader-border)] no-underline"
-                >
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={material.cover ?? ""}
-                    alt={material.title}
-                    className="h-14 w-11 flex-none rounded-sm border border-[var(--reader-border)] object-cover"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-[var(--reader-text)]">
-                      {highlight(material.title, query)}
-                    </div>
-                    <div className="truncate text-xs font-medium text-[var(--reader-text-muted)]">
-                      {highlight(material.author, query)}
-                    </div>
-                  </div>
-                </Link>
-              ))}
+              {isSearching
+                ? Array.from({ length: 5 }).map((_, i) => <ResultRowSkeleton key={i} />)
+                : libraryResults.map((material) => (
+                    <Link
+                      key={material.id}
+                      href={`/book/${material.slug}`}
+                      onClick={() => onClose?.()}
+                      className="flex items-center gap-3 py-3 border-b border-[var(--reader-border)] no-underline"
+                    >
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={material.cover ?? ""}
+                        alt={material.title}
+                        className="h-14 w-11 flex-none rounded-sm border border-[var(--reader-border)] object-cover"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-semibold text-[var(--reader-text)]">
+                          {highlight(material.title, query)}
+                        </div>
+                        <div className="truncate text-xs font-medium text-[var(--reader-text-muted)]">
+                          {highlight(material.author, query)}
+                        </div>
+                      </div>
+                    </Link>
+                  ))}
               {!isSearching && query.trim() && libraryResults.length === 0 && (
                 <p className="text-sm text-[var(--reader-text-muted)] text-center py-10">
                   No results for &ldquo;{query}&rdquo;.

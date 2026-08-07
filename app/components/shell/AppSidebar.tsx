@@ -68,7 +68,7 @@ export default function AppSidebar() {
         </span>
       </Link>
 
-      <nav className="flex-1 min-h-0 overflow-y-auto px-2.5 pt-2 flex flex-col gap-3">
+      <nav className="flex-1 min-h-0 overflow-y-auto px-2.5 pt-2 flex flex-col gap-1">
         {items.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (
@@ -76,9 +76,9 @@ export default function AppSidebar() {
               key={href}
               href={href}
               onClick={onNavClick}
-              className={`flex items-center gap-3 rounded-sm px-2.5 py-[9px] text-sm font-semibold no-underline transition-colors ${
+              className={`flex items-center gap-3 rounded-sm px-2.5 py-[9px] text-sm font-semibold no-underline transition-colors active:scale-[0.97] ${
                 active
-                  ? "bg-[var(--reader-accent)]/10 text-[var(--reader-accent)] text-[15px]"
+                  ? "bg-[var(--reader-accent)]/10 text-[var(--reader-accent)]"
                   : "text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
               }`}
             >

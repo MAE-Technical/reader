@@ -5,4 +5,5 @@
 export const authKeys = {
   me: ["auth", "me"] as const,
   continueReading: ["auth", "continue-reading"] as const,
+  notesCount: ["auth", "notes-count"] as const,
 };

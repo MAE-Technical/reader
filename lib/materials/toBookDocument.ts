@@ -1,6 +1,6 @@
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { projectMaterial } from "@/lib/materials/projection";
-import type { BookDocument, Narrator, Note, Section } from "@/lib/book/schema";
+import type { BookDocument, Narrator, Note, Passage, Section } from "@/lib/book/schema";
 
 export class MaterialNotFoundError extends Error {
   constructor(materialId: string) {
@@ -23,11 +23,52 @@ const FULL_CONTENT_FIELDS = [
   "sections",
 ];
 
+/** Blanks out the actual prose (and its inline marks) on every passage
+ * *except* the one section the reader is either landing on or has already
+ * been told to load — everything else about the section (id, count, type,
+ * level, audio, children) stays exactly as real/complete as before this
+ * existed. That's deliberate: `passages.length`/`passage.type` are load-
+ * bearing signals elsewhere (ChaptersDrawer's "does this chapter have
+ * content" check, the endnotes-index heuristic, reading-progress's
+ * passage-count math, resume/audio passage-index lookups) — stripping the
+ * *array* itself would have made an unloaded chapter look structurally
+ * different (and in ChaptersDrawer's case, wrongly non-clickable) rather
+ * than just visually blank for a moment. Only `text` (by far the dominant
+ * byte weight of a book's JSON) is what actually needed deferring; nothing
+ * downstream reads it before the reader can actually see it.
+ *
+ * Image passages are left untouched — their `text` is alt copy, already
+ * small, and `src` (the thing that actually renders) was never in scope
+ * here anyway. */
+function stripProseExceptSection(sections: Section[], keepSectionId: string): Section[] {
+  return sections.map((s) => {
+    const children = s.children.length > 0 ? stripProseExceptSection(s.children, keepSectionId) : s.children;
+    if (s.id === keepSectionId) return children === s.children ? s : { ...s, children };
+    const passages: Passage[] = s.passages.map((p) =>
+      p.type === "image" ? p : ({ ...p, text: "", marks: undefined } as Passage)
+    );
+    return { ...s, children, passages };
+  });
+}
+
 /**
- * What `/read/[slug]` and its modal counterpart actually load — the reader
- * needs the *whole* book (every section's passages) in memory today, not
- * just one section at a time (see plan.md's Phase 6 "Reader data source"
- * decision). Rather than bypass the materials table the way the old direct
+ * What `/read/[slug]` and its modal counterpart actually load — every
+ * section's real structure (spine order, ids, audio tracks, passage counts/
+ * types) up front, but only *one* section's actual prose text eagerly: the
+ * one the reader is either deep-linking straight into (`eagerSectionId`,
+ * from `?section=`) or, absent that, the book's very first spine entry —
+ * this function has no way to know a returning reader's real saved resume
+ * position itself (that lives client-side, in reading-position-store's
+ * localStorage, or behind a Bearer token this server call never sees), so
+ * that's `useProgressiveText`'s job once mounted: resolve the real target,
+ * and if it isn't the one section already eagerly included here, fetch
+ * just that one before the reader can start reading, then fetch everything
+ * else in the background. `eagerSectionIds` tells the client exactly which
+ * section(s) it can trust as already-real, so it never re-fetches
+ * needlessly or (worse) mistakes "not yet loaded" for "genuinely has no
+ * content."
+ *
+ * Rather than bypass the materials table the way the old direct
  * `getBookDocument()` Storage read did, this resolves the row and calls
  * straight into the same `projectMaterial` the public
  * `GET /api/materials/{materialId}` route itself calls — no HTTP round
@@ -39,12 +80,18 @@ const FULL_CONTENT_FIELDS = [
  * read, which had no notion of "published" at all.
  */
 export async function getBookDocumentFromMaterial(
-  slug: string
-): Promise<{ book: BookDocument; materialId: string }> {
+  slug: string,
+  opts: { eagerSectionId?: string } = {}
+): Promise<{ book: BookDocument; materialId: string; eagerSectionIds: string[] }> {
   const row = await resolveMaterialRow(slug);
   if (!row) throw new MaterialNotFoundError(slug);
 
   const projected = await projectMaterial(row, { fields: FULL_CONTENT_FIELDS, fullContent: true });
+  const spine = projected.spine as string[];
+  const fullSections = projected.sections as Section[];
+  const eagerId = (opts.eagerSectionId && spine.includes(opts.eagerSectionId) ? opts.eagerSectionId : spine[0]) as
+    | string
+    | undefined;
 
   const book: BookDocument = {
     schemaVersion: 3,
@@ -64,10 +111,10 @@ export async function getBookDocumentFromMaterial(
       pageCountEstimate: (projected.pageCountEstimate as number | null) ?? 0,
     },
     narrators: projected.narrators as Narrator[],
-    sections: projected.sections as Section[],
-    spine: projected.spine as string[],
+    sections: eagerId ? stripProseExceptSection(fullSections, eagerId) : fullSections,
+    spine,
     notes: projected.notes as Note[],
   };
 
-  return { book, materialId: row.id };
+  return { book, materialId: row.id, eagerSectionIds: eagerId ? [eagerId] : [] };
 }

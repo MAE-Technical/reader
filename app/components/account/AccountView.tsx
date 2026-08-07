@@ -13,6 +13,7 @@ import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useProfile } from "@/lib/auth/useProfile";
 import { useLogout } from "@/lib/auth/useLogout";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
+import { useNotesCount } from "@/lib/auth/useNotesCount";
 import { avatarColor, avatarInitial } from "@/lib/reader/authorDisplay";
 
 function handleFor(name: string): string {
@@ -99,12 +100,12 @@ export default function AccountView() {
 
   // Real "books started" count — GET /api/auth/me/continue-reading already
   // only lists materials with a saved position (api-spec.md), so this is a
-  // straight count, no local computation needed. There's no equivalent
-  // aggregate endpoint for "notes made across every book" (api-spec.md has
-  // no "my notes" listing), so that second stat tile from the old
-  // local-only version is dropped rather than shown with fabricated data.
+  // straight count, no local computation needed.
   const { data: continueReading } = useContinueReading();
   const booksStarted = continueReading?.length;
+  // Every note (root or reply) this reader has authored across the whole
+  // library — GET /api/auth/me/notes-count, a plain aggregate query.
+  const { data: notesMade } = useNotesCount();
 
   // AccountInstallCard needs this rehydrated independently of
   // HomeInstallBanner, since a reader landing straight on /account (not via
@@ -133,10 +134,10 @@ export default function AccountView() {
               {avatarInitial(reader.pseudonym)}
             </span>
             <div>
-              <div className="font-sans text-xl font-bold text-[var(--reader-text)]">{reader.pseudonym}</div>
+              <div className="font-sans text-md font-bold text-[var(--reader-text)]">{reader.fullName}</div>
               <div className="text-[13px] font-medium text-[var(--reader-text-muted)]">
-                {handleFor(reader.pseudonym)}
-                {reader.city && reader.country ? ` · ${reader.city}, ${reader.country}` : ""}
+                {handleFor(reader.pseudonym)}<br></br>
+                {reader.city && reader.country ? `${reader.city}, ${reader.country}` : ""}
               </div>
             </div>
           </div>
@@ -146,7 +147,13 @@ export default function AccountView() {
               <div className="font-serif text-[22px] font-semibold text-[var(--reader-accent)]">
                 {booksStarted ?? "–"}
               </div>
-              <div className="mt-1 text-xs font-medium text-[var(--reader-text-subtle)]">Books started</div>
+              <div className="mt-1 text-[13px] font-semibold text-[var(--reader-text-subtle)]">Books started</div>
+            </div>
+            <div className="flex-1 rounded-md border border-[var(--reader-border)] p-3.5 text-center">
+              <div className="font-serif text-[22px] font-semibold text-[var(--reader-accent)]">
+                {notesMade ?? "–"}
+              </div>
+              <div className="mt-1 text-[13px] font-semibold text-[var(--reader-text-subtle)]">Notes</div>
             </div>
           </div>
 
@@ -192,7 +199,7 @@ export default function AccountView() {
               A curated library of Pan-African and revolutionary political thought — free to browse.
             </p>
             <p className="mt-2 mb-0 text-xs font-medium text-[var(--reader-text-muted)]">
-              Raise your consciousness.
+              Raise your Pan-African consciousness.
             </p>
             <p className="mt-1 mb-0 text-xs font-medium text-[var(--reader-text-subtle)]">Ominira · v{APP_VERSION}</p>
           </div>
@@ -225,7 +232,7 @@ export default function AccountView() {
 
           <div className="border-t border-[var(--reader-border)] pt-3.5 text-center">
             <p className="m-0 text-xs font-medium text-[var(--reader-text-muted)]">
-            Raise your consciousness.
+            Raise your Pan-African consciousness.
             </p>
             <p className="mt-1 mb-0 text-xs font-medium text-[var(--reader-text-subtle)]">Ominira · v{APP_VERSION}</p>
           </div>

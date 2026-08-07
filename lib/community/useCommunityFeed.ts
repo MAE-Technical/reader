@@ -14,7 +14,10 @@ export type CommunityFeedItem = {
    * old DUMMY_EXCERPT_PLACEHOLDER stand-in now that this feed reads from
    * the real API. */
   excerpt: string;
-  replyCount: number;
+  /** Every visible reply, hydrated and chronological — shipped inline so a
+   * card's reply count and thread are accurate immediately, no click or
+   * separate fetch required. */
+  replies: Note[];
 };
 
 /** The two sorts CommunityFeedSortToggle's UI exposes — `GET

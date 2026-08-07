@@ -59,7 +59,8 @@ export default function AppBottomNav() {
             key={href}
             href={href}
             onClick={onNavClick}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 no-underline text-xs font-bold ${
+            style={{ touchAction: "manipulation" }}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 no-underline text-xs font-semibold transition-[color,transform] duration-100 active:scale-95 active:text-brand-500 ${
               active ? "text-brand-500" : "text-[var(--reader-text-muted)]"
             }`}
           >

@@ -46,9 +46,9 @@ export default async function ReadBookModalPage({
   const { slug } = await params;
   const { section, passage, note } = await searchParams;
 
-  let book, materialId;
+  let book, materialId, eagerSectionIds;
   try {
-    ({ book, materialId } = await getBookDocumentFromMaterial(slug));
+    ({ book, materialId, eagerSectionIds } = await getBookDocumentFromMaterial(slug, { eagerSectionId: section }));
   } catch (err) {
     if (err instanceof MaterialNotFoundError) {
       notFound();
@@ -56,6 +56,13 @@ export default async function ReadBookModalPage({
     throw err;
   }
   return (
-    <ReaderModal book={book} materialId={materialId} targetSectionId={section} targetPassageId={passage} targetNoteId={note} />
+    <ReaderModal
+      book={book}
+      materialId={materialId}
+      eagerSectionIds={eagerSectionIds}
+      targetSectionId={section}
+      targetPassageId={passage}
+      targetNoteId={note}
+    />
   );
 }

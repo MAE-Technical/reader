@@ -32,6 +32,7 @@ import { useNarrationStore } from "@/stores/narration-store";
 import { buildSectionsById } from "@/lib/reader/sections";
 import { useSectionCarousel } from "@/lib/reader/useSectionCarousel";
 import { useResumeScroll } from "@/lib/reader/useResumeScroll";
+import { useProgressiveText } from "@/lib/reader/useProgressiveText";
 import { useReadingProgress } from "@/lib/reader/useReadingProgress";
 import { useTextAnnotations } from "@/lib/reader/useTextAnnotations";
 import { useBookAnnotationFeed } from "@/lib/reader/useBookAnnotationFeed";
@@ -42,6 +43,7 @@ import { sectionLabel } from "@/lib/reader/sectionHeading";
 export default function Reader({
   book,
   materialId,
+  eagerSectionIds,
   targetSectionId,
   targetPassageId,
   targetNoteId,
@@ -54,6 +56,10 @@ export default function Reader({
    * reads/writes reading position (reading-position-store, audio-store's
    * "now playing" slot) keys off this, never `book.id`. */
   materialId: string;
+  /** Which section(s) of `book.sections` already carry real prose —
+   * everything else starts with blanked-out passage text (see
+   * toBookDocument.ts), backfilled by useProgressiveText below. */
+  eagerSectionIds: string[];
   /** ?section=<id> from the book-detail page's chapter links — see
    * useResumeScroll's own doc comment for why this never touches the saved
    * resume position. */
@@ -167,7 +173,28 @@ export default function Reader({
   const contentWidth = contentWidthPxFromScale(contentWidthScale);
   const fontFamilyVar = FONT_FAMILY_VARS[fontFamily];
 
-  const sectionsById = useMemo(() => buildSectionsById(book.sections), [book.sections]);
+  // Every section's structure (spine order, ids, audio, passage counts/
+  // types) is real from the very first render — only the actual prose
+  // fills in progressively, section by section, starting from whichever
+  // one(s) `eagerSectionIds` names (see toBookDocument.ts). `sections`
+  // below is what every downstream consumer (orderedSections,
+  // passageLookup, search, the book-wide notes feed, BookContent itself)
+  // reads instead of the static `book.sections` prop, so all of them
+  // improve automatically as more of the book arrives — no separate
+  // "is this stale" bookkeeping needed anywhere else in this file.
+  const { sections, ensureTextLoaded, loadAllTextInBackground } = useProgressiveText({
+    materialId,
+    initialSections: book.sections,
+    eagerSectionIds,
+  });
+  // The same BookDocument shape every child already expects, just with the
+  // live (progressively-filling) sections tree swapped in for the static
+  // one the server sent — so BookContent/ChaptersDrawer/SearchModal need
+  // no prop-shape changes at all, only this one substitution at the call
+  // site.
+  const liveBook = useMemo<BookDocument>(() => ({ ...book, sections }), [book, sections]);
+
+  const sectionsById = useMemo(() => buildSectionsById(sections), [sections]);
 
   // book.spine is already the whole book's reading order (front matter,
   // part dividers, and chapters alike) — the same order the sidebar and
@@ -298,11 +325,52 @@ export default function Reader({
     targetPassageId,
   });
 
+  // Whichever section the reader actually lands on (server's own eager
+  // guess, or — the common "just continue reading" case — wherever
+  // useResumeScroll's client-only saved position actually points, which the
+  // server has no way to have known) needs its real prose in hand before
+  // the loader lifts — same gate as hydrated/resumeReady below, just for
+  // text instead of theme/scroll-position. Everywhere else in the book
+  // keeps filling in via loadAllTextInBackground below regardless.
+  const [textReady, setTextReady] = useState(false);
+  useEffect(() => {
+    if (!resumeReady) return;
+    let cancelled = false;
+    ensureTextLoaded(activeSectionId).then(() => {
+      if (!cancelled) setTextReady(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeReady, activeSectionId, ensureTextLoaded]);
+
+  // The "rest of the book, at once" wave — fired exactly once, right after
+  // the reader's own starting section is settled, not paced by scroll or
+  // navigation at all (see useProgressiveText's own doc comment).
+  const backgroundLoadStartedRef = useRef(false);
+  useEffect(() => {
+    if (!resumeReady || backgroundLoadStartedRef.current) return;
+    backgroundLoadStartedRef.current = true;
+    loadAllTextInBackground();
+  }, [resumeReady, loadAllTextInBackground]);
+
+  // Defensive: a reader can navigate (chapters drawer, search result,
+  // chapter-nav footer) to a section the background wave above hasn't
+  // reached yet — this fetches that one specific section immediately
+  // rather than leaving it blank until the whole-book wave gets there on
+  // its own. A no-op whenever the target's already loaded or already in
+  // flight (see ensureTextLoaded).
+  useEffect(() => {
+    if (!activeSectionId) return;
+    ensureTextLoaded(activeSectionId);
+  }, [activeSectionId, ensureTextLoaded]);
+
   // Gates the full-screen loader below — the reader isn't considered ready
   // until every piece of state it renders from (theme/font/position, via
-  // `hydrated`; scroll position, via `resumeReady`) reflects the reader's
-  // actual saved data rather than a first-paint default.
-  const isReady = hydrated && resumeReady;
+  // `hydrated`; scroll position, via `resumeReady`; the starting section's
+  // actual prose, via `textReady`) reflects the reader's actual saved data
+  // rather than a first-paint default.
+  const isReady = hydrated && resumeReady && textReady;
 
   // Plain reading (no audio) had no position-save path at all — only
   // listen-mode's own effects (now in NarrationEngine) ever called
@@ -588,7 +656,7 @@ export default function Reader({
             fallback (a bottom sheet, since there's no room to push there). */}
         <div className="w-full h-full flex overflow-hidden">
           <ChaptersDrawer
-            book={book}
+            book={liveBook}
             scrollPct={scrollPct}
             activeSectionId={activeSectionForSidebar}
             isMobile={isMobile}
@@ -691,8 +759,7 @@ export default function Reader({
             {searchOpen && (
               <div className="absolute inset-0 z-50">
                 <SearchModal
-                  book={book}
-                  currentSectionId={activeSectionForSidebar}
+                  book={liveBook}
                   onNavigate={(sectionId, passageId) => {
                     goToSection(sectionId, { animate: false });
                     requestAnimationFrame(() => {
@@ -721,7 +788,6 @@ export default function Reader({
                   quote={shareQuote}
                   author={book.metadata.author}
                   bookTitle={book.metadata.title}
-                  coverSrc={book.metadata.cover}
                   onClose={() => setShareQuote(null)}
                 />
               </div>

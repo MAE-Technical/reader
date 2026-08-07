@@ -2,6 +2,9 @@ import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import { encodeCursor, keysetBeforeFilter, type Keyset } from "@/lib/api/cursor";
 import type { MaterialSummary } from "@/lib/api/types";
+import type { Database } from "@/lib/supabase/database.types";
+
+type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
 
 /**
  * `plainto_tsquery` (what this used before) matches whole lexemes only —
@@ -72,9 +75,10 @@ async function listByEngagement(
     .eq("status", "published")
     .limit(ENGAGEMENT_POOL_SIZE);
 
+  // No search branch here: listPublishedMaterials routes any query straight
+  // to listBySearch before `sort` is even inspected (see its own comment),
+  // so this only ever runs in plain "top" browse mode.
   if (opts.category) materialsQuery = materialsQuery.contains("categories", [opts.category]);
-  const engagementTsQuery = opts.search ? toPrefixTsQuery(opts.search) : null;
-  if (engagementTsQuery) materialsQuery = materialsQuery.textSearch("search_vector", engagementTsQuery, { config: "english" });
 
   const { data: materialRows, error: materialsError } = await materialsQuery;
   if (materialsError || !materialRows || materialRows.length === 0) return { items: [], nextCursor: null };
@@ -112,6 +116,82 @@ async function listByEngagement(
   return { items: page.map(toMaterialSummary), nextCursor };
 }
 
+// Same tradeoff as ENGAGEMENT_POOL_SIZE above: rank in JS over a capped pool
+// rather than pushing the ranking into Postgres, since there's no computed
+// rank column (ts_rank needs the query text at rank time, which a plain
+// stored/indexed column can't hold) to `.order()` by at the DB level.
+const SEARCH_POOL_SIZE = 500;
+
+/**
+ * Relevance score for one matching row against the reader's (already
+ * lowercased, whitespace-split) query tokens — mirrors search_vector's own
+ * weighting (migration.sql: title A > author B > toc_titles C > description
+ * D) so a title hit always outranks a description hit, plus a bonus for a
+ * token starting the title (e.g. "capital" ranking *Capital* above a book
+ * merely mentioning it in its blurb).
+ */
+function relevanceScore(row: MaterialRow, tokens: string[]): number {
+  const title = row.title.toLowerCase();
+  const author = row.author.toLowerCase();
+  const toc = row.toc_titles.toLowerCase();
+  const description = (row.description ?? "").toLowerCase();
+
+  let score = 0;
+  for (const token of tokens) {
+    if (title.startsWith(token)) score += 100;
+    else if (title.includes(token)) score += 60;
+    if (author.includes(token)) score += 40;
+    if (toc.includes(token)) score += 20;
+    if (description.includes(token)) score += 10;
+  }
+  return score;
+}
+
+/**
+ * Search branch of `listPublishedMaterials` — used instead of the plain
+ * `created_at`-ordered path whenever a query is present, `sort` regardless
+ * (a reader who typed a search wants the best match first, not just the
+ * newest match first). Same textSearch prefix-match filter as before to
+ * narrow the pool down at the DB level; relevanceScore then orders that
+ * pool the way ts_rank would if there were a rank column to order by.
+ */
+async function listBySearch(
+  opts: ListMaterialsOptions,
+  limit: number
+): Promise<{ items: MaterialSummary[]; nextCursor: string | null }> {
+  const tsQuery = toPrefixTsQuery(opts.search ?? "");
+  if (!tsQuery) return { items: [], nextCursor: null };
+
+  let query = getSupabaseAdminClient()
+    .from("materials")
+    .select("*")
+    .eq("status", "published")
+    .textSearch("search_vector", tsQuery, { config: "english" })
+    .limit(SEARCH_POOL_SIZE);
+
+  if (opts.category) query = query.contains("categories", [opts.category]);
+
+  const { data, error } = await query;
+  if (error || !data || data.length === 0) return { items: [], nextCursor: null };
+
+  const tokens = (opts.search ?? "").toLowerCase().split(/\s+/).filter(Boolean);
+  const scored = data.map((row) => ({ row, score: relevanceScore(row, tokens) }));
+  scored.sort((a, b) => {
+    if (a.score !== b.score) return b.score - a.score;
+    // Stable tie-break for equal-relevance rows — newest first, same as
+    // listByEngagement's own tie-break.
+    if (a.row.created_at !== b.row.created_at) return a.row.created_at < b.row.created_at ? 1 : -1;
+    return a.row.id < b.row.id ? 1 : -1;
+  });
+
+  const offset = opts.cursor && "offset" in opts.cursor ? opts.cursor.offset : 0;
+  const page = scored.slice(offset, offset + limit).map((s) => s.row);
+  const nextOffset = offset + limit;
+  const nextCursor = nextOffset < scored.length ? encodeCursor<OffsetCursor>({ offset: nextOffset }) : null;
+
+  return { items: page.map(toMaterialSummary), nextCursor };
+}
+
 /**
  * Shared query behind `GET /api/materials` — factored out so a server
  * component that needs the same published-materials list (the survey
@@ -124,6 +204,11 @@ export async function listPublishedMaterials(
 ): Promise<{ items: MaterialSummary[]; nextCursor: string | null }> {
   const limit = Math.min(Math.max(opts.limit ?? 24, 1), 100);
 
+  // A query in flight always wins over `sort` — relevance-ranked (see
+  // listBySearch/relevanceScore), never just the newest or the most-
+  // engaged match. `sort` only distinguishes "recent" from "top" once
+  // there's no query narrowing things down (plain browse).
+  if (opts.search) return listBySearch(opts, limit);
   if (opts.sort === "top") return listByEngagement(opts, limit);
 
   let query = getSupabaseAdminClient()
@@ -135,12 +220,6 @@ export async function listPublishedMaterials(
     .limit(limit + 1);
 
   if (opts.category) query = query.contains("categories", [opts.category]);
-  // See toPrefixTsQuery's own doc comment for why this isn't plainto_tsquery
-  // — and app/api/materials/route.ts's comment on the remaining gap:
-  // recency, not true ts_rank relevance, since there's no computed column
-  // to order by yet.
-  const tsQuery = opts.search ? toPrefixTsQuery(opts.search) : null;
-  if (tsQuery) query = query.textSearch("search_vector", tsQuery, { config: "english" });
   if (opts.cursor && "createdAt" in opts.cursor) query = query.or(keysetBeforeFilter(opts.cursor));
 
   const { data, error } = await query;

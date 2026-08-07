@@ -3,6 +3,7 @@ import { Source_Serif_4, Manrope, Literata } from "next/font/google";
 import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
+import TouchActiveState from "./components/pwa/TouchActiveState";
 import NowPlayingBar from "./components/NowPlayingBar";
 import ThemeProvider from "./components/ThemeProvider";
 import QueryProvider from "./components/QueryProvider";
@@ -33,7 +34,7 @@ const literata = Literata({
 export const metadata: Metadata = {
   metadataBase: new URL(PLATFORM_URL),
   title: { default: PLATFORM_NAME, template: `%s — ${PLATFORM_NAME}` },
-  description: "Raise your consciousness.",
+  description: "Raise your Pan-African consciousness.",
   applicationName: PLATFORM_NAME,
   manifest: "/manifest.json",
   appleWebApp: {
@@ -89,6 +90,7 @@ export default function RootLayout({
           <ThemeProvider>{children}</ThemeProvider>
           {modal}
           <ServiceWorkerRegistration />
+          <TouchActiveState />
           <NarrationEngine />
           <NowPlayingBar />
           {/* `mode` is explicit (rather than relying on the "auto" default)

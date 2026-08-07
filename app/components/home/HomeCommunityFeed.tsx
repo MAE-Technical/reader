@@ -55,7 +55,7 @@ export default function HomeCommunityFeed() {
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="m-0 font-serif text-xl font-bold text-[var(--reader-text)]">Community notes</h1>
-          <p className="mt-1 mb-0 font-literata text-sm font-medium text-[var(--reader-text-muted)]">
+          <p className="mt-1 mb-0 font-literata text-sm text-[var(--reader-text-muted)]">
             What comrades are discussing across the library right now.
           </p>
         </div>

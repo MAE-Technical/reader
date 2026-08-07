@@ -197,20 +197,20 @@ export default function NoteComposer({
   // there's nothing to compose into right now.
   if (!isAuthenticated) {
     return (
-      <div className="rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
+      <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
         <p className="m-0 mb-2 text-xs font-medium leading-relaxed text-[var(--reader-text-muted)]">
-          Only logged in members can post.
+          Only members can contribute to the discourse.
         </p>
         <div className="flex gap-4">
           <Link
             href="/auth/login"
-            className="text-[13px] font-medium text-[var(--reader-text-muted)] no-underline hover:text-[var(--reader-text)]"
+            className="text-[12px] font-bold text-[var(--reader-text-muted)] no-underline hover:text-[var(--reader-text)]"
           >
             Log in
           </Link>
           <Link
             href="/auth/signup"
-            className="text-[13px] font-bold text-[var(--reader-accent)] no-underline hover:opacity-80"
+            className="text-[12px] font-bold text-[var(--reader-accent)] no-underline hover:opacity-80"
           >
             Join us
           </Link>

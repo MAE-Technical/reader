@@ -51,12 +51,17 @@ const EXIT_ANIMATION_MS = 220;
 export default function ReaderModal({
   book,
   materialId,
+  eagerSectionIds,
   targetSectionId,
   targetPassageId,
   targetNoteId,
 }: {
   book: BookDocument;
   materialId: string;
+  /** Which section(s) of `book` already carry real prose text, server-side
+   * — see toBookDocument.ts's own doc comment. Threaded straight through to
+   * Reader/useProgressiveText, unchanged. */
+  eagerSectionIds: string[];
   targetSectionId?: string;
   targetPassageId?: string;
   targetNoteId?: string;
@@ -137,6 +142,7 @@ export default function ReaderModal({
         <Reader
           book={book}
           materialId={materialId}
+          eagerSectionIds={eagerSectionIds}
           targetSectionId={targetSectionId}
           targetPassageId={targetPassageId}
           targetNoteId={targetNoteId}

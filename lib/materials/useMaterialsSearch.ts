@@ -13,12 +13,14 @@ type Options = {
 /**
  * Debounced `GET /api/materials?search=` — the one live, catalog-wide book
  * search every "search books" entry point reads from (SearchModal's
- * home-page mode, LibraryView's own search box), so a query is always
- * answered against the *whole* materials table, never just whatever page
- * of results happens to already be sitting in the browser. Its own hook
- * rather than TanStack Query: this is throwaway, component-lifetime-only
- * search state, not data worth caching/sharing across the app the way a
- * real query key would imply.
+ * library-wide mode, which every page that can open it — home, library —
+ * shares), so a query is always answered against the *whole* materials
+ * table, never just whatever page of results happens to already be
+ * sitting in the browser. Results come back relevance-ranked, not just
+ * recency-ranked (see lib/materials/list.ts's relevanceScore). Its own
+ * hook rather than TanStack Query: this is throwaway, component-lifetime-
+ * only search state, not data worth caching/sharing across the app the
+ * way a real query key would imply.
  */
 export function useMaterialsSearch(query: string, opts: Options = {}) {
   const { category, limit = 24 } = opts;

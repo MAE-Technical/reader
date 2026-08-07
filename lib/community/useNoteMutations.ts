@@ -8,18 +8,18 @@ import type { AnnotationRange, Note, NoteContent } from "@/lib/api/types";
 
 /** A write anywhere in one material's notes can change three different
  * cached views of the same underlying rows: this material's own note list
- * (inline markers, the book-wide feed), every sort of the global home feed
- * (a public top-level note may newly qualify, disqualify, or just reorder),
- * and — for an edit/delete/reaction on a note already open in its own
- * standalone thread view — that thread's own query. Simplest-correct is
- * invalidate-and-refetch on all three rather than hand-rolled optimistic
- * cache patches; a save/react-then-refetch round trip is a real UX
- * tradeoff against the old instant local write, acceptable for this pass
- * (see plan.md's Phase 6 note on this exact tradeoff). */
-function invalidateNoteQueries(queryClient: QueryClient, materialId: string, noteId?: string) {
+ * (inline markers, the book-wide feed), the book details page's own
+ * community-notes tab (every sort variant — see notesFeedPrefix), and every
+ * sort of the global home feed (a public top-level note may newly qualify,
+ * disqualify, or just reorder). Simplest-correct is invalidate-and-refetch
+ * on all three rather than hand-rolled optimistic cache patches, a
+ * save/react-then-refetch round trip is a real UX tradeoff against the old
+ * instant local write, acceptable for this pass (see plan.md's Phase 6 note
+ * on this exact tradeoff). */
+function invalidateNoteQueries(queryClient: QueryClient, materialId: string) {
   queryClient.invalidateQueries({ queryKey: materialKeys.notes(materialId) });
+  queryClient.invalidateQueries({ queryKey: materialKeys.notesFeedPrefix(materialId) });
   queryClient.invalidateQueries({ queryKey: communityKeys.feedPrefix });
-  if (noteId) queryClient.invalidateQueries({ queryKey: communityKeys.thread(noteId) });
 }
 
 export type CreateNoteInput = {
@@ -37,7 +37,7 @@ export function useCreateNote(materialId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateNoteInput) => apiFetch<Note>("/community/notes", { json: { materialId, ...input } }),
-    onSuccess: (note) => invalidateNoteQueries(queryClient, materialId, note.parentId ?? note.id),
+    onSuccess: () => invalidateNoteQueries(queryClient, materialId),
   });
 }
 
@@ -46,7 +46,7 @@ export function useUpdateNote(materialId: string) {
   return useMutation({
     mutationFn: ({ noteId, ...input }: { noteId: string; content?: NoteContent; visibility?: "public" | "private" }) =>
       apiFetch<Note>(`/community/notes/${noteId}`, { method: "PATCH", json: input }),
-    onSuccess: (note) => invalidateNoteQueries(queryClient, materialId, note.parentId ?? note.id),
+    onSuccess: () => invalidateNoteQueries(queryClient, materialId),
   });
 }
 
@@ -54,7 +54,7 @@ export function useDeleteNote(materialId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (noteId: string) => apiFetch<void>(`/community/notes/${noteId}`, { method: "DELETE" }),
-    onSuccess: (_data, noteId) => invalidateNoteQueries(queryClient, materialId, noteId),
+    onSuccess: () => invalidateNoteQueries(queryClient, materialId),
   });
 }
 
@@ -66,6 +66,6 @@ export function useToggleReaction(materialId: string) {
       apiFetch<{ reactedByMe: boolean; reactionCount: number }>(`/community/notes/${noteId}/reactions`, {
         method: "POST",
       }),
-    onSuccess: (_data, noteId) => invalidateNoteQueries(queryClient, materialId, noteId),
+    onSuccess: () => invalidateNoteQueries(queryClient, materialId),
   });
 }

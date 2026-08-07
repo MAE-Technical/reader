@@ -16,7 +16,7 @@ import { errorMessage } from "@/lib/api/client";
 function QuotePanel({ className = "" }: { className?: string }) {
   const router = useRouter();
   return (
-    <div className={`flex flex-col bg-sand-950 px-6 py-10 text-white shell:px-10 shell:py-14 ${className}`}>
+    <div className={`flex flex-col bg-[var(--reader-bg)] px-6 py-10 text-white shell:px-10 shell:py-14 ${className}`}>
       {/* Same BackArrow as the signup/survey wizard's own StepHeader — login
           is the one auth screen a reader can also land on directly (its own
           link on the home feed/sidebar), but it should still feel like a
@@ -25,15 +25,15 @@ function QuotePanel({ className = "" }: { className?: string }) {
           own first-step back: a direct/bookmarked visit has no in-app
           history to pop to. */}
       <div className="flex items-center gap-3">
-          <BackArrow onClick={() => router.push("/")} className="-ml-2 text-white hover:bg-sand-400" />
-          <div className="hidden shell:block">
-            <Wordmark />
-          </div>
+        <BackArrow onClick={() => router.push("/")} className="-ml-2" />
+        <div className="hidden shell:block">
+          <Wordmark />
         </div>
-      <blockquote className="mt-6 font-serif text-2xl leading-[1.25] font-medium shell:mt-10 shell:text-[28px]">
-        The decolonization of the mind is as necessary as the decolonization of the land.
+      </div>
+      <blockquote className="mt-6 font-serif text-2xl text-[var(--reader-text)] leading-[1.25] font-medium shell:mt-10 shell:text-[28px]">
+      What matters is not to know the world but to change it.
       </blockquote>
-      <div className="mt-4 text-xs font-bold tracking-[0.1em] text-brand-400">— FRANTZ FANON</div>
+      <div className="mt-4 text-xs font-bold tracking-[0.1em] text-brand-400">— Frantz Fanon, Black Skin, White Masks</div>
       <div className="flex-1" />
       <SunriseMark theme="dark" className="-mb-6 w-full max-w-xs self-center" />
     </div>
@@ -49,7 +49,7 @@ function LoginForm() {
   return (
     <div className="w-full max-w-sm">
       <h1 className="font-serif text-3xl font-semibold text-[var(--reader-text)]">Welcome back.</h1>
-      <p className="mt-2 font-literata text-[14px] font-medium text-[var(--reader-text-muted)]">Log in to continue your consciousness journey.</p>
+      <p className="mt-2 font-literata text-[14px] text-[var(--reader-text-muted)]">Log in to continue your journey of consciousness.</p>
 
       <form
         className="mt-8 space-y-5"

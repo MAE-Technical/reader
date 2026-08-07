@@ -1,8 +1,7 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { storagePublicUrl } from "@/lib/storage/config";
 import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
-import { buildPassageIndex, buildSectionsById } from "@/lib/reader/sections";
-import { sectionLabel } from "@/lib/reader/sectionHeading";
+import { resolveExcerpt } from "./excerpt";
 import { hydrateNotes, type NoteRow } from "./notes";
 import type { AnnotationRange, MaterialSummary, Note } from "@/lib/api/types";
 
@@ -12,7 +11,12 @@ export type FeedItem = {
   sectionId: string;
   label: string;
   excerpt: string;
-  replyCount: number;
+  /** Every visible reply to this note, already hydrated and chronological —
+   * shipped inline with the feed page itself so a card can show its
+   * accurate count and full thread immediately, with no separate
+   * per-note fetch and no click-to-reveal step (there's no threshold here;
+   * everything visible to the caller comes down with the page). */
+  replies: Note[];
 };
 
 /**
@@ -20,7 +24,7 @@ export type FeedItem = {
  * material/section/label/excerpt enrichment `GET /api/community/notes` and
  * `GET /api/community/notes/{noteId}` both need (api-spec.md § 3). One
  * Storage fetch per unique material referenced on the page (not per note),
- * and one reply-count query for the whole page.
+ * and one reply query for the whole page.
  */
 export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefined): Promise<FeedItem[]> {
   if (rows.length === 0) return [];
@@ -50,19 +54,34 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
   const { data: replyRows } = rows.length
     ? await admin
         .from("notes")
-        .select("parent_id")
+        .select("*")
         .in(
           "parent_id",
           rows.map((r) => r.id)
         )
+        .order("created_at", { ascending: true })
     : { data: [] };
-  const replyCounts = new Map<string, number>();
-  for (const r of replyRows ?? []) {
+  // Same visibility rule as everywhere else (visibleToFilter): a private
+  // reply is only visible to its own author. Filtered in app code rather
+  // than the query above since it's an `.in(parent_id)` already, and this
+  // keeps it identical to the single-thread route's own filter.
+  const visibleReplyRows = ((replyRows ?? []) as NoteRow[]).filter(
+    (r) => r.visibility === "public" || r.reader_id === callerId
+  );
+  const repliesByParent = new Map<string, NoteRow[]>();
+  for (const r of visibleReplyRows) {
     if (!r.parent_id) continue;
-    replyCounts.set(r.parent_id, (replyCounts.get(r.parent_id) ?? 0) + 1);
+    const list = repliesByParent.get(r.parent_id) ?? [];
+    list.push(r);
+    repliesByParent.set(r.parent_id, list);
   }
 
-  const hydratedById = new Map((await hydrateNotes(rows, callerId)).map((n) => [n.id, n]));
+  // One pseudonym/reaction batch across top-level notes AND their replies —
+  // hydrateNotes already dedupes reader ids internally, so this stays a
+  // single extra query each, not one per note.
+  const hydratedById = new Map(
+    (await hydrateNotes([...rows, ...visibleReplyRows], callerId)).map((n) => [n.id, n])
+  );
 
   const items: FeedItem[] = [];
   for (const row of rows) {
@@ -70,20 +89,11 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
     const note = hydratedById.get(row.id);
     if (!material || !note) continue;
 
-    let sectionId = "";
-    let label = "";
-    let excerpt = "";
-    const book = bookByMaterialId.get(row.material_id);
-    const range = (row.ranges as AnnotationRange[])[0];
-    if (book && range) {
-      const passageEntry = buildPassageIndex(book.sections).get(range.passageId);
-      if (passageEntry) {
-        sectionId = passageEntry.sectionId;
-        const section = buildSectionsById(book.sections).get(passageEntry.sectionId);
-        label = (section && sectionLabel(section)) ?? "";
-        excerpt = passageEntry.passage.text.slice(range.start, range.end);
-      }
-    }
+    const { sectionId, label, excerpt } = resolveExcerpt(bookByMaterialId.get(row.material_id), row.ranges as AnnotationRange[]);
+
+    const replies = (repliesByParent.get(row.id) ?? [])
+      .map((r) => hydratedById.get(r.id))
+      .filter((n): n is Note => Boolean(n));
 
     items.push({
       note,
@@ -91,7 +101,7 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
       sectionId,
       label,
       excerpt,
-      replyCount: replyCounts.get(row.id) ?? 0,
+      replies,
     });
   }
   return items;
