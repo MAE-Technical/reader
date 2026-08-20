@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/react";
 import "./globals.css";
 import ServiceWorkerRegistration from "./ServiceWorkerRegistration";
 import TouchActiveState from "./components/pwa/TouchActiveState";
+import AppSplashScreen from "./components/pwa/AppSplashScreen";
 import NowPlayingBar from "./components/NowPlayingBar";
 import ThemeProvider from "./components/ThemeProvider";
 import QueryProvider from "./components/QueryProvider";
@@ -87,7 +88,10 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col font-sans">
         <QueryProvider>
-          <ThemeProvider>{children}</ThemeProvider>
+          <ThemeProvider>
+            <AppSplashScreen />
+            {children}
+          </ThemeProvider>
           {modal}
           <ServiceWorkerRegistration />
           <TouchActiveState />

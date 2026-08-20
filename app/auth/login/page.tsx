@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import Wordmark from "@/app/components/auth/Wordmark";
-import SunriseMark from "@/app/components/auth/SunriseMark";
+import SplashArtwork from "@/app/components/pwa/SplashArtwork";
 import AuthButton from "@/app/components/auth/AuthButton";
 import BackArrow from "@/app/components/auth/BackArrow";
 import TextField from "@/app/components/auth/TextField";
@@ -34,8 +34,9 @@ function QuotePanel({ className = "" }: { className?: string }) {
       What matters is not to know the world but to change it.
       </blockquote>
       <div className="mt-4 text-xs font-bold tracking-[0.1em] text-brand-400">— Frantz Fanon, Black Skin, White Masks</div>
-      <div className="flex-1" />
-      <SunriseMark theme="dark" className="-mb-6 w-full max-w-xs self-center" />
+      <div className="pt-10 shell:pt-15">
+        <SplashArtwork showAccent={false} />
+      </div>
     </div>
   );
 }
