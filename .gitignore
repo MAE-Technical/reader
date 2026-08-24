@@ -68,3 +68,5 @@ content/books/*/audiobooks/*.mp3
 /data/voice-notes/
 
 Archive/
+
+migrations/

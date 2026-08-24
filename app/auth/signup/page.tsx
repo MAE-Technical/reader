@@ -133,21 +133,25 @@ export default function SignupPage() {
 
   return (
     <div className="min-h-screen bg-[var(--reader-bg)] px-6 py-8 shell:px-16 shell:py-16 xl:px-24">
-      <StepHeader formStepIndex={clampedStep} onBack={goBack} />
-      <div className="mx-auto w-full max-w-3xl">
+      {/* Keep the progress marker and each step's introduction in the same
+          left-hand column on desktop. The form occupies the right side,
+          mirroring login's split desktop composition instead of centring the
+          whole step independently beneath the page header. */}
+      <div className="w-full shell:grid shell:grid-cols-[38%_minmax(0,1fr)] shell:gap-x-12">
+        <div className="shell:col-span-2">
+          <StepHeader formStepIndex={clampedStep} onBack={goBack} />
+        </div>
         {current === "form-account" && (
-          <div className="grid gap-8 shell:grid-cols-[minmax(0,1fr)_360px] shell:items-start">
+          <div className="shell:contents">
             <div>
               <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
-                Let&rsquo;s get
-                <br />
-                you started.
+                Let&rsquo;s get you started, <br></br> Comrade.
               </h1>
               <p className="mt-3 font-literata text-[14px] text-[var(--reader-text-muted)]">
                 Enter your details below to create your account.
               </p>
             </div>
-            <div className="space-y-5">
+            <div className="mt-8 w-full max-w-sm space-y-5 shell:mt-0 shell:justify-self-center">
               <form
                 className="space-y-5"
                 onSubmit={(e) => {
@@ -193,11 +197,11 @@ export default function SignupPage() {
         )}
 
         {current === "form-pseudonym" && (
-          <div className="grid gap-8 shell:grid-cols-[minmax(0,1fr)_360px] shell:items-start">
+          <div className="shell:contents">
             <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
               Choose the name your comrades will know you by — this is what others see, never your full name.
             </h1>
-            <div className="space-y-5">
+            <div className="mt-8 w-full max-w-sm space-y-5 shell:mt-0 shell:justify-self-center">
               <TextField
                 label="Pseudonym"
                 placeholder="e.g. Kofi Writes"
@@ -216,7 +220,7 @@ export default function SignupPage() {
         )}
 
         {current === "form-location" && (
-          <div className="grid gap-8 shell:grid-cols-[minmax(0,1fr)_360px] shell:items-start">
+          <div className="shell:contents">
             <div>
               <h1 className="font-serif text-3xl leading-tight font-semibold text-[var(--reader-text)]">
                 Where are you reading from?
@@ -227,7 +231,7 @@ export default function SignupPage() {
                 </p>
               </div>
             </div>
-            <div className="space-y-5">
+            <div className="mt-8 w-full max-w-sm space-y-5 shell:mt-0 shell:justify-self-center">
               <TextField label="City" placeholder="e.g. Accra" value={city} onChange={(e) => setCity(e.target.value)} />
               <SelectField
                 label="Country"

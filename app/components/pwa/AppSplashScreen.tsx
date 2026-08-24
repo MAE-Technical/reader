@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 import { PLATFORM_NAME } from "@/lib/config/platform";
 import { useReaderStore } from "@/stores/reader-store";
 
-const SPLASH_DURATION_MS = 1500;
+const SPLASH_DURATION_MS = 2000;
+const SPLASH_SESSION_KEY = "ominira:pwa-launch-splash-shown";
 
 // Theme controls the visual treatment only. Add future splash quotations here
 // without changing the layout or binding a quotation to a color scheme.
@@ -21,13 +23,15 @@ const SPLASH_QUOTES = [
 ] as const;
 
 /**
- * The web-app launch screen shown while the React app becomes interactive.
- * It is mounted once in the root layout, so normal client-side navigation
- * never retriggers it. The manifest background remains the native first
+ * The branded launch screen for the installed mobile PWA's initial Home
+ * load. All ordinary routes and browser/desktop visits use their normal
+ * loading UI instead. The manifest background remains the native first
  * paint; this supplies the branded, theme-aware screen immediately after.
  */
 export default function AppSplashScreen() {
-  const [visible, setVisible] = useState(true);
+  const pathname = usePathname();
+  const [visible, setVisible] = useState(false);
+  const hasShownThisMount = useRef(false);
   // A stable initial value avoids an SSR/client hydration mismatch. The
   // animation-frame callback then selects a fresh quote for each app launch.
   const [quoteIndex, setQuoteIndex] = useState(0);
@@ -35,18 +39,45 @@ export default function AppSplashScreen() {
   const assetTheme = theme === "dark" ? "dark" : "light";
 
   useEffect(() => {
-    const timeout = window.setTimeout(() => setVisible(false), SPLASH_DURATION_MS);
-    return () => window.clearTimeout(timeout);
-  }, []);
+    const isStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as Navigator & { standalone?: boolean }).standalone === true;
+    const isMobile = window.matchMedia("(max-width: 767px)").matches;
+
+    // A Home launch is the app-start moment we brand. A detail/admin URL is
+    // regular navigation, even when opened directly from an installed app.
+    if (!isStandalone || !isMobile || pathname !== "/home") return;
+    if (hasShownThisMount.current) return;
+
+    try {
+      if (window.sessionStorage.getItem(SPLASH_SESSION_KEY)) {
+        hasShownThisMount.current = true;
+        return;
+      }
+      window.sessionStorage.setItem(SPLASH_SESSION_KEY, "true");
+    } catch {
+      // Storage can be unavailable in privacy-restricted contexts. The
+      // splash remains safe to show once for this page lifetime there.
+    }
+
+    hasShownThisMount.current = true;
+    const showTimeout = window.setTimeout(() => setVisible(true), 0);
+    const hideTimeout = window.setTimeout(() => setVisible(false), SPLASH_DURATION_MS);
+    return () => {
+      window.clearTimeout(showTimeout);
+      window.clearTimeout(hideTimeout);
+    };
+  }, [pathname]);
 
   useEffect(() => {
+    if (!visible) return;
     const frame = window.requestAnimationFrame(() => {
       setQuoteIndex(Math.floor(Math.random() * SPLASH_QUOTES.length));
     });
     return () => window.cancelAnimationFrame(frame);
-  }, []);
+  }, [visible]);
 
-  if (!visible) return null;
+  if (!visible || pathname !== "/home") return null;
 
   const dark = theme === "dark";
   const quote = SPLASH_QUOTES[quoteIndex];

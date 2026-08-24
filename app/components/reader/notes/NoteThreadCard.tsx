@@ -1,6 +1,6 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { EllipsisVertical } from "lucide-react";
 import type { Note } from "@/lib/api/types";
 import { useIsOwnNote } from "@/lib/reader/currentAuthor";
@@ -56,6 +56,10 @@ export default function NoteThreadCard({
   const own = useIsOwnNote(note);
   const isEditing = ui.editingId === note.id;
   const isMenuOpen = ui.activeMenuFor === note.id;
+  // A thread can be expanded by surrounding UI without the reader asking to
+  // compose. Track the root Reply control itself so a signed-out prompt is
+  // only shown after that deliberate action.
+  const [hasRequestedRootReply, setHasRequestedRootReply] = useState(false);
 
   return (
     <div className="flex flex-col gap-3">
@@ -112,7 +116,14 @@ export default function NoteThreadCard({
         )}
         <div className="flex items-center gap-3.5">
           <ReactionButton count={note.reactionCount} reacted={note.reactedByMe} onToggle={() => actions.toggleReaction(note.id)} />
-          <ReplyButton count={replies.length} expanded={expanded} onToggle={onToggleExpand} />
+          <ReplyButton
+            count={replies.length}
+            expanded={expanded}
+            onToggle={() => {
+              if (!expanded) setHasRequestedRootReply(true);
+              onToggleExpand();
+            }}
+          />
         </div>
       </div>
 
@@ -148,6 +159,7 @@ export default function NoteThreadCard({
                     : "Add your thoughts…"
                 }
                 startCollapsed
+                showMemberPrompt={hasRequestedRootReply || ui.activeComposerFor !== null}
                 onCancel={ui.activeComposerFor ? () => ui.toggleComposer(ui.activeComposerFor!) : undefined}
                 onSave={(content) => actions.reply(ui.activeComposerFor ?? note.id, content)}
               />

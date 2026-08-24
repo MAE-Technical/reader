@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { Search, X } from "lucide-react";
+import { BookUp, Search, X } from "lucide-react";
 import type { BookDocument } from "@/lib/book/schema";
 import { useMaterialsSearch } from "@/lib/materials/useMaterialsSearch";
 import { buildBookIndex, searchBook, type SearchResult } from "@/lib/search/bookIndex";
@@ -177,9 +177,22 @@ export default function SearchModal({ book, onNavigate, onClose }: Props) {
                     </Link>
                   ))}
               {!isSearching && query.trim() && libraryResults.length === 0 && (
-                <p className="text-sm text-[var(--reader-text-muted)] text-center py-10">
-                  No results for &ldquo;{query}&rdquo;.
-                </p>
+                <div className="py-10 text-center">
+                  <p className="m-0 text-sm text-[var(--reader-text-muted)]">
+                    No results for &ldquo;{query}&rdquo;.
+                  </p>
+                  <p className="mt-2 mb-4 text-sm text-[var(--reader-text-muted)]">
+                    Can&rsquo;t find this book? Suggest it or share a copy.
+                  </p>
+                  <Link
+                    href="/share-books"
+                    onClick={() => onClose?.()}
+                    className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-sand-25 no-underline transition-opacity hover:opacity-90"
+                  >
+                    <BookUp size={16} />
+                    Share books
+                  </Link>
+                </div>
               )}
             </>
           )}

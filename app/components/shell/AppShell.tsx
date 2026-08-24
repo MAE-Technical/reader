@@ -23,7 +23,6 @@ export default function AppShell({ children }: { children: ReactNode }) {
   const anyPlayerActive = useAudioStore((s) => s.book !== null);
   const playerHeight = useAudioStore((s) => s.playerHeight);
   const bottomNavHeight = useLayoutStore((s) => s.bottomNavHeight);
-
   return (
     <div className="min-h-screen" style={{ background: "var(--reader-bg)" }}>
       <AppSidebar />

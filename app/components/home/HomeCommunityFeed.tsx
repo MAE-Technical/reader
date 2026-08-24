@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import AppHeader from "@/app/components/shell/AppHeader";
-import SearchModal from "@/app/components/SearchModal";
+import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import { useCommunityFeed, type CommunityFeedSort } from "@/lib/community/useCommunityFeed";
-import ContinueReadingRail from "./ContinueReadingRail";
 import TopBooksRail from "./TopBooksRail";
 import CommunityFeedSortToggle from "./CommunityFeedSortToggle";
 import CommunityNoteCard from "./CommunityNoteCard";
@@ -32,32 +30,23 @@ function CommunityNoteCardSkeleton() {
  * then a page heading + a filter control, then the content). */
 export default function HomeCommunityFeed() {
   const [sort, setSort] = useState<CommunityFeedSort>("recent");
-  const [searchOpen, setSearchOpen] = useState(false);
   const { data, isLoading } = useCommunityFeed(sort);
   const items = data?.items ?? [];
 
   return (
-    <div className="pb-10">
-      <AppHeader onSearchFocus={() => setSearchOpen(true)} />
-
-      {searchOpen && (
-        <div className="fixed inset-0 z-50">
-          <SearchModal onClose={() => setSearchOpen(false)} />
-        </div>
-      )}
+    <SearchableAppPage>
 
       <HomeAuthBanner />
       <HomeInstallBanner />
 
-      <ContinueReadingRail />
       <TopBooksRail />
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>
           <h1 className="m-0 font-serif text-xl font-bold text-[var(--reader-text)]">Community notes</h1>
-          <p className="mt-1 mb-0 font-literata text-sm text-[var(--reader-text-muted)]">
+          {/* <p className="mt-1 mb-0 font-literata text-sm text-[var(--reader-text-muted)]">
             What comrades are discussing across the library right now.
-          </p>
+          </p> */}
         </div>
         {items.length > 0 && <CommunityFeedSortToggle mode={sort} onChange={setSort} />}
       </div>
@@ -96,6 +85,6 @@ export default function HomeCommunityFeed() {
           ))}
         </div>
       )}
-    </div>
+    </SearchableAppPage>
   );
 }

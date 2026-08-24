@@ -34,6 +34,7 @@ export default function NoteComposer({
   initialText,
   placeholder = "Add a note…",
   startCollapsed = false,
+  showMemberPrompt = false,
   onCancel,
   excludeRef,
   onSave,
@@ -44,6 +45,10 @@ export default function NoteComposer({
    * idle pill. False for editing an existing entry in place, which starts
    * already expanded with `initialText` filled in. */
   startCollapsed?: boolean;
+  /** Show the signed-out membership prompt for an explicitly requested
+   * reply. General compose surfaces stay out of the way for signed-out
+   * readers instead of repeating the prompt throughout the panel. */
+  showMemberPrompt?: boolean;
   /** Present for a reply composer (closes/unmounts it) and for editing
    * (steps back to the saved view). Absent for the root composer, whose
    * Cancel instead collapses itself back to the idle pill in place — it's
@@ -184,33 +189,26 @@ export default function NoteComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- handleCancel/onCancel close over stable identity per mount for this component's purposes; re-subscribing on hasUnsavedProgress/excludeRef is sufficient.
   }, [hasUnsavedProgress, excludeRef]);
 
-  // Signed-out readers never reach the actual pill/textarea at all — every
-  // mount of this composer (root, reply, or edit) is gated the same way,
-  // rather than each call site separately guessing whether to render one.
-  // This replaces the old behavior of letting the reader type a whole
-  // note only to have the save itself (useRequireAuth, deeper in
-  // useThreadInteraction/NotesSidebar) silently redirect them to /auth/login
-  // — an abrupt, easy-to-miss context switch away from whatever passage
-  // they were just reading. Same "Log in"/"Join us" copy and links as
-  // AppSidebar's own signed-out promo card, just without that one's
-  // dismiss button: this isn't a promo to dismiss, it's the actual reason
-  // there's nothing to compose into right now.
+  // A membership prompt is feedback for a deliberate attempt to reply, not
+  // persistent panel copy. Keeping it opt-in prevents repeated prompts when
+  // a panel contains several otherwise-idle compose surfaces.
   if (!isAuthenticated) {
+    if (!showMemberPrompt) return null;
     return (
       <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
-        <p className="m-0 mb-2 text-xs font-medium leading-relaxed text-[var(--reader-text-muted)]">
+        <p className="m-0 mb-2 text-[13px] font-medium leading-relaxed text-[var(--reader-text-muted)]">
           Only members can contribute to the discourse.
         </p>
         <div className="flex gap-4">
           <Link
             href="/auth/login"
-            className="text-[12px] font-bold text-[var(--reader-text-muted)] no-underline hover:text-[var(--reader-text)]"
+            className="text-[13px] font-bold text-[var(--reader-text-muted)] no-underline hover:text-[var(--reader-text)]"
           >
             Log in
           </Link>
           <Link
             href="/auth/signup"
-            className="text-[12px] font-bold text-[var(--reader-accent)] no-underline hover:opacity-80"
+            className="text-[13px] font-bold text-[var(--reader-accent)] no-underline hover:opacity-80"
           >
             Join us
           </Link>

@@ -95,6 +95,40 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["materials"]["Insert"]>;
         Relationships: [];
       };
+      pending_materials: {
+        Row: {
+          id: string;
+          submission_type: "upload" | "suggestion" | "external_url";
+          title: string;
+          author: string | null;
+          reader_id: string | null;
+          source_url: string | null;
+          storage_path: string | null;
+          original_filename: string | null;
+          mime_type: string | null;
+          file_size_bytes: number | null;
+          status: "pending" | "approved";
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          submission_type: "upload" | "suggestion" | "external_url";
+          title: string;
+          author?: string | null;
+          reader_id?: string | null;
+          source_url?: string | null;
+          storage_path?: string | null;
+          original_filename?: string | null;
+          mime_type?: string | null;
+          file_size_bytes?: number | null;
+          status?: "pending" | "approved";
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["pending_materials"]["Insert"]>;
+        Relationships: [];
+      };
       highlights: {
         Row: {
           id: string;

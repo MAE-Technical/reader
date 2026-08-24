@@ -1,10 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import AppHeader from "./AppHeader";
+import Link from "next/link";
 import CategoryPills, { DEFAULT_CATEGORIES } from "./CategoryPills";
 import BookCard from "./BookCard";
-import SearchModal from "@/app/components/SearchModal";
+import SearchableAppPage from "./SearchableAppPage";
 import type { MaterialSummary } from "@/lib/api/types";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
 import { apiFetch } from "@/lib/api/client";
@@ -21,7 +21,6 @@ export default function LibraryView({ materials, initialNextCursor }: Props) {
   const [items, setItems] = useState(materials);
   const [nextCursor, setNextCursor] = useState(initialNextCursor);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [searchOpen, setSearchOpen] = useState(false);
   const [category, setCategory] = useState<string>(DEFAULT_CATEGORIES[0]);
 
   // Populates reading-position-store's local mirror (progress bars on every
@@ -56,21 +55,14 @@ export default function LibraryView({ materials, initialNextCursor }: Props) {
   }
 
   return (
-    <div className="pb-10">
-      {/* Same AppHeader/SearchModal pairing as the home page (HomeCommunityFeed)
-          — focusing the field opens the modal rather than filtering this
-          page's own grid in place, so a typed query always shows results
-          the same way (and with the same relevance order) everywhere in
-          the app it can be entered. */}
-      <AppHeader onSearchFocus={() => setSearchOpen(true)} />
+    <SearchableAppPage>
 
-      {searchOpen && (
-        <div className="fixed inset-0 z-50">
-          <SearchModal onClose={() => setSearchOpen(false)} />
-        </div>
-      )}
-
-      <h1 className="mt-1 mb-4 font-serif text-2xl font-semibold text-[var(--reader-text)]">Library</h1>
+      <div className="mt-1 mb-7">
+        <h1 className="m-0 font-serif text-2xl font-bold text-[var(--reader-text)]">Library</h1>
+        {/* <p className="mt-1.5 mb-0 text-[14px] text-[var(--reader-text-muted)]">
+          Have books to share with comrades? <Link href="/share-books" className="font-semibold text-[var(--reader-accent)]">Share books</Link>.
+        </p> */}
+      </div>
 
       <div className="mb-10">
         <CategoryPills selected={category} onSelect={setCategory} />
@@ -102,6 +94,6 @@ export default function LibraryView({ materials, initialNextCursor }: Props) {
           )}
         </>
       )}
-    </div>
+    </SearchableAppPage>
   );
 }

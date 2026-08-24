@@ -6,11 +6,13 @@ import { usePathname, useRouter } from "next/navigation";
 import * as Popover from "@radix-ui/react-popover";
 import { LogOut, MoreVertical, X } from "lucide-react";
 import { NAV_ITEMS } from "./navItems";
+import BrandMark from "./BrandMark";
 import { useReaderOverlayStore } from "@/stores/reader-overlay-store";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useProfile } from "@/lib/auth/useProfile";
 import { useLogout } from "@/lib/auth/useLogout";
 import { avatarColor, avatarInitial } from "@/lib/reader/authorDisplay";
+import SidebarContinueReading from "@/app/components/books/SidebarContinueReading";
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -60,15 +62,13 @@ export default function AppSidebar() {
       <Link
         href="/home"
         onClick={onNavClick}
-        className="flex-none flex items-center gap-2.5 px-4 pt-[18px] pb-3.5 no-underline"
+        aria-label="Ominira home"
+        className="flex-none px-4 pt-[18px] pb-3.5 no-underline"
       >
-        <img src="/icons/icon-192.png" alt="" className="h-[30px] w-[30px] flex-none rounded-xs object-cover object-[center_20%]" />
-        <span className="text-[15px] font-bold uppercase tracking-[0.08em] text-[var(--reader-accent)]">
-          Ominira
-        </span>
+        <BrandMark />
       </Link>
 
-      <nav className="flex-1 min-h-0 overflow-y-auto px-2.5 pt-2 flex flex-col gap-1">
+      <nav className="flex-1 min-h-0 overflow-y-auto px-2.5 pt-2 flex flex-col gap-2">
         {items.map(({ href, label, icon: Icon }) => {
           const active = isActive(pathname, href);
           return (
@@ -87,6 +87,8 @@ export default function AppSidebar() {
             </Link>
           );
         })}
+
+        {isAuthenticated && <SidebarContinueReading />}
 
         {!isAuthenticated && !promoDismissed && (
           <div className="mt-3.5 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">

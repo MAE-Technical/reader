@@ -1,5 +1,17 @@
-const CACHE_NAME = "ominira-shell-v1";
-const APP_SHELL = ["/", "/manifest.json", "/icons/icon-192.png", "/icons/icon-512.png"];
+const CACHE_NAME = "ominira-shell-v2";
+// Launch artwork is part of the PWA shell, not page content: it needs to be
+// available before a network request can complete on a cold app start. Cache
+// both themes because the reader preference is restored client-side.
+const APP_SHELL = [
+  "/",
+  "/manifest.json",
+  "/icons/icon-192.png",
+  "/icons/icon-512.png",
+  "/images/splash/light-accent.svg",
+  "/images/splash/light-illustration.svg",
+  "/images/splash/dark-accent.svg",
+  "/images/splash/dark-illustration.svg",
+];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(

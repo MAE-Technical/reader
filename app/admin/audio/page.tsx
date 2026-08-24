@@ -29,7 +29,7 @@ export default async function AdminAudioPage() {
   const partialCount = rows.filter((r) => r.status === "partial").length;
 
   return (
-    <main className="max-w-3xl mx-auto px-6 py-10">
+    <>
       <div className="flex items-end justify-between gap-4 mb-6">
         <div>
           <h1 className="text-2xl font-semibold text-[var(--reader-text)] tracking-tight mb-1">
@@ -54,6 +54,6 @@ export default async function AdminAudioPage() {
         </div>
       </div>
       <AudioAdminTable books={rows} />
-    </main>
+    </>
   );
 }

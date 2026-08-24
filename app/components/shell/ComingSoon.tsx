@@ -1,5 +1,3 @@
-import AppHeader from "./AppHeader";
-
 // Shared placeholder for shell pages that aren't designed yet (Home, Notes,
 // Profile) — exists so the nav has somewhere real to go rather than a dead
 // link, without inventing a design for any of them ahead of that work.
@@ -12,3 +10,4 @@ export default function ComingSoon({ title }: { title: string }) {
     </div>
   );
 }
+import AppHeader from "./AppHeader";
