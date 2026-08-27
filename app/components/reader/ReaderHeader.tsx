@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, BookOpen, MessageCircle, Moon, Play, Search, Sun, X } from "lucide-react";
 import Tooltip from "./Tooltip";
 import type { Theme } from "@/stores/reader-store";
@@ -14,7 +14,7 @@ type Props = {
    * into a plain close button, since "back" would otherwise describe a
    * page navigation that isn't actually happening here (see Reader.tsx's
    * own doc comment on this prop). Absent on the standalone /read/[slug]
-   * route, which keeps the existing Link. Deliberately the *only* thing
+   * route, which uses browser history. Deliberately the *only* thing
    * that picks X vs. the back arrow — same on mobile and desktop, an
    * overlay is always X and a standalone page is always back, regardless
    * of viewport. */
@@ -79,6 +79,7 @@ export default function ReaderHeader({
   onToggleTheme,
   scrollPct,
 }: Props) {
+  const router = useRouter();
   const pct = Math.round(scrollPct * 100);
 
   return (
@@ -103,14 +104,14 @@ export default function ReaderHeader({
           </button>
         </Tooltip>
       ) : (
-        <Tooltip label="Back to home" side="bottom" align="start">
-          <Link
-            href={`/`}
-            aria-label="Back to home"
+        <Tooltip label="Back" side="bottom" align="start">
+          <button
+            onClick={() => router.back()}
+            aria-label="Back"
             className="w-9 h-9 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] flex items-center justify-center text-[var(--reader-text)] no-underline flex-none"
           >
             <ArrowLeft size={18} />
-          </Link>
+          </button>
         </Tooltip>
       )}
 

@@ -4,6 +4,8 @@ import Link from "next/link";
 import { ArrowUpRight } from "lucide-react";
 import { rangesKey } from "@/stores/library-store";
 import type { CommunityFeedItem } from "@/lib/community/useCommunityFeed";
+import BookCover from "@/app/components/shared/BookCover";
+import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 
 /** A community note's book context — cover, title, author, and (when
  * known) the section the highlight is drawn from, plus a deep link into
@@ -39,11 +41,10 @@ export default function NoteBookHeader({ item }: { item: CommunityFeedItem }) {
       aria-label={`Open in ${item.material.title}`}
       className="group flex cursor-pointer items-center gap-2.5 no-underline"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={item.material.cover ?? ""}
+      <BookCover
+        src={resolveBookThumbnailSrc(item.material)}
         alt={item.material.title}
-        className="h-12 w-10 flex-none rounded-sm border border-[var(--reader-border)] object-cover"
+        className="h-12 w-10 flex-none rounded-sm border border-[var(--reader-border)]"
       />
       <div className="min-w-0 flex-1">
         <div className="truncate text-[13.5px] font-serif leading-[1.6] font-semibold text-[var(--reader-text)]">

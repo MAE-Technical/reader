@@ -1,5 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import type { Database } from "@/lib/supabase/database.types";
+import { MATERIAL_DETAIL_COLUMNS } from "./columns";
 
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
 
@@ -20,9 +21,14 @@ export async function resolveMaterialRow(
 ): Promise<MaterialRow | null> {
   const { publishedOnly = true } = opts;
   const column = UUID_RE.test(materialId) ? "id" : "slug";
-  let query = getSupabaseAdminClient().from("materials").select("*").eq(column, materialId);
+  let query = getSupabaseAdminClient()
+    .from("materials")
+    .select(MATERIAL_DETAIL_COLUMNS)
+    .eq(column, materialId);
   if (publishedOnly) query = query.eq("status", "published");
   const { data, error } = await query.maybeSingle();
   if (error || !data) return null;
-  return data;
+  // The resolver intentionally projects out the retired TOC/spine payloads;
+  // callers that need navigation use the Storage manifest instead.
+  return data as unknown as MaterialRow;
 }

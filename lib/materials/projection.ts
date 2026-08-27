@@ -2,6 +2,7 @@ import { storagePublicUrl } from "@/lib/storage/config";
 import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
 import { buildSectionsById } from "@/lib/reader/sections";
 import type { Database } from "@/lib/supabase/database.types";
+import { fetchMaterialManifest } from "./manifest";
 
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
 
@@ -13,11 +14,16 @@ const DB_ONLY_FIELDS = new Set([
   "author",
   "description",
   "cover",
+  "googleCoverUrl",
+  "googleThumbnailUrl",
+  "googleDescription",
+  "googleMetaData",
   "language",
   "publishedYear",
   "pageCountEstimate",
   "narratorCount",
   "spine",
+  "toc_titles",
 ]);
 const STORAGE_FIELDS = new Set(["narrators", "notes"]);
 
@@ -70,6 +76,9 @@ export async function projectMaterial(
   const needsSectionContent = fields.has("sections") && (!!opts.sectionId || !!opts.fullContent);
   const needsStorage = [...fields].some((f) => STORAGE_FIELDS.has(f)) || needsSectionContent;
   const book = needsStorage ? await fetchBookFromStorage(row.json_storage_path) : null;
+  const manifest = fields.has("spine") || (fields.has("sections") && !needsSectionContent)
+    ? await fetchMaterialManifest(row.slug)
+    : null;
 
   for (const field of fields) {
     if (DB_ONLY_FIELDS.has(field)) {
@@ -86,6 +95,18 @@ export async function projectMaterial(
         case "cover":
           result.cover = row.cover_url;
           break;
+        case "googleCoverUrl":
+          result.googleCoverUrl = row.google_cover_url;
+          break;
+        case "googleThumbnailUrl":
+          result.googleThumbnailUrl = row.google_thumbnail_url;
+          break;
+        case "googleDescription":
+          result.googleDescription = row.google_description;
+          break;
+        case "googleMetaData":
+          result.googleMetaData = row.google_meta_data;
+          break;
         case "language":
           result.language = row.language;
           break;
@@ -99,7 +120,10 @@ export async function projectMaterial(
           result.narratorCount = row.narrator_count;
           break;
         case "spine":
-          result.spine = row.spine;
+          result.spine = manifest?.spine ?? row.spine;
+          break;
+        case "toc_titles":
+          result.toc_titles = row.toc_titles;
           break;
       }
       continue;
@@ -115,7 +139,7 @@ export async function projectMaterial(
       if (!opts.sectionId) {
         // Pure DB path — the pruned TocSection[] populated at publish time,
         // no passage content, no Storage round trip.
-        result.sections = row.toc;
+        result.sections = manifest?.toc ?? row.toc;
         continue;
       }
       // sectionId set — always a Storage read for that one section's real

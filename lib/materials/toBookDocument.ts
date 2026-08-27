@@ -1,6 +1,7 @@
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { projectMaterial } from "@/lib/materials/projection";
 import type { BookDocument, Narrator, Note, Passage, Section } from "@/lib/book/schema";
+import { fetchMaterialManifest } from "./manifest";
 
 export class MaterialNotFoundError extends Error {
   constructor(materialId: string) {
@@ -17,7 +18,6 @@ const FULL_CONTENT_FIELDS = [
   "language",
   "publishedYear",
   "pageCountEstimate",
-  "spine",
   "narrators",
   "notes",
   "sections",
@@ -86,8 +86,11 @@ export async function getBookDocumentFromMaterial(
   const row = await resolveMaterialRow(slug);
   if (!row) throw new MaterialNotFoundError(slug);
 
-  const projected = await projectMaterial(row, { fields: FULL_CONTENT_FIELDS, fullContent: true });
-  const spine = projected.spine as string[];
+  const [projected, manifest] = await Promise.all([
+    projectMaterial(row, { fields: FULL_CONTENT_FIELDS, fullContent: true }),
+    fetchMaterialManifest(row.slug),
+  ]);
+  const spine = manifest.spine;
   const fullSections = projected.sections as Section[];
   const eagerId = (opts.eagerSectionId && spine.includes(opts.eagerSectionId) ? opts.eagerSectionId : spine[0]) as
     | string

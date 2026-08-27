@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { listPublishedMaterials } from "@/lib/materials/list";
 import SurveyWizard from "@/app/components/auth/SurveyWizard";
+import { getCategories } from "@/lib/categories/config";
 
 export const metadata: Metadata = {
   title: "Tell us about you",
@@ -15,6 +16,6 @@ export const metadata: Metadata = {
  * `POST /api/auth/survey`'s `readMaterialIds` is actually keyed by.
  */
 export default async function SurveyPage() {
-  const { items } = await listPublishedMaterials({ limit: 50 });
-  return <SurveyWizard materials={items} />;
+  const [categories, { items }] = await Promise.all([getCategories(), listPublishedMaterials({ limit: 50 })]);
+  return <SurveyWizard materials={items} categories={categories} />;
 }

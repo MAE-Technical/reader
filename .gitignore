@@ -70,3 +70,5 @@ content/books/*/audiobooks/*.mp3
 Archive/
 
 migrations/
+
+scripts/

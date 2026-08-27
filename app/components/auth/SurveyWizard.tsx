@@ -7,29 +7,19 @@ import AuthButton from "./AuthButton";
 import BackArrow from "./BackArrow";
 import PillGroup from "@/app/components/PillGroup";
 import type { MaterialSummary } from "@/lib/api/types";
+import BookCover from "@/app/components/shared/BookCover";
+import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 import { useSurveySubmit } from "@/lib/auth/useSurveySubmit";
 import { onboardingRoute } from "@/lib/auth/onboardingRoute";
 
 const TOTAL_STEPS = 2;
 
-const INTERESTS = [
-  { value: "pan-africanism", label: "Pan-Africanism" },
-  { value: "marxism", label: "Marxism" },
-  { value: "feminism", label: "Feminism" },
-  { value: "decolonial-theory", label: "Decolonial Theory" },
-  { value: "black-liberation", label: "Black Liberation" },
-  { value: "political-economy", label: "Political Economy" },
-  { value: "african-history", label: "African History" },
-  { value: "psychology", label: "Psychology" },
-  { value: "literature-culture", label: "Literature & Culture" },
-  { value: "philosophy", label: "Philosophy" },
-  { value: "science-technology", label: "Science & Technology" },
-  { value: "education", label: "Education" },
-  { value: "environment-climate", label: "Environment & Climate" },
-  { value: "spirituality", label: "Spirituality" },
-];
+type Props = {
+  materials: MaterialSummary[];
+  categories: string[];
+};
 
-export default function SurveyWizard({ materials }: { materials: MaterialSummary[] }) {
+export default function SurveyWizard({ materials, categories }: Props) {
   const router = useRouter();
   const [step, setStep] = useState(0);
   const [readMaterialIds, setReadMaterialIds] = useState<Set<string>>(new Set());
@@ -104,7 +94,12 @@ export default function SurveyWizard({ materials }: { materials: MaterialSummary
                         checked ? "border-brand-400 bg-brand-50/40" : "border-sand-300"
                       }`}
                     >
-                      <img src={material.cover ?? ""} alt="" className="h-14 w-10 flex-none rounded-sm object-cover" />
+                      <BookCover
+                        src={resolveBookThumbnailSrc(material)}
+                        alt=""
+                        className="h-14 w-10 flex-none rounded-sm"
+                        imageClassName="object-cover"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="truncate font-serif text-[15px] font-semibold text-[var(--reader-text)]">
                           {material.title}
@@ -138,7 +133,7 @@ export default function SurveyWizard({ materials }: { materials: MaterialSummary
             </p>
 
             <div className="mt-6">
-              <PillGroup options={INTERESTS} selected={Array.from(interests)} onSelect={toggleInterest} />
+              <PillGroup options={categories.map((category) => ({ value: category, label: category }))} selected={Array.from(interests)} onSelect={toggleInterest} />
             </div>
 
             {survey.error && (

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
+import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 import { getAuthenticatedReader } from "@/lib/auth/session";
 import { forbidden, notFound, unauthorized, validationError } from "@/lib/api/errors";
 import { contentToColumns, hydrateNotes, type NoteRow } from "@/lib/community/notes";
@@ -16,7 +17,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ note
   // own author — 404, not 403, so existence of a private note is never leaked.
   if (!row || (row.visibility !== "public" && row.reader_id !== reader?.readerId)) return notFound();
 
-  const { data: material } = await admin.from("materials").select("*").eq("id", row.material_id).maybeSingle();
+  const { data: material } = await admin.from("materials").select(`${MATERIAL_SUMMARY_COLUMNS}, json_storage_path`).eq("id", row.material_id).maybeSingle();
   if (!material) return notFound();
 
   const { data: replyRows } = await admin.from("notes").select("*").eq("parent_id", noteId).order("created_at", { ascending: true });
@@ -27,7 +28,16 @@ export async function GET(request: Request, { params }: { params: Promise<{ note
   return NextResponse.json({
     note: hydratedById.get(row.id)!,
     replies: visibleReplies.map((r) => hydratedById.get(r.id)!),
-    material: { id: material.id, slug: material.slug, title: material.title, author: material.author, cover: material.cover_url },
+    material: {
+      id: material.id,
+      slug: material.slug,
+      title: material.title,
+      author: material.author,
+      cover: material.cover_url,
+      thumbnail: material.thumbnail_url,
+      googleCoverUrl: material.google_cover_url,
+      googleThumbnailUrl: material.google_thumbnail_url,
+    },
   });
 }
 

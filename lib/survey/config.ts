@@ -1,13 +1,15 @@
+import "server-only";
+
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import type { MaterialSummary } from "@/lib/api/types";
+import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 
 const CONFIG_PATH = path.join(process.cwd(), "config", "survey.json");
 
-export type SurveyCategory = { value: string; label: string };
-type RawSurveyConfig = { categories: SurveyCategory[]; readMaterialIds: string[] };
+type RawSurveyConfig = { readMaterialIds: string[] };
 
 let cached: RawSurveyConfig | undefined;
 
@@ -16,13 +18,6 @@ async function loadRawConfig(): Promise<RawSurveyConfig> {
     cached = JSON.parse(await readFile(CONFIG_PATH, "utf-8")) as RawSurveyConfig;
   }
   return cached;
-}
-
-/** The signup survey's "what are you interested in?" pills — same
- * `{value, label}` shape SurveyWizard.tsx's `INTERESTS` already uses,
- * `value` a slug matching `readers.interests`' entries. */
-export async function getSurveyCategories(): Promise<SurveyCategory[]> {
-  return (await loadRawConfig()).categories;
 }
 
 /**
@@ -37,7 +32,7 @@ export async function getSurveyCategories(): Promise<SurveyCategory[]> {
 export async function getSurveyBooks(): Promise<MaterialSummary[]> {
   const { readMaterialIds } = await loadRawConfig();
   if (readMaterialIds.length === 0) return [];
-  const { data } = await getSupabaseAdminClient().from("materials").select("*").in("id", readMaterialIds);
+  const { data } = await getSupabaseAdminClient().from("materials").select(MATERIAL_SUMMARY_COLUMNS).in("id", readMaterialIds);
   // Preserve the config's own ordering rather than whatever order the DB
   // happens to return — the JSON is the curation, the DB is just the lookup.
   const bySummaryId = new Map((data ?? []).map((row) => [row.id, toMaterialSummary(row)]));

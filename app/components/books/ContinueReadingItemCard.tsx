@@ -1,5 +1,7 @@
 import ReaderLink from "@/app/components/ReaderLink";
 import type { ContinueReadingItem } from "@/lib/auth/useContinueReading";
+import BookCover from "@/app/components/shared/BookCover";
+import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 
 type Props = {
   item: ContinueReadingItem;
@@ -24,15 +26,14 @@ export default function ContinueReadingItemCard({ item, variant }: Props) {
             : "flex gap-3 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3 no-underline"
       }
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={material.cover ?? ""}
+      <BookCover
+        src={resolveBookThumbnailSrc(material)}
         alt={material.title}
         className={
           isRailStyle
-            ? "h-20 w-17 flex-none rounded-sm border border-[var(--reader-border)] object-cover"
+            ? "h-20 w-17 flex-none rounded-sm border border-[var(--reader-border)]"
             : isSidebar
-              ? "h-14 w-10 flex-none rounded-sm border border-[var(--reader-border)] object-cover"
+              ? "h-14 w-10 flex-none rounded-sm border border-[var(--reader-border)]"
               : ""
         }
       />

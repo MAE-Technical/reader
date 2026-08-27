@@ -1,6 +1,7 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import type { MaterialSummary } from "@/lib/api/types";
+import { MATERIAL_SUMMARY_COLUMNS } from "./columns";
 
 // Plenty for today's catalog size — pulling this many rows client-side and
 // shuffling in memory is simpler than a DB-side TABLESAMPLE/`order by
@@ -20,7 +21,7 @@ const SAMPLE_POOL_SIZE = 200;
 export async function getRandomPublishedMaterials(count = 5): Promise<MaterialSummary[]> {
   const { data, error } = await getSupabaseAdminClient()
     .from("materials")
-    .select("*")
+    .select(MATERIAL_SUMMARY_COLUMNS)
     .eq("status", "published")
     .limit(SAMPLE_POOL_SIZE);
 

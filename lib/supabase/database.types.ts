@@ -59,6 +59,11 @@ export type Database = {
           author: string;
           description: string | null;
           cover_url: string | null;
+          thumbnail_url: string | null;
+          google_thumbnail_url: string | null;
+          google_cover_url: string | null;
+          google_description: string | null;
+          google_meta_data: Json | null;
           language: string | null;
           published_year: number | null;
           page_count_estimate: number | null;
@@ -79,6 +84,11 @@ export type Database = {
           author: string;
           description?: string | null;
           cover_url?: string | null;
+          thumbnail_url?: string | null;
+          google_thumbnail_url?: string | null;
+          google_cover_url?: string | null;
+          google_description?: string | null;
+          google_meta_data?: Json | null;
           language?: string | null;
           published_year?: number | null;
           page_count_estimate?: number | null;
@@ -93,40 +103,6 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["materials"]["Insert"]>;
-        Relationships: [];
-      };
-      pending_materials: {
-        Row: {
-          id: string;
-          submission_type: "upload" | "suggestion" | "external_url";
-          title: string;
-          author: string | null;
-          reader_id: string | null;
-          source_url: string | null;
-          storage_path: string | null;
-          original_filename: string | null;
-          mime_type: string | null;
-          file_size_bytes: number | null;
-          status: "pending" | "approved";
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          submission_type: "upload" | "suggestion" | "external_url";
-          title: string;
-          author?: string | null;
-          reader_id?: string | null;
-          source_url?: string | null;
-          storage_path?: string | null;
-          original_filename?: string | null;
-          mime_type?: string | null;
-          file_size_bytes?: number | null;
-          status?: "pending" | "approved";
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: Partial<Database["public"]["Tables"]["pending_materials"]["Insert"]>;
         Relationships: [];
       };
       highlights: {

@@ -1,8 +1,15 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { toMaterialSummary } from "@/lib/materials/summary";
-import { encodeCursor, keysetBeforeFilter, type Keyset } from "@/lib/api/cursor";
+import {
+  type AlphabeticalKeyset,
+  encodeCursor,
+  keysetAfterAlphabeticalFilter,
+  keysetBeforeFilter,
+  type Keyset,
+} from "@/lib/api/cursor";
 import type { MaterialSummary } from "@/lib/api/types";
 import type { Database } from "@/lib/supabase/database.types";
+import { MATERIAL_SUMMARY_COLUMNS } from "./columns";
 
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
 
@@ -23,16 +30,15 @@ type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
  * websearch_to_tsquery instead; omitting it is the one way to reach
  * to_tsquery, which is the only variant that understands `:*` at all.
  */
-function toPrefixTsQuery(input: string): string | null {
+function toSearchTokens(input: string): string[] {
   const tokens = input
     .split(/\s+/)
     .map((t) => t.replace(/[^a-zA-Z0-9]/g, ""))
     .filter(Boolean);
-  if (tokens.length === 0) return null;
-  return tokens.map((t) => `${t}:*`).join(" & ");
+  return tokens;
 }
 
-export type MaterialsSort = "recent" | "top";
+export type MaterialsSort = "alphabetical" | "recent" | "top";
 
 /** Offset into the engagement-ranked pool `listByEngagement` builds below —
  * a distinct shape from `recent`'s {createdAt, id} keyset, since `top`'s
@@ -43,15 +49,19 @@ export type MaterialsSort = "recent" | "top";
 export type OffsetCursor = { offset: number };
 
 export type ListMaterialsOptions = {
+  /** Include unpublished (database `draft`) materials in addition to the
+   * published catalog. Public callers keep the published-only default. */
+  includeUnpublished?: boolean;
   category?: string | null;
   search?: string | null;
   limit?: number;
-  /** "recent" (default): `createdAt` descending — every existing caller's
-   * behavior, unchanged. "top": ranked by each material's own community
-   * engagement (its public notes, each worth 1 + however many reactions
-   * it's gotten), highest first — the library page's default view. */
+  /** "alphabetical" (library default): `title` ascending, then `id`.
+   * "recent": `createdAt` descending — every existing caller's behavior,
+   * unchanged. "top": ranked by each material's own community engagement
+   * (its public notes, each worth 1 + however many reactions it's gotten),
+   * highest first. */
   sort?: MaterialsSort;
-  cursor?: Keyset | OffsetCursor | null;
+  cursor?: Keyset | AlphabeticalKeyset | OffsetCursor | null;
 };
 
 // Cap on how many published rows `top` pulls into memory to rank — plenty
@@ -63,22 +73,34 @@ export type ListMaterialsOptions = {
 // rank here in JS on every request).
 const ENGAGEMENT_POOL_SIZE = 500;
 
+function applyStatusFilter<T extends { in: (column: string, values: string[]) => T }>(query: T, includeUnpublished = false) {
+  return query.in("status", includeUnpublished ? ["draft", "published"] : ["published"]);
+}
+
+function applyCategoryFilter<T extends { filter: (column: string, operator: string, value: string) => T }>(
+  query: T,
+  category: string
+) {
+  // `jsonb @> '["Category"]'` matches rows whose array contains the
+  // selected category even if the row has other categories too.
+  return query.filter("categories", "cs", JSON.stringify([category]));
+}
+
 async function listByEngagement(
   opts: ListMaterialsOptions,
   limit: number
 ): Promise<{ items: MaterialSummary[]; nextCursor: string | null }> {
   const admin = getSupabaseAdminClient();
 
-  let materialsQuery = admin
-    .from("materials")
-    .select("*")
-    .eq("status", "published")
-    .limit(ENGAGEMENT_POOL_SIZE);
+  let materialsQuery = applyStatusFilter(
+    admin.from("materials").select(MATERIAL_SUMMARY_COLUMNS).limit(ENGAGEMENT_POOL_SIZE),
+    opts.includeUnpublished
+  );
 
   // No search branch here: listPublishedMaterials routes any query straight
   // to listBySearch before `sort` is even inspected (see its own comment),
   // so this only ever runs in plain "top" browse mode.
-  if (opts.category) materialsQuery = materialsQuery.contains("categories", [opts.category]);
+  if (opts.category) materialsQuery = applyCategoryFilter(materialsQuery, opts.category);
 
   const { data: materialRows, error: materialsError } = await materialsQuery;
   if (materialsError || !materialRows || materialRows.length === 0) return { items: [], nextCursor: null };
@@ -116,6 +138,38 @@ async function listByEngagement(
   return { items: page.map(toMaterialSummary), nextCursor };
 }
 
+async function listAlphabetically(
+  opts: ListMaterialsOptions,
+  limit: number
+): Promise<{ items: MaterialSummary[]; nextCursor: string | null }> {
+  const admin = getSupabaseAdminClient();
+
+  let query = applyStatusFilter(
+    admin
+      .from("materials")
+      .select(MATERIAL_SUMMARY_COLUMNS)
+      .order("title", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(limit + 1),
+    opts.includeUnpublished
+  );
+
+  if (opts.category) query = applyCategoryFilter(query, opts.category);
+  if (opts.cursor && "title" in opts.cursor) query = query.or(keysetAfterAlphabeticalFilter(opts.cursor));
+
+  const { data, error } = await query;
+  if (error) return { items: [], nextCursor: null };
+
+  const rows = data ?? [];
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const last = page[page.length - 1];
+  const nextCursor =
+    hasMore && last ? encodeCursor<AlphabeticalKeyset>({ title: last.title, id: last.id }) : null;
+
+  return { items: page.map(toMaterialSummary), nextCursor };
+}
+
 // Same tradeoff as ENGAGEMENT_POOL_SIZE above: rank in JS over a capped pool
 // rather than pushing the ranking into Postgres, since there's no computed
 // rank column (ts_rank needs the query text at rank time, which a plain
@@ -130,19 +184,15 @@ const SEARCH_POOL_SIZE = 500;
  * token starting the title (e.g. "capital" ranking *Capital* above a book
  * merely mentioning it in its blurb).
  */
-function relevanceScore(row: MaterialRow, tokens: string[]): number {
+function relevanceScore(row: Pick<MaterialRow, "title" | "author">, tokens: string[]): number {
   const title = row.title.toLowerCase();
   const author = row.author.toLowerCase();
-  const toc = row.toc_titles.toLowerCase();
-  const description = (row.description ?? "").toLowerCase();
 
   let score = 0;
   for (const token of tokens) {
     if (title.startsWith(token)) score += 100;
     else if (title.includes(token)) score += 60;
     if (author.includes(token)) score += 40;
-    if (toc.includes(token)) score += 20;
-    if (description.includes(token)) score += 10;
   }
   return score;
 }
@@ -159,23 +209,28 @@ async function listBySearch(
   opts: ListMaterialsOptions,
   limit: number
 ): Promise<{ items: MaterialSummary[]; nextCursor: string | null }> {
-  const tsQuery = toPrefixTsQuery(opts.search ?? "");
-  if (!tsQuery) return { items: [], nextCursor: null };
+  const tokens = toSearchTokens(opts.search ?? "");
+  if (tokens.length === 0) return { items: [], nextCursor: null };
 
-  let query = getSupabaseAdminClient()
-    .from("materials")
-    .select("*")
-    .eq("status", "published")
-    .textSearch("search_vector", tsQuery, { config: "english" })
-    .limit(SEARCH_POOL_SIZE);
+  let query = applyStatusFilter(
+    getSupabaseAdminClient()
+      .from("materials")
+      .select(MATERIAL_SUMMARY_COLUMNS)
+      .limit(SEARCH_POOL_SIZE),
+    opts.includeUnpublished
+  );
 
-  if (opts.category) query = query.contains("categories", [opts.category]);
+  for (const token of tokens) {
+    const safe = token.replace(/[(),]/g, "");
+    query = query.or(`title.ilike.%${safe}%,author.ilike.%${safe}%`);
+  }
+
+  if (opts.category) query = applyCategoryFilter(query, opts.category);
 
   const { data, error } = await query;
   if (error || !data || data.length === 0) return { items: [], nextCursor: null };
 
-  const tokens = (opts.search ?? "").toLowerCase().split(/\s+/).filter(Boolean);
-  const scored = data.map((row) => ({ row, score: relevanceScore(row, tokens) }));
+  const scored = data.map((row) => ({ row, score: relevanceScore(row, tokens.map((token) => token.toLowerCase())) }));
   scored.sort((a, b) => {
     if (a.score !== b.score) return b.score - a.score;
     // Stable tie-break for equal-relevance rows — newest first, same as
@@ -205,21 +260,24 @@ export async function listPublishedMaterials(
   const limit = Math.min(Math.max(opts.limit ?? 24, 1), 100);
 
   // A query in flight always wins over `sort` — relevance-ranked (see
-  // listBySearch/relevanceScore), never just the newest or the most-
-  // engaged match. `sort` only distinguishes "recent" from "top" once
-  // there's no query narrowing things down (plain browse).
+  // listBySearch/relevanceScore), never alphabetical/recent/top. `sort`
+  // only matters once there's no query narrowing things down (plain
+  // browse).
   if (opts.search) return listBySearch(opts, limit);
+  if (opts.sort === "alphabetical") return listAlphabetically(opts, limit);
   if (opts.sort === "top") return listByEngagement(opts, limit);
 
-  let query = getSupabaseAdminClient()
-    .from("materials")
-    .select("*")
-    .eq("status", "published")
-    .order("created_at", { ascending: false })
+  let query = applyStatusFilter(
+    getSupabaseAdminClient()
+      .from("materials")
+      .select(MATERIAL_SUMMARY_COLUMNS)
+      .order("created_at", { ascending: false })
     .order("id", { ascending: false })
-    .limit(limit + 1);
+      .limit(limit + 1),
+    opts.includeUnpublished
+  );
 
-  if (opts.category) query = query.contains("categories", [opts.category]);
+  if (opts.category) query = applyCategoryFilter(query, opts.category);
   if (opts.cursor && "createdAt" in opts.cursor) query = query.or(keysetBeforeFilter(opts.cursor));
 
   const { data, error } = await query;

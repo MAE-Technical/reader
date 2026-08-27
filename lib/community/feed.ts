@@ -4,10 +4,14 @@ import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
 import { resolveExcerpt } from "./excerpt";
 import { hydrateNotes, type NoteRow } from "./notes";
 import type { AnnotationRange, MaterialSummary, Note } from "@/lib/api/types";
+import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 
 export type FeedItem = {
   note: Note;
-  material: Pick<MaterialSummary, "id" | "slug" | "title" | "author" | "cover">;
+  material: Pick<
+    MaterialSummary,
+    "id" | "slug" | "title" | "author" | "cover" | "thumbnail" | "googleCoverUrl" | "googleThumbnailUrl"
+  >;
   sectionId: string;
   label: string;
   excerpt: string;
@@ -31,7 +35,7 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
   const admin = getSupabaseAdminClient();
 
   const materialIds = Array.from(new Set(rows.map((r) => r.material_id)));
-  const { data: materials } = await admin.from("materials").select("*").in("id", materialIds);
+  const { data: materials } = await admin.from("materials").select(`${MATERIAL_SUMMARY_COLUMNS}, json_storage_path`).in("id", materialIds);
   const materialsById = new Map((materials ?? []).map((m) => [m.id, m]));
 
   const bookByMaterialId = new Map<string, BookDocument>();
@@ -97,7 +101,16 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
 
     items.push({
       note,
-      material: { id: material.id, slug: material.slug, title: material.title, author: material.author, cover: material.cover_url },
+      material: {
+        id: material.id,
+        slug: material.slug,
+        title: material.title,
+        author: material.author,
+        cover: material.cover_url,
+        thumbnail: material.thumbnail_url,
+        googleCoverUrl: material.google_cover_url,
+        googleThumbnailUrl: material.google_thumbnail_url,
+      },
       sectionId,
       label,
       excerpt,

@@ -16,6 +16,9 @@ export type MaterialSummary = {
   author: string;
   description: string | null;
   cover: string | null;
+  thumbnail: string | null;
+  googleCoverUrl: string | null;
+  googleThumbnailUrl: string | null;
   language: string | null;
   publishedYear: number | null;
   pageCountEstimate: number | null;

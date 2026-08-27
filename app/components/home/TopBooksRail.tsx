@@ -3,6 +3,8 @@
 import { useRandomBooks } from "@/lib/general/useRandomBooks";
 import type { MaterialSummary } from "@/lib/api/types";
 import ReaderLink from "@/app/components/ReaderLink";
+import BookCover from "@/app/components/shared/BookCover";
+import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 
 function TopBookCard({ material }: { material: MaterialSummary }) {
   return (
@@ -10,12 +12,7 @@ function TopBookCard({ material }: { material: MaterialSummary }) {
       href={`/read/${material.slug}`}
       className="flex w-60 md:w-70 flex-none gap-3 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3 no-underline"
     >
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={material.cover ?? ""}
-        alt={material.title}
-        className="h-20 w-17 flex-none rounded-sm border border-[var(--reader-border)] object-cover"
-      />
+      <BookCover src={resolveBookThumbnailSrc(material)} alt={material.title} className="h-20 w-17 flex-none rounded-sm border border-[var(--reader-border)]" />
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
         <div className="truncate font-serif text-sm font-semibold leading-tight text-[var(--reader-text)]">
           {material.title}

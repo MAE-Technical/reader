@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { BookUp, Search, X } from "lucide-react";
+import { Search, X } from "lucide-react";
 import type { BookDocument } from "@/lib/book/schema";
 import { useMaterialsSearch } from "@/lib/materials/useMaterialsSearch";
 import { buildBookIndex, searchBook, type SearchResult } from "@/lib/search/bookIndex";
+import BookCover from "@/app/components/shared/BookCover";
+import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 
 function highlight(text: string, q: string) {
   if (!q) return text;
@@ -160,12 +162,7 @@ export default function SearchModal({ book, onNavigate, onClose }: Props) {
                       onClick={() => onClose?.()}
                       className="flex items-center gap-3 py-3 border-b border-[var(--reader-border)] no-underline"
                     >
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={material.cover ?? ""}
-                        alt={material.title}
-                        className="h-14 w-11 flex-none rounded-sm border border-[var(--reader-border)] object-cover"
-                      />
+                      <BookCover src={resolveBookThumbnailSrc(material)} alt={material.title} className="h-14 w-11 flex-none rounded-sm border border-[var(--reader-border)]" />
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-semibold text-[var(--reader-text)]">
                           {highlight(material.title, query)}
@@ -179,19 +176,19 @@ export default function SearchModal({ book, onNavigate, onClose }: Props) {
               {!isSearching && query.trim() && libraryResults.length === 0 && (
                 <div className="py-10 text-center">
                   <p className="m-0 text-sm text-[var(--reader-text-muted)]">
-                    No results for &ldquo;{query}&rdquo;.
+                    No results for &ldquo;{query}&rdquo;
                   </p>
-                  <p className="mt-2 mb-4 text-sm text-[var(--reader-text-muted)]">
-                    Can&rsquo;t find this book? Suggest it or share a copy.
+                  {/* <p className="mt-2 mb-4 text-sm text-[var(--reader-text-muted)]">
+                    Can&rsquo;t find this book? Suggest it for the library.
                   </p>
-                  <Link
-                    href="/share-books"
-                    onClick={() => onClose?.()}
+                  <a
+                    href="https://t.me/africanyeast"
+                    target="_blank"
+                    rel="noreferrer"
                     className="inline-flex items-center gap-2 rounded-full bg-brand-500 px-4 py-2 text-sm font-semibold text-sand-25 no-underline transition-opacity hover:opacity-90"
                   >
-                    <BookUp size={16} />
-                    Share books
-                  </Link>
+                    Suggest
+                  </a> */}
                 </div>
               )}
             </>

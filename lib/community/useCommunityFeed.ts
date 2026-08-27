@@ -7,7 +7,10 @@ import type { MaterialSummary, Note } from "@/lib/api/types";
 
 export type CommunityFeedItem = {
   note: Note;
-  material: Pick<MaterialSummary, "id" | "slug" | "title" | "author" | "cover">;
+  material: Pick<
+    MaterialSummary,
+    "id" | "slug" | "title" | "author" | "cover" | "thumbnail" | "googleCoverUrl" | "googleThumbnailUrl"
+  >;
   sectionId: string;
   label: string;
   /** The actual quoted passage text, resolved server-side — replaces the

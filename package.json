@@ -9,7 +9,10 @@
     "lint": "eslint",
     "schema:generate": "bun run scripts/generate-schema.ts",
     "audio:generate": "bun run scripts/generate-audio.ts",
-    "publish:book": "bun run scripts/publish-book.ts"
+    "publish:book": "bun run scripts/publish-book.ts",
+    "materials:manifests": "bun run scripts/generate-material-manifests.ts",
+    "materials:thumbnails": "bun run scripts/generate-material-thumbnails.ts",
+    "materials:google": "bun run scripts/generate-material-google-metadata.ts"
   },
   "dependencies": {
     "@radix-ui/react-popover": "^1.1.23",

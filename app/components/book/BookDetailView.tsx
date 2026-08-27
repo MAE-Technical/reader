@@ -1,20 +1,21 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronRight, Headphones, Play } from "lucide-react";
 import type { MaterialDetail } from "@/lib/materials/detail";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
-import { buildTocOutlineRows } from "@/lib/reader/tocOutline";
 import { useBookCommunityNotes } from "@/lib/materials/useBookCommunityNotes";
+import BookCover from "@/app/components/shared/BookCover";
+import { resolveBookCoverSrc } from "@/lib/materials/image";
 import BookNoteCard from "./BookNoteCard";
 import ShareButton from "./ShareButton";
 import ReaderLink from "../ReaderLink";
 
 type Tab = "outline" | "notes";
 const TAB_OPTIONS: { value: Tab; label: string }[] = [
-  { value: "outline", label: "Book outline" },
+  { value: "outline", label: "Table of content" },
   { value: "notes", label: "Community notes" },
 ];
 
@@ -111,81 +112,117 @@ function CardGrid<T>({
   );
 }
 
-/**
- * The whole book outline as one flowing list in a single card — every group
- * (Part) header and every chapter row, in the tree's own order, no
- * splitting into several same-sized cards and no left/right column
- * balancing. A table of contents is one document a reader scans top to
- * bottom, not a set of independent posts (unlike the notes tab's cards,
- * where CardGrid's column-balancing genuinely earns its keep) — so the
- * simplest, most consistent rendering is a single div holding every row,
- * with `divide-y` doing all the separation between them, group headers
- * included. Shown in full, no collapse — the whole point of this tab is a
- * reader being able to scan the entire shape of the book at a glance.
- */
-function OutlineTab({ material }: { material: MaterialDetail }) {
-  // Exactly the same rows the reader's own TOC drawer (ChaptersDrawer) shows
-  // (there, off the full Section[] tree — see lib/reader/outline.ts) — group
-  // rows for Parts, leaf rows for every chapter, in the tree's own order.
-  const outlineRows = useMemo(() => buildTocOutlineRows(material.sections), [material.sections]);
+type TocOutlineNode = {
+  title: string | null;
+  section: MaterialDetail["sections"][number] | null;
+  children: TocOutlineNode[];
+};
 
-  const chapterNumbers = useMemo(() => {
-    const map = new Map<string, number>();
-    let n = 0;
-    for (const row of outlineRows) if (!row.isGroup) map.set(row.section.id, ++n);
-    return map;
-  }, [outlineRows]);
+function hasRenderableTocTitleNode(node: MaterialDetail["tocTitles"][number]): boolean {
+  return (node.title !== null && node.title.trim().length > 0) || node.children.some(hasRenderableTocTitleNode);
+}
+
+function hasRenderableTocTitleNodes(nodes: MaterialDetail["tocTitles"]): boolean {
+  return nodes.some(hasRenderableTocTitleNode);
+}
+
+function mergeTocTrees(
+  titles: MaterialDetail["tocTitles"],
+  sections: MaterialDetail["sections"]
+): TocOutlineNode[] {
+  return titles.map((titleNode, index) => {
+    const section = sections[index] ?? null;
+    return {
+      title: titleNode.title,
+      section,
+      children: mergeTocTrees(titleNode.children, section?.children ?? []),
+    };
+  });
+}
+
+function TocTree({
+  nodes,
+  slug,
+  depth = 0,
+}: {
+  nodes: TocOutlineNode[];
+  slug: string;
+  depth?: number;
+}) {
+  const rendered = nodes
+    .map((node, index) => ({ node, key: `${depth}-${index}` }))
+    .filter(({ node }) => (node.title !== null && node.title.trim().length > 0) || node.children.some(hasRenderableTocTitleNode));
+
+  if (rendered.length === 0) return null;
+
+  return (
+    <div
+      className={
+        depth === 0
+          ? "flex flex-col divide-y divide-[var(--reader-border)]"
+          : "mt-2 flex flex-col divide-y divide-[var(--reader-border)] pl-5"
+      }
+    >
+      {rendered.map(({ node, key }) => (
+        <TocNode key={key} node={node} slug={slug} depth={depth} />
+      ))}
+    </div>
+  );
+}
+
+function TocNode({ node, slug, depth }: { node: TocOutlineNode; slug: string; depth: number }) {
+  const hasTitle = node.title !== null && node.title.trim().length > 0;
+  const hasChildren = node.children.length > 0;
+  const hasLinkTarget = node.section !== null && !hasChildren && hasTitle;
+
+  if (!hasTitle && !hasChildren) return null;
+
+  if (hasChildren) {
+    return (
+      <div className="py-3 first:pt-0">
+        {hasTitle && (
+          <div
+            className="mb-2 text-[13.5px] font-semibold text-[var(--reader-text)]"
+          >
+            {node.title}
+          </div>
+        )}
+        <TocTree nodes={node.children} slug={slug} depth={depth + 1} />
+      </div>
+    );
+  }
+
+  if (!hasLinkTarget || !node.section) {
+    return (
+      <div className="py-2.5 first:pt-0">
+        <span className="truncate text-[13.5px] font-medium text-[var(--reader-text-muted)]">{node.title}</span>
+      </div>
+    );
+  }
+
+  return (
+    <ReaderLink
+      href={`/read/${slug}?section=${node.section.id}`}
+      className="group flex w-full items-center gap-3 px-1 py-2.5 no-underline transition-colors hover:bg-[var(--reader-surface-hover)]"
+    >
+      <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--reader-text-muted)] transition-colors group-hover:text-[var(--reader-text)]">
+        {node.title}
+      </span>
+      <ChevronRight
+        size={14}
+        className="flex-none text-[var(--reader-text-subtle)] transition-colors group-hover:text-[var(--reader-text-muted)] group-hover:translate-x-0.5"
+      />
+    </ReaderLink>
+  );
+}
+
+function OutlineTab({ material }: { material: MaterialDetail }) {
+  if (!hasRenderableTocTitleNodes(material.tocTitles)) return null;
+  const outline = mergeTocTrees(material.tocTitles, material.sections);
 
   return (
     <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-4">
-      <div className="flex flex-col divide-y divide-[var(--reader-border)]">
-        {outlineRows.map((row) => {
-          if (row.isGroup) {
-            return (
-              <div
-                key={row.section.id}
-                className="pt-5 pb-2 text-[13.5px] font-semibold text-[var(--reader-text)] first:pt-0"
-              >
-                {row.section.label}
-              </div>
-            );
-          }
-
-          const hasContent = row.section.passageCount > 0;
-          const number = chapterNumbers.get(row.section.id);
-          const numberEl = number !== undefined && (
-            <span className="w-5 flex-none text-right text-xs font-semibold tabular-nums text-[var(--reader-text-subtle)]">
-              {number}
-            </span>
-          );
-          if (!hasContent) {
-            return (
-              <div key={row.section.id} className="flex items-center gap-3 px-1 py-2.5 opacity-50">
-                {numberEl}
-                <span className="truncate text-[13.5px] font-medium text-[var(--reader-text-muted)]">
-                  {row.section.label}
-                </span>
-              </div>
-            );
-          }
-          return (
-            <ReaderLink
-              key={row.section.id}
-              href={`/read/${material.slug}?section=${row.section.id}`}
-              className="group flex items-center gap-3 px-1 py-2.5 no-underline hover:bg-[var(--reader-surface-hover)]"
-            >
-              {numberEl}
-              <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--reader-text-muted)] group-hover:text-[var(--reader-text)]">
-                {row.section.label}
-              </span>
-              <ChevronRight
-                size={14}
-                className="flex-none text-[var(--reader-text-subtle)] transition-colors group-hover:text-[var(--reader-text-muted)]"
-              />
-            </ReaderLink>
-          );
-        })}
-      </div>
+      <TocTree nodes={outline} slug={material.slug} />
     </div>
   );
 }
@@ -295,7 +332,7 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
 
   return (
     <div className="pb-12 shell:mx-auto shell:max-w-4xl">
-      <div className="flex items-center justify-between py-3.5">
+      <div className="flex items-center gap-3 py-3.5">
         <Link
           href="/library"
           aria-label="Back to library"
@@ -303,24 +340,25 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
         >
           <ArrowLeft size={18} />
         </Link>
-        <ShareButton title={material.title} text={`${material.title} by ${material.author}`} />
+        <div className="ml-auto">
+          <ShareButton title={material.title} text={`${material.title} by ${material.author}`} />
+        </div>
       </div>
 
       <div className="mb-8 flex flex-col items-start gap-5 shell:flex-row shell:items-center shell:gap-9">
         {/* A compact, contained thumbnail rather than a full-bleed hero —
             edge-to-edge previously made the cover roughly half the screen
             and put it visibly out of step with everything else on the
-            page, since the back/share row and all the text below sit
+            page, since the back row and all the text below sit
             flush left inside the normal page padding while the cover
             escaped it via negative margins. No auto margin here either,
             for the same reason: the cover is the container's first flex
             item, so it lines up flush left with everything below it
             instead of floating centered on its own. */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={material.cover ?? ""}
+        <BookCover
+          src={resolveBookCoverSrc(material)}
           alt={material.title}
-          className="aspect-[2/3] w-48 shell:w-48 flex-none object-cover shadow-lg"
+          className="aspect-[2/3] w-48 shell:w-48 flex-none shadow-lg"
         />
         <div className="min-w-0 flex-1">
           <h1 className="font-serif text-2xl font-semibold leading-tight text-[var(--reader-text)] shell:text-4xl">
@@ -329,6 +367,12 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
           <div className="mt-2 text-base font-medium text-[var(--reader-text-muted)]">{material.author}</div>
 
           <MetaLine material={material} hasNarration={hasNarration} />
+
+          {material.googleDescription && (
+            <p className="mt-4 text-sm font-medium leading-6 text-[var(--reader-text-muted)]">
+              {material.googleDescription}
+            </p>
+          )}
 
           {pct > 0 && (
             <div className="mt-4 flex items-center gap-3">

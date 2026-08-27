@@ -5,6 +5,7 @@ import { unauthorized } from "@/lib/api/errors";
 import { getReaderRow } from "@/lib/auth/profile";
 import { toMaterialSummary } from "@/lib/materials/summary";
 import type { CurrentReadingEntry } from "@/lib/api/types";
+import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 
 export async function GET(request: Request) {
   const reader = await getAuthenticatedReader(request);
@@ -19,7 +20,7 @@ export async function GET(request: Request) {
 
   const { data: materials } = await getSupabaseAdminClient()
     .from("materials")
-    .select("*")
+    .select(MATERIAL_SUMMARY_COLUMNS)
     .in(
       "id",
       entries.map((e) => e.materialId)

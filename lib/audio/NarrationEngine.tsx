@@ -114,7 +114,8 @@ export default function NarrationEngine() {
     const src = audioSectionTrack?.src;
     if (src === audioSrcRef.current) return;
     audioSrcRef.current = src;
-    audio.src = src ?? "";
+    if (src) audio.src = src;
+    else audio.removeAttribute("src");
     // Assigning `.src` runs the element through the browser's media load
     // algorithm, which resets playbackRate back to 1 in Safari (and can on
     // other engines too) — reapply immediately so a chapter auto-advance or

@@ -237,7 +237,7 @@ export default function AudioPlayer({
       className="flex items-center gap-2.5 min-w-0 flex-1 border-none bg-transparent p-0 text-left disabled:cursor-default"
       style={{ cursor: onTitleClick ? "pointer" : "default" }}
     >
-      <img src={coverSrc} alt="cover" className={`${coverSize} object-cover rounded-xs flex-none`} />
+      {coverSrc ? <img src={coverSrc} alt="cover" className={`${coverSize} object-cover rounded-xs flex-none`} /> : null}
       <div className="min-w-0">
         <div className="text-sm font-semibold text-[var(--reader-text)] whitespace-nowrap overflow-hidden text-ellipsis">
           {bookTitle}

@@ -21,9 +21,17 @@ export function decodeCursor<T>(cursor: string | null): T | null {
 
 export type Keyset = { createdAt: string; id: string };
 
+export type AlphabeticalKeyset = { title: string; id: string };
+
 /** The `.or(...)` fragment for "strictly before this (created_at, id) pair,
  * both descending" — the plain recency-ordered case every `recent`-sorted
  * list below uses. */
 export function keysetBeforeFilter(cursor: Keyset): string {
   return `created_at.lt.${cursor.createdAt},and(created_at.eq.${cursor.createdAt},id.lt.${cursor.id})`;
+}
+
+/** The `.or(...)` fragment for "strictly after this (title, id) pair,
+ * both ascending" — the alphabetical browse case. */
+export function keysetAfterAlphabeticalFilter(cursor: AlphabeticalKeyset): string {
+  return `title.gt.${cursor.title},and(title.eq.${cursor.title},id.gt.${cursor.id})`;
 }
