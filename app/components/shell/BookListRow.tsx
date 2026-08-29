@@ -1,0 +1,65 @@
+"use client";
+
+import Link from "next/link";
+import { useReadingPositionStore } from "@/stores/reading-position-store";
+import type { MaterialSummary } from "@/lib/api/types";
+import BookCover from "@/app/components/shared/BookCover";
+import { resolveBookThumbnailSrc } from "@/lib/materials/image";
+
+/**
+ * List-row book tile — Claude Design "Library catalogue listing" project,
+ * direction 1c ("Editorial tint"), since trimmed to just
+ * title/author/progress (the description made the listing feel
+ * overwhelming — a reader after it goes to the book's own detail page).
+ * Shared by the Library catalogue and the Reading page (ReadingView) — the
+ * latter reuses it unmodified, since `showProgress` already reads live off
+ * reading-position-store, which each page's own `useContinueReading` call
+ * already populated.
+ *
+ * Covers here come from three inconsistent sources (own uploads,
+ * OpenLibrary, Google — see lib/materials/image.ts) with wildly different
+ * styles, which the old cover-tile grid made loud. The thin rust-tint
+ * overlay pulls whatever's left toward one shared warm tone —
+ * rgba(190,64,13,.16) is brand-500 (#be400d is rgb(190,64,13)) at 16%
+ * opacity, multiplied over the art.
+ *
+ * The text column has no `items-start`, so it stretches to the row's full
+ * height (the thumbnail's) and centers title/author/progress within that,
+ * rather than pinning them to the top and leaving the tall thumbnail
+ * towering over a short text block.
+ */
+export default function BookListRow({ material }: { material: MaterialSummary }) {
+  const pct = Math.round(useReadingPositionStore((s) => s.progressPercentByMaterial[material.id] ?? 0));
+  const showProgress = pct > 0;
+
+  return (
+    <Link
+      href={`/book/${material.slug}`}
+      className="group flex min-w-0 gap-4 border-b border-[var(--reader-border)] py-4 no-underline"
+    >
+      <div className="relative h-28 w-20 flex-none overflow-hidden rounded-xs">
+        <BookCover src={resolveBookThumbnailSrc(material)} alt={material.title} className="h-full w-full" iconSize={22} />
+        <div className="absolute inset-0 bg-[rgba(190,64,13,0.16)] mix-blend-multiply" />
+      </div>
+
+      <div className="flex min-w-0 flex-1 flex-col justify-center gap-1">
+        <div className="font-serif text-[14px] font-semibold leading-tight text-[var(--reader-text)] group-hover:text-brand-500">
+          {material.title}
+        </div>
+        <div className="text-[11px] font-semibold capitalize tracking-[0.04em] text-[var(--reader-text-muted)]">
+          {material.author}
+        </div>
+        {showProgress && (
+          <div className="flex items-center gap-2">
+            <span className="text-[11px] font-bold text-[var(--reader-accent)]">
+              {pct >= 100 ? "Finished" : `${pct}%`}
+            </span>
+            <span className="h-1 max-w-[160px] flex-1 overflow-hidden rounded-full bg-[var(--reader-border)]">
+              <span className="block h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
+            </span>
+          </div>
+        )}
+      </div>
+    </Link>
+  );
+}

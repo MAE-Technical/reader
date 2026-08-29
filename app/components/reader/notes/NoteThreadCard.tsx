@@ -160,6 +160,7 @@ export default function NoteThreadCard({
                 }
                 startCollapsed
                 showMemberPrompt={hasRequestedRootReply || ui.activeComposerFor !== null}
+                action="reply"
                 onCancel={ui.activeComposerFor ? () => ui.toggleComposer(ui.activeComposerFor!) : undefined}
                 onSave={(content) => actions.reply(ui.activeComposerFor ?? note.id, content)}
               />

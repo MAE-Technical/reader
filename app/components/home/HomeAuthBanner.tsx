@@ -36,7 +36,7 @@ export default function HomeAuthBanner() {
     <>
       <MissionCard ref={setNode} className="mb-6" />
 
-      {scrolledPast && (
+      {/* {scrolledPast && (
         <div
           className="fixed inset-x-0 top-0 z-40 flex items-center justify-between gap-3 box-border border-b border-[var(--reader-border)] bg-[var(--reader-bg)] px-4 py-2.5 shell:px-4"
           style={{ paddingTop: "max(env(safe-area-inset-top), 0.625rem)" }}
@@ -61,7 +61,7 @@ export default function HomeAuthBanner() {
             </button>
           </div>
         </div>
-      )}
+      )} */}
     </>
   );
 }

@@ -5,12 +5,14 @@ import { resolveExcerpt } from "./excerpt";
 import { hydrateNotes, type NoteRow } from "./notes";
 import type { AnnotationRange, MaterialSummary, Note } from "@/lib/api/types";
 import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
+import { parseGoogleMetaData, parseOpenLibraryMetaData } from "@/lib/materials/providerMeta";
 
 export type FeedItem = {
   note: Note;
   material: Pick<
     MaterialSummary,
-    "id" | "slug" | "title" | "author" | "cover" | "thumbnail" | "googleCoverUrl" | "googleThumbnailUrl"
+    | "id" | "slug" | "title" | "author" | "cover" | "thumbnail"
+    | "googleCoverUrl" | "googleThumbnailUrl" | "openlibraryCoverUrl" | "openlibraryThumbnailUrl" | "coverSource"
   >;
   sectionId: string;
   label: string;
@@ -99,6 +101,9 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
       .map((r) => hydratedById.get(r.id))
       .filter((n): n is Note => Boolean(n));
 
+    const google = parseGoogleMetaData(material.google_meta_data);
+    const openlibrary = parseOpenLibraryMetaData(material.openlibrary_meta_data);
+
     items.push({
       note,
       material: {
@@ -108,8 +113,11 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
         author: material.author,
         cover: material.cover_url,
         thumbnail: material.thumbnail_url,
-        googleCoverUrl: material.google_cover_url,
-        googleThumbnailUrl: material.google_thumbnail_url,
+        googleCoverUrl: google.coverUrl,
+        googleThumbnailUrl: google.thumbnailUrl,
+        openlibraryCoverUrl: openlibrary.coverUrl,
+        openlibraryThumbnailUrl: openlibrary.thumbnailUrl,
+        coverSource: material.cover_source,
       },
       sectionId,
       label,

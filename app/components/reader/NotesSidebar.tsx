@@ -8,7 +8,6 @@ import { useSessionStore } from "@/stores/session-store";
 import { useAnnotations } from "@/lib/reader/useAnnotations";
 import { useDeleteHighlight } from "@/lib/materials/useHighlightMutations";
 import { useCreateNote, useDeleteNote } from "@/lib/community/useNoteMutations";
-import { useRequireAuth } from "@/lib/reader/useRequireAuth";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { topLevelNotes, repliesFor, sortNotes, type NoteSortMode } from "@/lib/reader/noteThread";
 import { useThreadInteraction } from "@/lib/reader/useThreadInteraction";
@@ -66,7 +65,6 @@ function EditPanel({
   const createNote = useCreateNote(materialId);
   const deleteNote = useDeleteNote(materialId);
   const deleteHighlight = useDeleteHighlight(materialId);
-  const requireAuth = useRequireAuth();
   const readerId = useSessionStore((s) => s.readerId);
 
   // A brand-new thread has no annotationId yet — after its first note is
@@ -224,12 +222,18 @@ function EditPanel({
               otherwise sit right alongside it, two empty compose surfaces
               deep for no reason a reader could tell apart. Collapsing
               every thread is what brings this one back. */}
+          {ui.actionError && (
+            <p className="m-0 text-[11px] text-[var(--reader-text-muted)]">{ui.actionError}</p>
+          )}
+
           {expandedIds.size === 0 && ui.activeComposerFor === null && ui.editingId === null && (
             <NoteComposer
               initialText=""
-              placeholder="Share your thoughts…"
+              placeholder="Add your thoughts"
               startCollapsed
-              onSave={(content) => requireAuth(() => createNote.mutate({ ranges, content }))}
+              showMemberPrompt
+              action="note"
+              onSave={(content) => createNote.mutate({ ranges, content }, { onError: () => ui.reportError("Couldn't save your note — check your connection and try again.") })}
             />
           )}
         </>

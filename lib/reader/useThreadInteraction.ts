@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { AnnotationRange, Note } from "@/lib/api/types";
 import { useCreateNote, useUpdateNote, useDeleteNote, useToggleReaction } from "@/lib/community/useNoteMutations";
-import { useRequireAuth } from "./useRequireAuth";
 import { topLevelNotes } from "./noteThread";
 import type { ThreadActions, ThreadUIState } from "./threadTypes";
+
+const SAVE_FAILED_MESSAGE = "Couldn't save — check your connection and try again.";
 
 /**
  * Everything about how one highlight's thread behaves interactively —
@@ -41,7 +42,6 @@ export function useThreadInteraction({
   const updateNote = useUpdateNote(materialId);
   const deleteNote = useDeleteNote(materialId);
   const toggleReaction = useToggleReaction(materialId);
-  const requireAuth = useRequireAuth();
 
   // Evaluated once at mount, same as editingId below — not a live
   // subscription, since allNotes/initialEditingId are set once per
@@ -57,6 +57,19 @@ export function useThreadInteraction({
   const [activeComposerFor, setActiveComposerFor] = useState<string | null>(null);
   const [activeMenuFor, setActiveMenuFor] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(initialEditingId ?? null);
+  // A failure here always arrives after the affordance that triggered it has
+  // already moved on (the composer already collapsed/reset, the reaction
+  // pill already flipped back) — same reasoning as useTextAnnotations' own
+  // overlay for highlights — so this is a shared, thread-wide banner rather
+  // than something any one composer/button renders itself. Self-clears; see
+  // the timer effect below.
+  const [actionError, setActionError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!actionError) return;
+    const timer = setTimeout(() => setActionError(null), 4000);
+    return () => clearTimeout(timer);
+  }, [actionError]);
+  const reportError = (message: string) => setActionError(message);
 
   const ui: ThreadUIState = {
     activeComposerFor,
@@ -65,12 +78,21 @@ export function useThreadInteraction({
     toggleMenu: (id) => setActiveMenuFor(id),
     editingId,
     startEdit: (id) => setEditingId(id),
+    actionError,
+    reportError,
   };
+  const onError = () => reportError(SAVE_FAILED_MESSAGE);
   const actions: ThreadActions = {
-    reply: (parentId, content) => requireAuth(() => createNote.mutate({ ranges, content, parentId })),
-    saveEdit: (noteId, content) => requireAuth(() => updateNote.mutate({ noteId, content })),
-    delete: (noteId) => requireAuth(() => deleteNote.mutate(noteId)),
-    toggleReaction: (noteId) => requireAuth(() => toggleReaction.mutate(noteId)),
+    // Signed-out gating happens above this layer now, not by wrapping these:
+    // reply/edit/delete are only ever reachable via affordances that are
+    // themselves already gated (NoteComposer's own MembersOnlyPrompt for
+    // reply; Edit/Delete's menu items never render for a non-owned note,
+    // and a reader is never "own" while signed out — see useIsOwnNote), and
+    // ReactionButton gates itself before calling toggleReaction.
+    reply: (parentId, content) => createNote.mutate({ ranges, content, parentId }, { onError }),
+    saveEdit: (noteId, content) => updateNote.mutate({ noteId, content }, { onError }),
+    delete: (noteId) => deleteNote.mutate(noteId, { onError }),
+    toggleReaction: (noteId) => toggleReaction.mutate(noteId, { onError }),
   };
 
   const toggleExpanded = (id: string) =>

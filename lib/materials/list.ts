@@ -65,8 +65,7 @@ export type ListMaterialsOptions = {
 };
 
 // Cap on how many published rows `top` pulls into memory to rank — plenty
-// for today's catalog size, same tradeoff as getRandomPublishedMaterials's
-// own SAMPLE_POOL_SIZE (no denormalized per-material engagement column
+// for today's catalog size (no denormalized per-material engagement column
 // exists yet to sort on at the DB level instead — see models-spec.md's
 // notes.reaction_count trigger for the equivalent pattern one table over,
 // which this would mirror if the catalog ever grows past what's cheap to

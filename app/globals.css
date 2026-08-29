@@ -191,11 +191,6 @@ body {
      UI panel. Lighter than the page in light theme, a lifted near-black
      in dark theme (see dark block below) — Substack-restack effect. */
   --reader-quote-bg: var(--color-sand-75);
-  /* Foreground for content sitting *on top of* --reader-note-accent (the
-     inline note-glyph badge) — white reads cleanly against brand-500's dark
-     terracotta here; the dark theme's lighter --color-brand-300 needs the
-     opposite (near-black) instead, see below. */
-  --reader-note-accent-fg: #ffffff;
   --reader-active-word-bg: #3d6fa8;
   --reader-active-word-text: #ffffff;
 }
@@ -226,10 +221,6 @@ body {
   --reader-note-accent: var(--color-brand-300);
   --reader-accent: var(--color-brand-300);
   --reader-quote-bg: var(--color-sand-900);
-  /* --color-brand-300 is a pale apricot, not dark enough for white to read
-     against — near-black ink instead (matches the Claude Design mockup's
-     dark-theme glyph exactly). */
-  --reader-note-accent-fg: #14110e;
   --reader-active-word-bg: #4a7fbd;
   --reader-active-word-text: #ffffff;
 }

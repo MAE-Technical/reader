@@ -12,7 +12,6 @@ import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useProfile } from "@/lib/auth/useProfile";
 import { useLogout } from "@/lib/auth/useLogout";
 import { avatarColor, avatarInitial } from "@/lib/reader/authorDisplay";
-import SidebarContinueReading from "@/app/components/books/SidebarContinueReading";
 
 function isActive(pathname: string, href: string) {
   return pathname === href || pathname.startsWith(`${href}/`);
@@ -76,7 +75,7 @@ export default function AppSidebar() {
               key={href}
               href={href}
               onClick={onNavClick}
-              className={`flex items-center gap-3 rounded-sm px-2.5 py-[9px] text-sm font-semibold no-underline transition-colors active:scale-[0.97] ${
+              className={`flex items-center gap-3 rounded-sm px-2.5 py-2.5 text-sm font-semibold no-underline transition-colors active:scale-[0.97] ${
                 active
                   ? "bg-[var(--reader-accent)]/10 text-[var(--reader-accent)]"
                   : "text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
@@ -87,8 +86,6 @@ export default function AppSidebar() {
             </Link>
           );
         })}
-
-        {isAuthenticated && <SidebarContinueReading />}
 
         {!isAuthenticated && !promoDismissed && (
           <div className="mt-3.5 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
@@ -159,7 +156,7 @@ export default function AppSidebar() {
               >
                 <button
                   type="button"
-                  onClick={() => logout.mutate(undefined, { onSuccess: () => router.push("/auth") })}
+                  onClick={() => logout.mutate(undefined, { onSuccess: () => router.push("/") })}
                   disabled={logout.isPending}
                   className="flex w-full cursor-pointer items-center gap-2.5 rounded-sm border-none bg-transparent px-2.5 py-2 text-[13px] font-medium text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)] disabled:cursor-not-allowed disabled:opacity-50"
                 >

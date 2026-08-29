@@ -8,8 +8,25 @@ import { persist } from "zustand/middleware";
  */
 export type Session = { accessToken: string; refreshToken: string; expiresAt: string };
 
+/**
+ * Deliberately *not* `expiresAt > now` — `expiresAt` is the short-lived
+ * access token's own expiry (Supabase default ~1h; whatever the project's
+ * JWT expiry is set to), not the refresh token's. Gating on it here made
+ * every reader-facing "am I logged in" read (this store's two callers)
+ * flip to logged-out the instant the access token aged out, even though
+ * the refresh token backing it was still perfectly good — a reader mid-
+ * session with the tab just sitting idle (no apiFetch to trigger a lazy
+ * refresh) would see themselves signed out well inside an hour. Presence
+ * of a session is what "logged in" means here; getting a fresh access
+ * token off the refresh token is `ensureFreshSession()`'s job (lib/api/
+ * client.ts), called before every real request, and it's the one place
+ * that clears the session outright — only once the refresh token itself
+ * is no good any more. This function staying real-security-adjacent but
+ * not the actual boundary is unchanged: see useIsAuthenticated's own doc
+ * comment.
+ */
 export function isSessionValid(session: Session | null): boolean {
-  return Boolean(session) && Date.parse(session!.expiresAt) > Date.now();
+  return Boolean(session);
 }
 
 type SessionState = {

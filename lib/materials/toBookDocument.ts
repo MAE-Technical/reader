@@ -2,6 +2,7 @@ import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { projectMaterial } from "@/lib/materials/projection";
 import type { BookDocument, Narrator, Note, Passage, Section } from "@/lib/book/schema";
 import { fetchMaterialManifest } from "./manifest";
+import { resolveBookCoverSrc, type CoverSource } from "./image";
 
 export class MaterialNotFoundError extends Error {
   constructor(materialId: string) {
@@ -15,6 +16,11 @@ const FULL_CONTENT_FIELDS = [
   "author",
   "description",
   "cover",
+  "coverSource",
+  "googleCoverUrl",
+  "googleThumbnailUrl",
+  "openlibraryCoverUrl",
+  "openlibraryThumbnailUrl",
   "language",
   "publishedYear",
   "pageCountEstimate",
@@ -108,7 +114,19 @@ export async function getBookDocumentFromMaterial(
       title: projected.title as string,
       author: projected.author as string,
       description: (projected.description as string | null) ?? "",
-      cover: (projected.cover as string | null) ?? "",
+      // Same own -> openlibrary -> google cascade as everywhere else covers/thumbnails
+      // are resolved (lib/materials/image.ts) — every consumer of book.metadata.cover
+      // (ChaptersDrawer, NowPlayingBar, NarrationEngine's media-session artwork) gets
+      // it for free from this one resolution point.
+      cover:
+        resolveBookCoverSrc({
+          cover: projected.cover as string | null,
+          coverSource: projected.coverSource as CoverSource,
+          googleCoverUrl: projected.googleCoverUrl as string | null,
+          googleThumbnailUrl: projected.googleThumbnailUrl as string | null,
+          openlibraryCoverUrl: projected.openlibraryCoverUrl as string | null,
+          openlibraryThumbnailUrl: projected.openlibraryThumbnailUrl as string | null,
+        }) ?? "",
       language: (projected.language as string | null) ?? "",
       publishedYear: (projected.publishedYear as number | null) ?? undefined,
       pageCountEstimate: (projected.pageCountEstimate as number | null) ?? 0,

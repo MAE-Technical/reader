@@ -1,7 +1,6 @@
 "use client";
 
 import { useCreateNote } from "@/lib/community/useNoteMutations";
-import { useRequireAuth } from "@/lib/reader/useRequireAuth";
 import { quoteForRanges } from "@/lib/reader/annotationSelection";
 import { topLevelNotes, repliesFor, sortNotes } from "@/lib/reader/noteThread";
 import { useThreadInteraction } from "@/lib/reader/useThreadInteraction";
@@ -30,7 +29,6 @@ export default function FeedHighlightThread({
   onJump: (entry: FeedEntry) => void;
 }) {
   const createNote = useCreateNote(materialId);
-  const requireAuth = useRequireAuth();
   const { annotation } = entry;
   const excerpt = quoteForRanges(annotation.ranges, getPassageText);
   const { ui, actions, expandedIds, toggleExpanded } = useThreadInteraction({
@@ -67,12 +65,21 @@ export default function FeedHighlightThread({
           any of this highlight's own threads is expanded — that thread
           already carries its own composer (defaulting to a reply on its
           root note), so this one would otherwise double up alongside it. */}
+      {ui.actionError && <p className="m-0 text-[11px] text-[var(--reader-text-muted)]">{ui.actionError}</p>}
+
       {expandedIds.size === 0 && ui.activeComposerFor === null && ui.editingId === null && (
         <NoteComposer
           initialText=""
           placeholder="Add to the discourse…"
           startCollapsed
-          onSave={(content) => requireAuth(() => createNote.mutate({ ranges: annotation.ranges, content }))}
+          showMemberPrompt
+          action="note"
+          onSave={(content) =>
+            createNote.mutate(
+              { ranges: annotation.ranges, content },
+              { onError: () => ui.reportError("Couldn't save your note — check your connection and try again.") }
+            )
+          }
         />
       )}
     </div>

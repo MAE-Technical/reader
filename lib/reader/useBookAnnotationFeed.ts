@@ -3,17 +3,20 @@ import type { Passage, Section } from "@/lib/book/schema";
 import { useAnnotations } from "./useAnnotations";
 import { buildAnnotationFeedGroups, type FeedSectionGroup } from "./annotationFeed";
 
-/** Which entries the panel actually renders — "all" is every highlight and
- * note thread alike, "notes" narrows down to entries with at least one note,
- * "highlights" is the complement (bare highlights only, nothing discussed
- * yet). Purely a display filter — totals below are always computed from the
- * full, unfiltered set, so the header badge/subtitle never appears to
- * shrink just because the reader narrowed their own view. */
-export type AnnotationFeedFilter = "all" | "notes" | "highlights";
+/** Which entries the panel actually renders — "notes" (labeled "Public
+ * notes") narrows down to entries with at least one note, "highlights"
+ * (labeled "Your highlights") is the complement, bare highlights only,
+ * nothing discussed yet. Every entry is exactly one or the other (never
+ * both, never neither), so these two exhaust the feed on their own — no
+ * third "all" option needed. Purely a display filter — totals below are
+ * always computed from the full, unfiltered set, so the header badge/
+ * subtitle never appears to shrink just because the reader narrowed their
+ * own view. */
+export type AnnotationFeedFilter = "notes" | "highlights";
 
 /**
  * Owns the book-wide annotation feed panel's own state — open/closed, the
- * section-grouped view-model, and which of the three the reader currently
+ * section-grouped view-model, and which of the two tabs the reader currently
  * has selected. Defaults to "notes" — the feed's whole point is surfacing
  * discourse worth re-reading, and a heavily-highlighted book would otherwise
  * bury that under every bare highlight on first open. Which highlight's
@@ -42,7 +45,6 @@ export function useBookAnnotationFeed({
   );
 
   const visibleGroups: FeedSectionGroup[] = useMemo(() => {
-    if (filter === "all") return groups;
     const keep = (e: FeedSectionGroup["entries"][number]) =>
       filter === "notes" ? e.annotation.notes.length > 0 : e.annotation.notes.length === 0;
     return groups.map((g) => ({ ...g, entries: g.entries.filter(keep) })).filter((g) => g.entries.length > 0);

@@ -12,7 +12,9 @@
     "publish:book": "bun run scripts/publish-book.ts",
     "materials:manifests": "bun run scripts/generate-material-manifests.ts",
     "materials:thumbnails": "bun run scripts/generate-material-thumbnails.ts",
-    "materials:google": "bun run scripts/generate-material-google-metadata.ts"
+    "materials:cover-src": "bun run scripts/generate-material-cover-src.ts",
+    "materials:google": "bun run scripts/generate-material-google-metadata.ts",
+    "materials:openlibrary": "bun run scripts/generate-material-openlibrary-metadata.ts"
   },
   "dependencies": {
     "@radix-ui/react-popover": "^1.1.23",
@@ -20,7 +22,7 @@
     "@tanstack/react-query": "^5.101.4",
     "@vercel/analytics": "^2.0.1",
     "country-list": "^2.4.1",
-    "lucide-react": "^1.24.0",
+    "lucide-react": "^1.37.0",
     "minisearch": "^7.2.0",
     "modern-screenshot": "^4.7.0",
     "next": "16.2.10",

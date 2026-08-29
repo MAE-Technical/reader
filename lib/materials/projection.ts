@@ -3,6 +3,7 @@ import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
 import { buildSectionsById } from "@/lib/reader/sections";
 import type { Database } from "@/lib/supabase/database.types";
 import { fetchMaterialManifest } from "./manifest";
+import { parseGoogleMetaData, parseOpenLibraryMetaData } from "./providerMeta";
 
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
 
@@ -14,10 +15,15 @@ const DB_ONLY_FIELDS = new Set([
   "author",
   "description",
   "cover",
+  "coverSource",
   "googleCoverUrl",
   "googleThumbnailUrl",
   "googleDescription",
   "googleMetaData",
+  "openlibraryCoverUrl",
+  "openlibraryThumbnailUrl",
+  "openlibraryDescription",
+  "openlibraryMetaData",
   "language",
   "publishedYear",
   "pageCountEstimate",
@@ -95,17 +101,32 @@ export async function projectMaterial(
         case "cover":
           result.cover = row.cover_url;
           break;
+        case "coverSource":
+          result.coverSource = row.cover_source;
+          break;
         case "googleCoverUrl":
-          result.googleCoverUrl = row.google_cover_url;
+          result.googleCoverUrl = parseGoogleMetaData(row.google_meta_data).coverUrl;
           break;
         case "googleThumbnailUrl":
-          result.googleThumbnailUrl = row.google_thumbnail_url;
+          result.googleThumbnailUrl = parseGoogleMetaData(row.google_meta_data).thumbnailUrl;
           break;
         case "googleDescription":
-          result.googleDescription = row.google_description;
+          result.googleDescription = parseGoogleMetaData(row.google_meta_data).description;
           break;
         case "googleMetaData":
           result.googleMetaData = row.google_meta_data;
+          break;
+        case "openlibraryCoverUrl":
+          result.openlibraryCoverUrl = parseOpenLibraryMetaData(row.openlibrary_meta_data).coverUrl;
+          break;
+        case "openlibraryThumbnailUrl":
+          result.openlibraryThumbnailUrl = parseOpenLibraryMetaData(row.openlibrary_meta_data).thumbnailUrl;
+          break;
+        case "openlibraryDescription":
+          result.openlibraryDescription = parseOpenLibraryMetaData(row.openlibrary_meta_data).description;
+          break;
+        case "openlibraryMetaData":
+          result.openlibraryMetaData = row.openlibrary_meta_data;
           break;
         case "language":
           result.language = row.language;

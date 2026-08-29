@@ -5,29 +5,18 @@ import { useRouter } from "next/navigation";
 import AuthButton from "./AuthButton";
 
 /**
- * The recruiting pitch, now pared down to just the CTA — Biko's portrait
- * carries the pitch on its own, so the old headline/copy block (the /auth
- * landing page's original wording) was cut rather than fighting the image
- * for attention. What's left sits directly on the photo, bottom-left: the
- * quote on top, the login/signup buttons under it. A flat tint over the
- * whole photo (not a box around the text) is what keeps both legible —
- * darkening the image itself rather than fencing the content off from it
- * is what makes this still read as one banner instead of a card with a
- * caption stuck on top of it.
+ * Substack-style recruiting card: a plain bordered surface (not a dark photo
+ * banner) with the pitch — title, subheading, CTAs — on the left and a
+ * portrait + quote as the "illustration" on the right, the way Substack's
+ * own house-ad card pairs a headline/CTA block with a decorative graphic in
+ * the corner. Biko's photo is a thumbnail here rather than the full card
+ * background, so it can sit beside the quote instead of behind it.
  *
- * object-cover, with a centered object-position rather than an edge like
- * "right top": this card's own box swings between two very different
- * shapes — wide and short on desktop (min-height only), tall and narrow on
- * mobile once the buttons stack above the quote. cover always scales to
- * match whichever axis is *tighter* and crops the other — on the wide/short
- * shape that's height-cropping only (width already matches the card
- * exactly, so the horizontal position never even applies there); on the
- * tall/narrow shape it's the reverse, purely horizontal crop. An
- * edge-anchored position is thus guaranteed to crop his face out on
- * whichever breakpoint that axis actually governs — which is exactly what
- * "right top" did (hair-only on desktop, ear-only on mobile). A single
- * roughly-centered position is safe at *both*, since each breakpoint only
- * ever consults one axis of it.
+ * Rather than a flat fill, the surface is a faint diagonal wash — the same
+ * surface token warmed by a sliver of brand rust via color-mix, so the
+ * banner reads as a banner instead of a form panel, without needing a
+ * pattern overlay or a separate dark-mode variant (color-mix always starts
+ * from --reader-surface, so it tracks whichever theme is active).
  */
 const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function MissionCard(
   { className = "" },
@@ -36,44 +25,51 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
   const router = useRouter();
 
   return (
-    <div ref={ref} className={`relative overflow-hidden rounded-sm bg-sand-950 text-white ${className}`}>
-      <img
-        src="https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/1.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9hYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuLzEuanBnIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NTk2MTYxNSwiZXhwIjoxODE3NDk3NjE1fQ.nfpRFQZlQ0nuGjC_6XVXYFPoVDbD_j9LRGazC_LntfI"
-        alt=""
-        aria-hidden="true"
-        className="absolute inset-0 h-full w-full object-cover object-[48%_30%] grayscale contrast-110 brightness-90"
-      />
-      {/* Flat tint over the whole photo, plus a bit more weight at the
-          bottom where the text sits — darkens the image itself so the
-          content reads directly on it, no boxed-off panel needed. */}
-      <div className="absolute inset-0 bg-sand-950/35" />
-      <div className="absolute inset-0 bg-gradient-to-t from-sand-950/55 from-0% to-transparent to-65%" />
+    <div
+      ref={ref}
+      className={`relative overflow-hidden rounded-sm border border-[var(--reader-border)] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--reader-surface)_90%,var(--color-brand-500)_10%),var(--reader-surface)_65%)] p-7 sm:p-9 ${className}`}
+    >
+      <div className="relative flex flex-col items-start gap-7 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col items-start gap-4">
+          <div className="flex flex-col items-start gap-2">
+            <h2 className="m-0 max-w-xs font-serif text-2xl font-bold leading-tight text-[var(--reader-text)] sm:text-[28px]">
+              The Young Nigerian Reading Project
+            </h2>
+            <p className="m-0 max-w-xs font-literata text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
+              Free books, honest conversations, and a reading culture built by and for young Nigerians.
+            </p>
+          </div>
 
-      <div className="relative flex flex-col items-start justify-end gap-4 p-6 pb-8 sm:min-h-96 sm:pb-9">
-        <div className="max-w-80 drop-shadow-[0_1px_4px_rgba(0,0,0,0.8)]">
-          <span aria-hidden="true" className="select-none font-literata text-[40px] leading-[0.4] text-white">
-            &ldquo;
-          </span>
-          <blockquote className="m-0 font-serif text-[15px] font-bold leading-snug text-white">
-            The most potent weapon in the hands of the oppressor is the mind of the oppressed.
-          </blockquote>
-          <p className="m-0 mt-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-white/80">
-            Black Consciousness — <span className="text-white">Steve Biko</span>
-          </p>
+          {/* Side by side at every width, each sized to its own label rather
+              than stretched full-width — two compact buttons read as a
+              caption's CTAs, not a form. */}
+          <div className="flex flex-row flex-wrap gap-3">
+            <AuthButton variant="solid" fullWidth={false} onClick={() => router.push("/auth/signup")}>
+              Join the movement
+            </AuthButton>
+            <AuthButton variant="outline" fullWidth={false} onClick={() => router.push("/auth/login")}>
+              Log in
+            </AuthButton>
+          </div>
         </div>
 
-        {/* Side by side at every width, each sized to its own label rather
-            than stretched to fill a grid column — a stacked, full-width
-            pair read as an oversized wall of button on a phone-width card;
-            two compact, right-sized buttons sit on the photo the way a
-            caption's CTAs would, not a form. */}
-        <div className="flex flex-row flex-wrap gap-3">
-          <AuthButton variant="outline" fullWidth={false} onClick={() => router.push("/auth/login")}>
-            Log in
-          </AuthButton>
-          <AuthButton variant="solid" fullWidth={false} onClick={() => router.push("/auth/signup")}>
-            Join the movement
-          </AuthButton>
+        {/* The "illustration" corner: a portrait next to the quote it
+            belongs to, wide enough for the line to breathe instead of
+            wrapping into a narrow column. */}
+        <div className="flex flex-none flex-row items-center gap-4 sm:max-w-80">
+          <img
+            src="https://idjeqhbhbcqkacyktupb.supabase.co/storage/v1/object/sign/public-cdn/1.jpg?token=eyJraWQiOiJzdG9yYWdlLXVybC1zaWduaW5nLWtleV9hYzE0NTA4MS05NjdmLTRiMzctOGRlYy0wMDAyMGYyMjQ2YmMiLCJhbGciOiJIUzI1NiJ9.eyJ1cmwiOiJwdWJsaWMtY2RuLzEuanBnIiwic2NvcGUiOiJkb3dubG9hZCIsImlhdCI6MTc4NTk2MTYxNSwiZXhwIjoxODE3NDk3NjE1fQ.nfpRFQZlQ0nuGjC_6XVXYFPoVDbD_j9LRGazC_LntfI"
+            alt="Steve Biko"
+            className="h-20 w-20 flex-none rounded-sm object-cover object-[48%_20%] grayscale contrast-110 sm:h-24 sm:w-24"
+          />
+          <div>
+            <blockquote className="m-0 font-serif text-sm font-semibold italic leading-snug text-[var(--reader-text)]">
+              &ldquo;The most potent weapon in the hands of the oppressor is the mind of the oppressed.&rdquo;
+            </blockquote>
+            <p className="m-0 mt-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--reader-text-muted)]">
+              Steve Biko
+            </p>
+          </div>
         </div>
       </div>
     </div>

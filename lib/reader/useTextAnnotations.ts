@@ -1,11 +1,11 @@
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { AnnotationRange } from "@/lib/api/types";
 import { sameRanges, type Annotation } from "@/stores/library-store";
 import { useSessionStore } from "@/stores/session-store";
+import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useAnnotations } from "./useAnnotations";
 import { useCreateHighlight, useDeleteHighlight } from "@/lib/materials/useHighlightMutations";
 import { useDeleteNote } from "@/lib/community/useNoteMutations";
-import { useRequireAuth } from "./useRequireAuth";
 import { topLevelNotes } from "./noteThread";
 import { computeSelectionRanges } from "./annotationSelection";
 
@@ -18,6 +18,16 @@ export type SelectionState = { ranges: AnnotationRange[]; anchor: SelectionAncho
  * why a click target is wrong for a row that isn't backed by anything real
  * yet). */
 export const PENDING_ANNOTATION_ID = "pending-selection";
+
+/** Replaces the SelectionMenu pill in place, anchored at whatever selection
+ * triggered it (see SelectionMenu's own `override` prop) — "auth" for a
+ * signed-out reader's highlight attempt (MembersOnlyPrompt, stays up until
+ * dismissed since it carries real Log in/Join us links), "error" for a
+ * failed optimistic highlight create/delete (a brief message, self-clears —
+ * see the timer effect below). Kept independent of `selection` itself since
+ * an "error" only surfaces after `selection` has already been cleared (the
+ * mutation was already dispatched). */
+export type SelectionOverlay = { anchor: SelectionAnchor; kind: "auth" | "error" };
 
 export type NotesPanelState = {
   passageId: string;
@@ -53,11 +63,20 @@ export function useTextAnnotations(materialId: string) {
   const createHighlight = useCreateHighlight(materialId);
   const deleteHighlight = useDeleteHighlight(materialId);
   const deleteNote = useDeleteNote(materialId);
-  const requireAuth = useRequireAuth();
+  const isAuthenticated = useIsAuthenticated();
   const readerId = useSessionStore((s) => s.readerId);
 
   const [selection, setSelection] = useState<SelectionState | null>(null);
   const [notesPanel, setNotesPanel] = useState<NotesPanelState | null>(null);
+  const [overlay, setOverlay] = useState<SelectionOverlay | null>(null);
+
+  // The "error" overlay is purely informational (no links to click, unlike
+  // "auth") — self-clears rather than waiting on an outside tap.
+  useEffect(() => {
+    if (overlay?.kind !== "error") return;
+    const timer = setTimeout(() => setOverlay(null), 2500);
+    return () => clearTimeout(timer);
+  }, [overlay]);
 
   const getForPassage = useCallback(
     (passageId: string): Annotation[] => annotationsByPassage[passageId] ?? [],
@@ -97,14 +116,18 @@ export function useTextAnnotations(materialId: string) {
   // deterministic range-derived key, not a real row id.
   const highlightSelection = useCallback(() => {
     if (!selection) return;
-    const { ranges } = selection;
+    const { ranges, anchor } = selection;
     const existing = getForPassage(ranges[0].passageId).find((a) => a.highlighted && sameRanges(a.ranges, ranges));
-    requireAuth(() => {
-      if (existing?.highlightId) deleteHighlight.mutate(existing.highlightId);
-      else createHighlight.mutate(ranges);
-    });
+    if (!isAuthenticated) {
+      setOverlay({ anchor, kind: "auth" });
+      setSelection(null);
+      return;
+    }
+    const onError = () => setOverlay({ anchor, kind: "error" });
+    if (existing?.highlightId) deleteHighlight.mutate(existing.highlightId, { onError });
+    else createHighlight.mutate(ranges, { onError });
     setSelection(null);
-  }, [selection, getForPassage, deleteHighlight, createHighlight, requireAuth]);
+  }, [selection, getForPassage, deleteHighlight, createHighlight, isAuthenticated]);
 
   // Adding a note always inserts a brand-new, independent note row — there
   // is no shared parent object to find-or-create, so a re-selection of an
@@ -141,14 +164,17 @@ export function useTextAnnotations(materialId: string) {
   // root already removes that reader's whole sub-thread.
   const deleteSelection = useCallback(() => {
     if (!selection || !existingForSelection) return;
-    requireAuth(() => {
-      if (existingForSelection.highlightId) deleteHighlight.mutate(existingForSelection.highlightId);
-      for (const note of topLevelNotes(existingForSelection.notes)) {
-        if (note.author.readerId === readerId) deleteNote.mutate(note.id);
-      }
-    });
+    const { anchor } = selection;
+    if (existingForSelection.highlightId) {
+      deleteHighlight.mutate(existingForSelection.highlightId, {
+        onError: () => setOverlay({ anchor, kind: "error" }),
+      });
+    }
+    for (const note of topLevelNotes(existingForSelection.notes)) {
+      if (note.author.readerId === readerId) deleteNote.mutate(note.id);
+    }
     setSelection(null);
-  }, [selection, existingForSelection, deleteHighlight, deleteNote, requireAuth, readerId]);
+  }, [selection, existingForSelection, deleteHighlight, deleteNote, readerId]);
 
   // Clicking any existing mark (highlight-only or noted) — opens its thread
   // directly, no intermediate menu. Removing a highlight or deleting a note
@@ -205,6 +231,8 @@ export function useTextAnnotations(materialId: string) {
     getForPassage: getForPassageWithPending,
     selection,
     notesPanel,
+    overlay,
+    dismissOverlay: useCallback(() => setOverlay(null), []),
     onTextSelect,
     dismissSelection,
     highlightSelection,

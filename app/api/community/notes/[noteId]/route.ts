@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
+import { parseGoogleMetaData, parseOpenLibraryMetaData } from "@/lib/materials/providerMeta";
 import { getAuthenticatedReader } from "@/lib/auth/session";
 import { forbidden, notFound, unauthorized, validationError } from "@/lib/api/errors";
 import { contentToColumns, hydrateNotes, type NoteRow } from "@/lib/community/notes";
@@ -25,6 +26,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ note
 
   const hydratedById = new Map((await hydrateNotes([row, ...visibleReplies], reader?.readerId)).map((n) => [n.id, n]));
 
+  const google = parseGoogleMetaData(material.google_meta_data);
+  const openlibrary = parseOpenLibraryMetaData(material.openlibrary_meta_data);
+
   return NextResponse.json({
     note: hydratedById.get(row.id)!,
     replies: visibleReplies.map((r) => hydratedById.get(r.id)!),
@@ -35,8 +39,11 @@ export async function GET(request: Request, { params }: { params: Promise<{ note
       author: material.author,
       cover: material.cover_url,
       thumbnail: material.thumbnail_url,
-      googleCoverUrl: material.google_cover_url,
-      googleThumbnailUrl: material.google_thumbnail_url,
+      googleCoverUrl: google.coverUrl,
+      googleThumbnailUrl: google.thumbnailUrl,
+      openlibraryCoverUrl: openlibrary.coverUrl,
+      openlibraryThumbnailUrl: openlibrary.thumbnailUrl,
+      coverSource: material.cover_source,
     },
   });
 }

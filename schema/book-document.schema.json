@@ -6,7 +6,7 @@
   "type": "object",
   "required": ["schemaVersion", "id", "slug", "metadata", "narrators", "sections", "spine"],
   "properties": {
-    "schemaVersion": { "const": 3 },
+    "schemaVersion": { "enum": [3, 4], "description": "4 adds optional TableCell.marks; 3 documents remain valid." },
     "id": { "type": "string" },
     "slug": { "type": "string" },
     "metadata": { "$ref": "#/$defs/BookMetadata" },
@@ -68,8 +68,12 @@
       "properties": {
         "start": { "type": "integer", "minimum": 0 },
         "end": { "type": "integer", "minimum": 0 },
-        "kind": { "enum": ["em", "strong", "note"] },
-        "noteId": { "type": "string", "description": "Set iff kind == \"note\"; references Note.id." }
+        "kind": { "enum": ["em", "strong", "underline", "strike", "code", "sub", "sup", "link", "note"] },
+        "noteId": { "type": "string", "description": "Set iff kind == \"note\"; references Note.id." },
+        "href": { "type": "string", "description": "Set for external links and unresolved EPUB-internal links." },
+        "internal": { "type": "boolean", "description": "True iff this link targets the current EPUB; readers must not open its href in a browser." },
+        "sectionId": { "type": "string", "description": "Set iff kind == \"link\" and an EPUB-internal destination resolves to a reading section." },
+        "fragmentId": { "type": "string", "description": "Optional source fragment within a resolved internal link destination." }
       }
     },
     "Passage": {
@@ -78,12 +82,48 @@
       "properties": {
         "id": { "type": "string" },
         "index": { "type": "integer", "minimum": 0 },
-        "type": { "enum": ["paragraph", "heading", "blockquote", "image"] },
+        "type": { "enum": ["paragraph", "heading", "blockquote", "image", "listItem", "code", "horizontalRule", "table", "definitionList"] },
         "text": { "type": "string", "description": "Body text, or alt text when type == \"image\"." },
         "level": { "type": "integer", "minimum": 1, "maximum": 6, "description": "Set iff type == \"heading\": the source h1-h6 depth, so the reader can render each distinctly instead of one uniform heading style." },
         "marks": { "type": "array", "items": { "$ref": "#/$defs/Mark" } },
         "src": { "type": "string", "description": "Set iff type == \"image\": public path to the extracted asset." },
-        "caption": { "type": "string", "description": "Set iff type == \"image\"." }
+        "caption": { "type": "string", "description": "Set iff type == \"image\"." },
+        "align": { "enum": ["left", "center", "right", "justify"], "description": "Source text alignment when explicitly declared by the EPUB." },
+        "listLevel": { "type": "integer", "minimum": 1, "description": "Set iff type == \"listItem\"; source nesting depth." },
+        "listStyle": { "enum": ["ordered", "unordered"], "description": "Set iff type == \"listItem\"." },
+        "listStart": { "type": "integer", "minimum": 1, "description": "Set on the first item of a source ordered list when its start differs from 1." },
+        "language": { "type": "string", "description": "Source language/class annotation when type == \"code\"." },
+        "table": { "$ref": "#/$defs/Table", "description": "Set iff type == \"table\"." },
+        "definitions": { "type": "array", "items": { "$ref": "#/$defs/Definition" }, "description": "Set iff type == \"definitionList\"." }
+      }
+    },
+    "TableCell": {
+      "type": "object",
+      "required": ["text"],
+      "properties": {
+        "text": { "type": "string" },
+        "rowspan": { "type": "integer", "minimum": 1 },
+        "colspan": { "type": "integer", "minimum": 1 },
+        "align": { "enum": ["left", "center", "right", "justify"] },
+        "marks": { "type": "array", "items": { "$ref": "#/$defs/Mark" }, "description": "schemaVersion >= 4: inline formatting/note refs within the cell, offsets into `text`." }
+      }
+    },
+    "Table": {
+      "type": "object",
+      "required": ["rows"],
+      "properties": {
+        "caption": { "type": "string" },
+        "header": { "type": "array", "items": { "type": "array", "items": { "$ref": "#/$defs/TableCell" } } },
+        "rows": { "type": "array", "items": { "type": "array", "items": { "$ref": "#/$defs/TableCell" } } },
+        "footer": { "type": "array", "items": { "type": "array", "items": { "$ref": "#/$defs/TableCell" } } }
+      }
+    },
+    "Definition": {
+      "type": "object",
+      "required": ["term", "definitions"],
+      "properties": {
+        "term": { "type": "string" },
+        "definitions": { "type": "array", "items": { "type": "string" } }
       }
     },
     "NarratorTrack": {

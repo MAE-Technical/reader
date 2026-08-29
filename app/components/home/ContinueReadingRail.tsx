@@ -41,7 +41,7 @@ export default function ContinueReadingRail() {
       ) : (
         <div className="flex gap-4 overflow-x-auto pb-1.5 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           {items!.map((item) => (
-            <ContinueReadingItemCard key={item.material.id} item={item} variant="rail" />
+            <ContinueReadingItemCard key={item.material.id} item={item} />
           ))}
         </div>
       )}

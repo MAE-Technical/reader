@@ -3,7 +3,7 @@
 import { useState } from "react";
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import { useCommunityFeed, type CommunityFeedSort } from "@/lib/community/useCommunityFeed";
-import TopBooksRail from "./TopBooksRail";
+import FeaturedThisWeek from "@/app/components/shell/FeaturedThisWeek";
 import CommunityFeedSortToggle from "./CommunityFeedSortToggle";
 import CommunityNoteCard from "./CommunityNoteCard";
 import HomeAuthBanner from "./HomeAuthBanner";
@@ -39,7 +39,7 @@ export default function HomeCommunityFeed() {
       <HomeAuthBanner />
       <HomeInstallBanner />
 
-      <TopBooksRail />
+      <FeaturedThisWeek />
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
         <div>

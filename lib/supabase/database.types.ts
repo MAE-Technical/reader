@@ -60,10 +60,16 @@ export type Database = {
           description: string | null;
           cover_url: string | null;
           thumbnail_url: string | null;
-          google_thumbnail_url: string | null;
-          google_cover_url: string | null;
-          google_description: string | null;
+          /** { googleBooksId, isbn, coverUrl, thumbnailUrl, description } — see
+           * scripts/generate-material-google-metadata.ts and lib/materials/providerMeta.ts. */
           google_meta_data: Json | null;
+          /** { coverUrl, thumbnailUrl, description } — see
+           * scripts/generate-material-openlibrary-metadata.ts. */
+          openlibrary_meta_data: Json | null;
+          /** Which of cover_url/thumbnail_url ("own"), openlibrary_meta_data, or
+           * google_meta_data resolveBookCoverSrc/resolveBookThumbnailSrc
+           * (lib/materials/image.ts) tries first — see migrations/20260829_materials_cover_source.sql. */
+          cover_source: "own" | "openlibrary" | "google";
           language: string | null;
           published_year: number | null;
           page_count_estimate: number | null;
@@ -85,10 +91,9 @@ export type Database = {
           description?: string | null;
           cover_url?: string | null;
           thumbnail_url?: string | null;
-          google_thumbnail_url?: string | null;
-          google_cover_url?: string | null;
-          google_description?: string | null;
           google_meta_data?: Json | null;
+          openlibrary_meta_data?: Json | null;
+          cover_source?: "own" | "openlibrary" | "google";
           language?: string | null;
           published_year?: number | null;
           page_count_estimate?: number | null;

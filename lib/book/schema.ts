@@ -12,6 +12,8 @@ export type { BookDocument };
 export type Section = BookDocument["sections"][number];
 export type Passage = Section["passages"][number];
 export type Mark = NonNullable<Passage["marks"]>[number];
+export type Table = NonNullable<Passage["table"]>;
+export type TableCell = Table["rows"][number][number];
 export type Narrator = BookDocument["narrators"][number];
 export type BookMetadata = BookDocument["metadata"];
 export type Note = BookDocument["notes"][number];

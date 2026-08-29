@@ -36,6 +36,12 @@ type Props = {
    * Delete) and the click-an-existing-mark popover (Remove highlight/Add
    * note or View thread), each with a different action set. */
   items: Item[];
+  /** Renders in place of `items` (both the desktop pill and the mobile
+   * bottom bar) when present — reuses this component's own clamped-position/
+   * dismiss mechanics for content that isn't an action list, e.g. the
+   * signed-out MembersOnlyPrompt or a brief "couldn't save" message after a
+   * failed optimistic write (see Reader.tsx's own selection handling). */
+  override?: ReactNode;
   onDismiss: () => void;
 };
 
@@ -63,7 +69,7 @@ const VIEWPORT_MARGIN = 8;
  * since its width varies with which actions are showing); mobile is a
  * fixed bottom bar, position independent of the selection entirely.
  */
-export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme, items, onDismiss }: Props) {
+export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme, items, override, onDismiss }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ top: number; left: number; flipped: boolean } | null>(null);
 
@@ -118,20 +124,25 @@ export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme,
     return (
       <div
         ref={rootRef}
-        style={{ bottom: bottomOffsetPx, background: bg, boxShadow: shadow }}
-        className="reader-menu-in fixed inset-x-0 z-30 flex items-stretch justify-around select-none no-callout"
+        style={override ? { bottom: bottomOffsetPx } : { bottom: bottomOffsetPx, background: bg, boxShadow: shadow }}
+        className={
+          override
+            ? "reader-menu-in fixed inset-x-0 z-30 select-none no-callout p-3"
+            : "reader-menu-in fixed inset-x-0 z-30 flex items-stretch justify-around select-none no-callout"
+        }
       >
-        {items.map((item) => (
-          <button
-            key={item.key}
-            onClick={item.onClick}
-            style={{ color: item.danger ? DANGER_COLOR : fg }}
-            className="flex-1 flex flex-col items-center justify-center gap-1 bg-transparent border-none py-2.5 cursor-pointer text-[11px] font-semibold"
-          >
-            {item.icon}
-            {item.label}
-          </button>
-        ))}
+        {override ??
+          items.map((item) => (
+            <button
+              key={item.key}
+              onClick={item.onClick}
+              style={{ color: item.danger ? DANGER_COLOR : fg }}
+              className="flex-1 flex flex-col items-center justify-center gap-1 bg-transparent border-none py-2.5 cursor-pointer text-[11px] font-semibold"
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          ))}
       </div>
     );
   }
@@ -142,32 +153,38 @@ export default function SelectionMenu({ anchor, isMobile, bottomOffsetPx, theme,
       style={{
         top: pos?.top ?? anchor.top,
         left: pos?.left ?? anchor.left,
-        background: bg,
-        boxShadow: shadow,
+        ...(override ? {} : { background: bg, boxShadow: shadow }),
         // Invisible until the first measure/clamp pass has run — otherwise
         // there'd be a one-frame flash at the raw (unclamped) anchor
         // position before it jumps to its real, on-screen spot.
         visibility: pos ? "visible" : "hidden",
       }}
-      className="reader-menu-in fixed flex items-center gap-px rounded-md p-1 z-30 select-none no-callout"
+      className={
+        override
+          ? "reader-menu-in fixed rounded-md z-30 select-none no-callout w-64"
+          : "reader-menu-in fixed flex items-center gap-px rounded-md p-1 z-30 select-none no-callout"
+      }
     >
-      <div
-        style={{ background: bg }}
-        className={`absolute left-5 w-2 h-2 rotate-45 rounded-xs ${pos?.flipped ? "-top-1" : "-bottom-1"}`}
-      />
-      {items.map((item, i) => (
-        <div key={item.key} className="flex items-center">
-          {i > 0 && <div style={{ background: divider }} className="w-px h-4 mx-0.5 flex-none" />}
-          <button
-            onClick={item.onClick}
-            style={{ color: item.danger ? DANGER_COLOR : fg }}
-            className="flex items-center gap-1.5 bg-transparent border-none py-1.75 px-3 rounded-full cursor-pointer text-xs font-semibold whitespace-nowrap"
-          >
-            {item.icon}
-            {item.label}
-          </button>
-        </div>
-      ))}
+      {!override && (
+        <div
+          style={{ background: bg }}
+          className={`absolute left-5 w-2 h-2 rotate-45 rounded-xs ${pos?.flipped ? "-top-1" : "-bottom-1"}`}
+        />
+      )}
+      {override ??
+        items.map((item, i) => (
+          <div key={item.key} className="flex items-center">
+            {i > 0 && <div style={{ background: divider }} className="w-px h-4 mx-0.5 flex-none" />}
+            <button
+              onClick={item.onClick}
+              style={{ color: item.danger ? DANGER_COLOR : fg }}
+              className="flex items-center gap-1.5 bg-transparent border-none py-1.75 px-3 rounded-full cursor-pointer text-xs font-semibold whitespace-nowrap"
+            >
+              {item.icon}
+              {item.label}
+            </button>
+          </div>
+        ))}
     </div>
   );
 }

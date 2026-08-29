@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { BookDocument, Section } from "@/lib/book/schema";
+import { resolveSpineTarget } from "@/lib/reader/sections";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 
 /**
@@ -19,10 +20,15 @@ import { useReadingPositionStore } from "@/stores/reading-position-store";
  * `targetSectionId` (the book-detail page's chapter links, `?section=`)
  * overrides the saved position for this one jump — deliberately never
  * written back to reading-position-store, so a reader just previewing a
- * chapter link doesn't clobber their real bookmark. `targetPassageId` (the
- * home community feed's deep links, `?passage=`) narrows that further to
- * one specific passage within the section, instead of always landing on
- * the section's first passage.
+ * chapter link doesn't clobber their real bookmark. It's resolved through
+ * `resolveSpineTarget` first, same as the in-reader chapters drawer's own
+ * `navigateToSection` (Reader.tsx) — a `?section=` link can legitimately
+ * name a grouping node with no passages of its own (a pure Part divider),
+ * which `orderedSections` (spine-only) has no entry for at all, so landing
+ * on it directly would silently no-op and leave the saved/default position
+ * in place instead. `targetPassageId` (the home community feed's deep
+ * links, `?passage=`) narrows that further to one specific passage within
+ * the section, instead of always landing on the section's first passage.
  */
 export function useResumeScroll({
   book,
@@ -49,7 +55,12 @@ export function useResumeScroll({
 
   useEffect(() => {
     if (hasScrolledToResumeRef.current) return;
-    const stored = targetSectionId ? { sectionId: targetSectionId, passageIndex: 0 } : getPosition(materialId);
+    const stored = targetSectionId
+      ? (() => {
+          const resolved = resolveSpineTarget(targetSectionId, book.sections, book.spine);
+          return resolved ? { sectionId: resolved, passageIndex: 0 } : null;
+        })()
+      : getPosition(materialId);
     const sectionIndex = stored ? orderedSections.findIndex((s) => s.id === stored.sectionId) : -1;
     const passageId =
       targetPassageId ?? (stored ? sectionsById.get(stored.sectionId)?.passages[stored.passageIndex]?.id : undefined);

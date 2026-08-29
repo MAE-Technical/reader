@@ -1,12 +1,8 @@
 import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { projectMaterial } from "@/lib/materials/projection";
 import type { TocSection } from "@/lib/api/types";
+import type { CoverSource } from "@/lib/materials/image";
 import { fetchMaterialManifest } from "./manifest";
-
-export type TocTitleNode = {
-  title: string | null;
-  children: TocTitleNode[];
-};
 
 export class MaterialNotFoundError extends Error {
   constructor(materialId: string) {
@@ -22,17 +18,21 @@ export type MaterialDetail = {
   author: string;
   description: string | null;
   cover: string | null;
+  coverSource: CoverSource;
   googleCoverUrl: string | null;
   googleThumbnailUrl: string | null;
   googleDescription: string | null;
   googleMetaData: Record<string, unknown> | null;
+  openlibraryCoverUrl: string | null;
+  openlibraryThumbnailUrl: string | null;
+  openlibraryDescription: string | null;
+  openlibraryMetaData: Record<string, unknown> | null;
   language: string | null;
   publishedYear: number | null;
   pageCountEstimate: number | null;
   narratorCount: number;
   spine: string[];
   sections: TocSection[];
-  tocTitles: TocTitleNode[];
 };
 
 const DETAIL_FIELDS = [
@@ -40,10 +40,15 @@ const DETAIL_FIELDS = [
   "author",
   "description",
   "cover",
+  "coverSource",
   "googleCoverUrl",
   "googleThumbnailUrl",
   "googleDescription",
   "googleMetaData",
+  "openlibraryCoverUrl",
+  "openlibraryThumbnailUrl",
+  "openlibraryDescription",
+  "openlibraryMetaData",
   "language",
   "publishedYear",
   "pageCountEstimate",
@@ -52,10 +57,6 @@ const DETAIL_FIELDS = [
   "sections",
   "toc_titles",
 ];
-
-function tocTitlesFromManifest(nodes: TocSection[]): TocTitleNode[] {
-  return nodes.map((node) => ({ title: node.label, children: tocTitlesFromManifest(node.children) }));
-}
 
 /**
  * Everything the book-detail page (`BookDetailView.tsx`) actually reads —
@@ -80,16 +81,20 @@ export async function getMaterialDetail(slug: string): Promise<MaterialDetail> {
     author: projected.author as string,
     description: projected.description as string | null,
     cover: projected.cover as string | null,
+    coverSource: projected.coverSource as CoverSource,
     googleCoverUrl: projected.googleCoverUrl as string | null,
     googleThumbnailUrl: projected.googleThumbnailUrl as string | null,
     googleDescription: projected.googleDescription as string | null,
     googleMetaData: (projected.googleMetaData as Record<string, unknown> | null) ?? null,
+    openlibraryCoverUrl: projected.openlibraryCoverUrl as string | null,
+    openlibraryThumbnailUrl: projected.openlibraryThumbnailUrl as string | null,
+    openlibraryDescription: projected.openlibraryDescription as string | null,
+    openlibraryMetaData: (projected.openlibraryMetaData as Record<string, unknown> | null) ?? null,
     language: projected.language as string | null,
     publishedYear: projected.publishedYear as number | null,
     pageCountEstimate: projected.pageCountEstimate as number | null,
     narratorCount: projected.narratorCount as number,
     spine: manifest.spine,
     sections: manifest.toc as TocSection[],
-    tocTitles: tocTitlesFromManifest(manifest.toc),
   };
 }

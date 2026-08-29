@@ -107,14 +107,94 @@ function renderLeaf(
   key: number,
   notesById: Map<string, NoteLookup>,
   onNoteClick: (note: NoteLookup, target: HTMLElement) => void,
+  onInternalLinkClick: (sectionId: string, fragmentId?: string) => void,
   activeWordIndex: number | undefined
 ) {
   const activeStyle =
     seg.wordIndex !== undefined && seg.wordIndex === activeWordIndex ? ACTIVE_WORD_STYLE : undefined;
+  const text = seg.text;
 
   if (!seg.mark) return <span key={key} style={activeStyle}>{seg.text}</span>;
   if (seg.mark.kind === "em") return <em key={key} style={activeStyle}>{seg.text}</em>;
   if (seg.mark.kind === "strong") return <strong key={key} style={activeStyle}>{seg.text}</strong>;
+  if (seg.mark.kind === "underline") return <span key={key} style={{ ...activeStyle, textDecoration: "underline" }}>{text}</span>;
+  if (seg.mark.kind === "strike") return <span key={key} style={{ ...activeStyle, textDecoration: "line-through" }}>{text}</span>;
+  if (seg.mark.kind === "sub") return <sub key={key} style={activeStyle}>{text}</sub>;
+  if (seg.mark.kind === "sup") return <sup key={key} style={activeStyle}>{text}</sup>;
+  if (seg.mark.kind === "code") {
+    return (
+      <code
+        key={key}
+        style={{
+          ...activeStyle,
+          fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+          background: "var(--reader-surface-hover)",
+          borderRadius: 3,
+          padding: "0 0.2em",
+        }}
+      >
+        {text}
+      </code>
+    );
+  }
+  if (seg.mark.kind === "link") {
+    if (seg.mark.internal) {
+      const { sectionId, fragmentId } = seg.mark;
+      if (sectionId) {
+        return (
+          <button
+            key={key}
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onInternalLinkClick(sectionId, fragmentId);
+            }}
+            style={{
+              ...activeStyle,
+              color: "var(--reader-accent)",
+              textDecoration: "underline",
+              // <button> defaults to display:inline-block with UA text-align:
+              // center and native appearance chrome — invisible for a short
+              // label, but for a full-paragraph internal link (a TOC entry,
+              // say) that wraps across lines, the inline-block box centers
+              // each line under itself instead of flowing left like the rest
+              // of the paragraph, and the native appearance can leave a
+              // stray edge/bevel behind. Reset back to plain inline text so
+              // it wraps exactly like the surrounding <a>/<span> mark cases.
+              appearance: "none",
+              display: "inline",
+              textAlign: "inherit",
+              font: "inherit",
+            }}
+            className="bg-transparent border-none cursor-pointer p-0 m-0"
+          >
+            {text}
+          </button>
+        );
+      }
+      return (
+        <span
+          key={key}
+          title={seg.mark.href}
+          style={{ ...activeStyle, color: "var(--reader-accent)", textDecoration: "underline" }}
+          className="cursor-not-allowed"
+        >
+          {text}
+        </span>
+      );
+    }
+    const href = seg.mark.href ?? "#";
+    return (
+      <a
+        key={key}
+        href={href}
+        onClick={(e) => e.stopPropagation()}
+        style={{ ...activeStyle, color: "var(--reader-accent)", textDecoration: "underline" }}
+      >
+        {text}
+      </a>
+    );
+  }
   if (seg.mark.kind === "note") {
     const note = seg.mark.noteId ? notesById.get(seg.mark.noteId) : undefined;
     if (!note) return <span key={key} style={activeStyle}>{seg.text}</span>;
@@ -129,11 +209,11 @@ function renderLeaf(
         style={{ color: "var(--reader-note-accent)" }}
         className="inline align-super text-[0.7em] leading-none font-semibold px-0.5 bg-transparent border-none cursor-pointer"
       >
-        {seg.text}
+        {text}
       </button>
     );
   }
-  return <span key={key} style={activeStyle}>{seg.text}</span>;
+  return <span key={key} style={activeStyle}>{text}</span>;
 }
 
 /** The only signal that a marked span has entries attached — a highlight
@@ -141,43 +221,31 @@ function renderLeaf(
  * Renders once per annotation (see LocalAnnotation.isTail), immediately
  * after the marked text, never in a margin.
  *
- * A bare line-icon at this size read as illegible noise — a thin multi-path
- * glyph shrunk to ~9px loses its shape entirely. A small solid badge (fill +
- * contrasting icon color, --reader-note-accent-fg) fixes that: the badge's
- * silhouette is what's actually recognizable at a glance, the icon just adds
- * meaning on top of an already-legible shape.
- *
- * Geometry matches the Claude Design mockup exactly (not approximated via
- * Tailwind's spacing scale) — 16px circle for a single entry, widening into
- * a pill (8px radius, 5px horizontal padding, 3px gap before the count) at
- * two or more; `position: relative; top: -1px` is the mockup's own nudge to
- * sit the badge on the text's baseline rather than floating above it the
- * way `vertical-align: super` (a much bigger, superscript-sized shift) did
- * in an earlier pass. */
+ * Matches the YouVersion idiom this was redesigned from: a plain muted
+ * outline icon sitting quietly in the text rather than a colored badge
+ * competing with it, with the count (when there's more than one entry)
+ * as a small superscript numeral beside it — the same "small raised digit"
+ * language the book's own footnote markers already use (see the `seg.mark.
+ * kind === "note"` branch above), rather than a filled pill. */
 function NoteGlyph({ count }: { count: number }) {
-  const isPill = count > 1;
   return (
     <span
       style={{
         display: "inline-flex",
-        alignItems: "center",
-        justifyContent: "center",
+        alignItems: "baseline",
         position: "relative",
         top: -1,
-        height: 16,
-        width: isPill ? undefined : 16,
-        padding: isPill ? "0 5px" : undefined,
-        gap: isPill ? 3 : undefined,
-        marginLeft: 4,
-        borderRadius: isPill ? 8 : "50%",
-        background: "var(--reader-note-accent)",
-        color: "var(--reader-note-accent-fg)",
+        marginLeft: 3,
+        color: "var(--reader-text-muted)",
       }}
       className="select-none"
     >
-      <MessageCircle size={9} strokeWidth={2.5} />
-      {isPill && (
-        <span style={{ fontSize: 10, fontWeight: 600, lineHeight: 1 }} className="font-sans">
+      <MessageCircle size={12} strokeWidth={1.75} />
+      {count > 1 && (
+        <span
+          style={{ fontSize: 9, fontWeight: 600, position: "relative", top: -3, marginLeft: 1 }}
+          className="font-sans leading-none"
+        >
           {count}
         </span>
       )}
@@ -189,6 +257,7 @@ type PassageTextProps = {
   passage: Passage;
   notesById: Map<string, NoteLookup>;
   onNoteClick: (note: NoteLookup, target: HTMLElement) => void;
+  onInternalLinkClick: (sectionId: string, fragmentId?: string) => void;
   /** User highlights/notes touching this passage — range-scoped (a reader
    * can mark a single word or a whole sentence, not just the entire
    * passage, and a mark can span into neighboring passages too), rendered
@@ -229,6 +298,7 @@ export const PassageText = memo(function PassageText({
   passage,
   notesById,
   onNoteClick,
+  onInternalLinkClick,
   annotations,
   onNoteMarkerClick,
   activeWordIndex,
@@ -269,7 +339,9 @@ export const PassageText = memo(function PassageText({
   return (
     <>
       {runs.map((run, i) => {
-        const children = run.segs.map((seg, j) => renderLeaf(seg, j, notesById, onNoteClick, activeWordIndex));
+        const children = run.segs.map((seg, j) =>
+          renderLeaf(seg, j, notesById, onNoteClick, onInternalLinkClick, activeWordIndex)
+        );
         if (!run.annotationId) return <span key={i}>{children}</span>;
 
         const local = localAnnotations.find((a) => a.id === run.annotationId)!;
@@ -339,14 +411,79 @@ export const PassageText = memo(function PassageText({
   );
 });
 
-/** Renders an `image`-type passage: the extracted figure plus its caption,
- * in place of the plain-paragraph fallback (reader-issues #5). */
-export function ImagePassageBlock({ passage }: { passage: Passage }) {
-  if (!passage.src) return null;
+/** Renders inline marks (bold/italic/links/note refs — the same Mark
+ * vocabulary as passage text) over a bare string, with no passage, no
+ * annotations, and no active-word tracking behind it. Table cells (v4:
+ * TableCell.marks) are the one place formatting needs to render outside a
+ * real Passage, so this is PassageText's own segment/leaf machinery pulled
+ * out from under it rather than a second implementation — a cell without
+ * `marks` (every v3 document) just renders `text` as one plain segment. */
+export function MarkedText({
+  text,
+  marks,
+  notesById,
+  onNoteClick,
+  onInternalLinkClick,
+}: {
+  text: string;
+  marks?: Mark[];
+  notesById: Map<string, NoteLookup>;
+  onNoteClick: (note: NoteLookup, target: HTMLElement) => void;
+  onInternalLinkClick: (sectionId: string, fragmentId?: string) => void;
+}) {
+  const segments = buildSegments(text, marks, [], []);
   return (
-    <figure className="my-6 mx-0">
-      {/* eslint-disable-next-line @next/next/no-img-element -- book-supplied assets, not app images */}
-      <img src={passage.src} alt={passage.text} className="max-w-full w-auto h-auto rounded-xs" />
+    <>
+      {segments.map((seg, i) =>
+        renderLeaf(seg, i, notesById, onNoteClick, onInternalLinkClick, undefined)
+      )}
+    </>
+  );
+}
+
+/** Renders an `image`-type passage: the extracted figure plus its caption,
+ * in place of the plain-paragraph fallback (reader-issues #5). `src` can be
+ * absent (the source asset went missing during ingestion) — the alt text
+ * and caption are still real content and still render, just over a plain
+ * placeholder instead of the missing image itself, rather than the whole
+ * passage silently vanishing from the book. Shrink-wrapped (inline-block)
+ * rather than the block-level default, so the caller's own text-align
+ * (BookContent, from `align` — same field every other passage type already
+ * reads) has something to actually position instead of a figure that's
+ * already filling the full line either way.
+ *
+ * `maxWidthPx` caps how wide the image is allowed to render, on top of the
+ * existing `max-w-full` (which only ever bounds it to the reading column).
+ * Nothing else about sizing is regulated — no cropping, no imposed aspect
+ * ratio, `w-auto h-auto` still lets the image's own intrinsic dimensions
+ * decide everything below that cap — this exists only for BookContent to
+ * keep a front-matter cover from rendering edge-to-edge at the full text
+ * column width (tuned for line length, not for a portrait cover image) on
+ * wide reading panes, while ordinary in-book images stay unregulated. */
+export function ImagePassageBlock({ passage, maxWidthPx }: { passage: Passage; maxWidthPx?: number }) {
+  const capStyle = maxWidthPx !== undefined ? { maxWidth: maxWidthPx } : undefined;
+  return (
+    <figure className="my-6 mx-0 inline-block max-w-full" style={capStyle}>
+      {passage.src ? (
+        // eslint-disable-next-line @next/next/no-img-element -- book-supplied assets, not app images
+        <img
+          src={passage.src}
+          alt={passage.text}
+          className="max-w-full w-auto h-auto rounded-xs"
+          style={capStyle}
+        />
+      ) : (
+        <div
+          role="img"
+          aria-label={passage.text}
+          style={capStyle}
+          className="flex items-center justify-center rounded-xs border border-dashed border-[var(--reader-border)] bg-[var(--reader-surface-hover)] px-4 py-10 text-center"
+        >
+          <span className="text-xs text-[var(--reader-text-muted)] font-sans leading-snug">
+            {passage.text || "Image unavailable"}
+          </span>
+        </div>
+      )}
       {passage.caption && (
         <figcaption className="text-xs text-sand-500 mt-2 text-center font-sans leading-snug">
           {passage.caption}

@@ -10,21 +10,38 @@ const REFRESH_MARGIN_MS = 60_000;
 // flight all await this same promise rather than each firing their own
 // POST /api/auth/refresh — a burst of queries on app load (or reconnect)
 // refreshes the session exactly once, not once per query.
-let refreshPromise: Promise<Session | null> | null = null;
+let refreshPromise: Promise<RefreshOutcome> | null = null;
 
-async function refreshSession(refreshToken: string): Promise<Session | null> {
+/**
+ * Three-way, not a plain Session-or-null: "the refresh token is confirmed
+ * dead" (`revoked`) and "that attempt just didn't land" (`transient`) used
+ * to collapse into the same `null` and both hard-signed the reader out —
+ * which meant a dropped network request (very common right after a PWA
+ * cold-resumes on iOS, before the OS has actually reconnected) was enough
+ * to end a session that had nothing wrong with it. Only `revoked` may ever
+ * clear session-store; `transient` leaves the existing session in place so
+ * the next attempt (next call, next app open) gets to retry.
+ */
+type RefreshOutcome = { session: Session } | { revoked: true } | { transient: true };
+
+async function refreshSession(refreshToken: string): Promise<RefreshOutcome> {
+  let res: Response;
   try {
-    const res = await fetch("/api/auth/refresh", {
+    res = await fetch("/api/auth/refresh", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ refreshToken }),
     });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { session: Session };
-    return data.session;
   } catch {
-    return null;
+    // Never reached our own API — says nothing about the refresh token's
+    // actual validity.
+    return { transient: true };
   }
+  if (res.ok) return { session: ((await res.json()) as { session: Session }).session };
+  // /api/auth/refresh itself only ever answers 401 once Supabase has
+  // confirmed the token is genuinely invalid (see that route) — anything
+  // else (a 5xx, a hiccup) isn't a verdict on the token.
+  return res.status === 401 ? { revoked: true } : { transient: true };
 }
 
 /**
@@ -50,18 +67,27 @@ export async function ensureFreshSession(): Promise<string | undefined> {
       refreshPromise = null;
     });
   }
-  const refreshed = await refreshPromise;
+  const outcome = await refreshPromise;
 
-  const readerId = useSessionStore.getState().readerId;
-  if (refreshed && readerId) {
-    useSessionStore.getState().setSession(readerId, refreshed);
-    return refreshed.accessToken;
+  if ("session" in outcome) {
+    const readerId = useSessionStore.getState().readerId;
+    if (readerId) {
+      useSessionStore.getState().setSession(readerId, outcome.session);
+      return outcome.session.accessToken;
+    }
   }
-  // The refresh token itself is no good any more — nothing left to try;
-  // treat this exactly like an explicit sign-out rather than silently
-  // keeping a dead session around.
-  useSessionStore.getState().clearSession();
-  return undefined;
+  if ("revoked" in outcome) {
+    // The refresh token itself is no good any more — nothing left to try;
+    // treat this exactly like an explicit sign-out rather than silently
+    // keeping a dead session around.
+    useSessionStore.getState().clearSession();
+    return undefined;
+  }
+  // Transient — keep the existing session rather than signing the reader
+  // out over what might just be a dropped request. Its access token is
+  // stale, so a call made with it may itself 401, but that's a single
+  // request retried on the next attempt, not a lost session.
+  return session.accessToken;
 }
 
 /** Client-side mirror of lib/api/errors.ts's `{ error: { code, message,

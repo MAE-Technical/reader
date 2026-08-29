@@ -147,13 +147,13 @@ export default function AccountView() {
               <div className="font-serif text-[22px] font-semibold text-[var(--reader-accent)]">
                 {booksStarted ?? "–"}
               </div>
-              <div className="mt-1 text-[13px] font-semibold text-[var(--reader-text-subtle)]">Books started</div>
+              <div className="mt-1 text-[13px] font-semibold text-[var(--reader-text-subtle)]">Currently reading</div>
             </div>
             <div className="flex-1 rounded-md border border-[var(--reader-border)] p-3.5 text-center">
               <div className="font-serif text-[22px] font-semibold text-[var(--reader-accent)]">
                 {notesMade ?? "–"}
               </div>
-              <div className="mt-1 text-[13px] font-semibold text-[var(--reader-text-subtle)]">Notes</div>
+              <div className="mt-1 text-[13px] font-semibold text-[var(--reader-text-subtle)]">Public notes</div>
             </div>
           </div>
 
@@ -186,7 +186,7 @@ export default function AccountView() {
           <div className="mb-5 text-center">
             <button
               type="button"
-              onClick={() => logout.mutate(undefined, { onSuccess: () => router.push("/auth") })}
+              onClick={() => logout.mutate(undefined, { onSuccess: () => router.push("/") })}
               disabled={logout.isPending}
               className="cursor-pointer border-none bg-transparent p-0 text-[13px] font-medium text-[var(--reader-text-muted)] disabled:cursor-not-allowed disabled:opacity-50"
             >

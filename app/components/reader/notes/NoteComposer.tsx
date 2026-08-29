@@ -2,13 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
-import Link from "next/link";
 import { ArrowRight, Loader2, Mic, Pause, Play, Square, X } from "lucide-react";
 import { LiveWaveform, WaveformBars } from "../Waveform";
 import { formatSeconds, useMeasuredWidth, useWaveformBars } from "./noteAudioUtils";
 import { useVoiceRecorder } from "./useVoiceRecorder";
 import { useUploadVoiceNote } from "@/lib/community/useUploadVoiceNote";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
+import MembersOnlyPrompt, { type MembersOnlyAction } from "./MembersOnlyPrompt";
 
 // Caps how tall the textarea will grow to fit a long note before it starts
 // scrolling internally instead — a chat-input pattern (Slack/iMessage-style),
@@ -35,6 +35,7 @@ export default function NoteComposer({
   placeholder = "Add a note…",
   startCollapsed = false,
   showMemberPrompt = false,
+  action = "note",
   onCancel,
   excludeRef,
   onSave,
@@ -49,6 +50,10 @@ export default function NoteComposer({
    * reply. General compose surfaces stay out of the way for signed-out
    * readers instead of repeating the prompt throughout the panel. */
   showMemberPrompt?: boolean;
+  /** Which MembersOnlyPrompt copy to show while signed out — a root
+   * composer is always "note", a thread's retargetable composer is "reply"
+   * once it's actually targeting one. */
+  action?: MembersOnlyAction;
   /** Present for a reply composer (closes/unmounts it) and for editing
    * (steps back to the saved view). Absent for the root composer, whose
    * Cancel instead collapses itself back to the idle pill in place — it's
@@ -194,25 +199,18 @@ export default function NoteComposer({
   // a panel contains several otherwise-idle compose surfaces.
   if (!isAuthenticated) {
     if (!showMemberPrompt) return null;
+    // onCancel is the same "collapse this composer back" handler as ever —
+    // present for a reply/edit composer (so its prompt gets a real close
+    // button), absent for the root composer (nothing to collapse back to,
+    // since this prompt is all it ever renders while signed out). Wrapped in
+    // containerRef same as every other branch below — without it, the
+    // outside-click handler above has nothing to recognize as "inside," so
+    // a mousedown anywhere (including on this prompt's own Log in/Join us
+    // links or its close button) would race handleCancel against the
+    // click/navigation itself.
     return (
-      <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
-        <p className="m-0 mb-2 text-[13px] font-medium leading-relaxed text-[var(--reader-text-muted)]">
-          Only members can contribute to the discourse.
-        </p>
-        <div className="flex gap-4">
-          <Link
-            href="/auth/login"
-            className="text-[13px] font-bold text-[var(--reader-text-muted)] no-underline hover:text-[var(--reader-text)]"
-          >
-            Log in
-          </Link>
-          <Link
-            href="/auth/signup"
-            className="text-[13px] font-bold text-[var(--reader-accent)] no-underline hover:opacity-80"
-          >
-            Join us
-          </Link>
-        </div>
+      <div ref={containerRef}>
+        <MembersOnlyPrompt action={action} onClose={onCancel} />
       </div>
     );
   }

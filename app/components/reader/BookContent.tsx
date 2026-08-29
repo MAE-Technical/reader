@@ -1,8 +1,8 @@
 "use client";
 
-import { memo } from "react";
-import { ImagePassageBlock, PassageText, type NoteLookup } from "./PassageContent";
-import type { BookDocument, Passage, Section } from "@/lib/book/schema";
+import { memo, type ReactElement } from "react";
+import { ImagePassageBlock, MarkedText, PassageText, type NoteLookup } from "./PassageContent";
+import type { BookDocument, Passage, Section, TableCell } from "@/lib/book/schema";
 import type { Annotation } from "@/stores/library-store";
 
 // How much larger than body text each heading level renders — h1 down to
@@ -12,6 +12,14 @@ const HEADING_FONT_BUMP: Record<number, number> = { 1: 16, 2: 10, 3: 6, 4: 4, 5:
 function headingFontBump(level: number | undefined): number {
   return level !== undefined ? HEADING_FONT_BUMP[level] ?? 1 : 8;
 }
+
+// The reading column's width (`contentWidth`) is tuned for text line length,
+// not for a portrait cover image — full-width there reads as bloated on a
+// wide pane. Front-matter cover images alone get capped below that, down to
+// whichever is smaller; nothing else about their sizing is touched (see
+// ImagePassageBlock's own comment), and every other image in the book still
+// renders at the full column width exactly as its own dimensions call for.
+const FRONT_COVER_MAX_WIDTH_PX = 340;
 
 type BookContentProps = {
   book: BookDocument;
@@ -33,6 +41,7 @@ type BookContentProps = {
   fontFamilyVar: string;
   notesById: Map<string, NoteLookup>;
   onNoteClick: (note: NoteLookup, target: HTMLElement) => void;
+  onInternalLinkClick: (sectionId: string, fragmentId?: string) => void;
   /** Fires on the *section's* own mouseup (not per-passage) so a drag that
    * crosses paragraph boundaries is captured as one selection. */
   onTextSelect: (sectionEl: HTMLElement) => void;
@@ -42,6 +51,10 @@ type BookContentProps = {
   /** Passed straight through to PassageText — see its own doc comment. */
   justJumpedAnnotationId: string | null;
 };
+
+type TableShape = NonNullable<Passage["table"]>;
+type TableRow = TableShape["rows"][number];
+type DefinitionItem = NonNullable<Passage["definitions"]>[number];
 
 /**
  * The book itself — only the *active* section is ever mounted (not a
@@ -77,6 +90,7 @@ const BookContent = memo(function BookContent({
   fontFamilyVar,
   notesById,
   onNoteClick,
+  onInternalLinkClick,
   onTextSelect,
   onNoteMarkerClick,
   justJumpedAnnotationId,
@@ -90,6 +104,313 @@ const BookContent = memo(function BookContent({
 
   const isPartDivider = section.children.length > 0;
   const isNotesIndex = section.id === notesIndexSectionId && notesIndexGroups;
+  const passageNodes: ReactElement[] = [];
+
+  const renderPassage = (raw: Passage, asListItem = false): ReactElement => {
+    const annotations = getAnnotations(raw.id);
+    const isHeading = raw.type === "heading";
+    const isBlockquote = raw.type === "blockquote";
+    const isCode = raw.type === "code";
+    const isHorizontalRule = raw.type === "horizontalRule";
+    const isImage = raw.type === "image";
+    const isTable = raw.type === "table";
+    const isFrontCoverImage = isImage && section.kind === "front";
+    const headingBump = isPartDivider ? 14 : headingFontBump(raw.level);
+    const textAlign = raw.align ?? (isHeading && isPartDivider ? "center" : isFrontCoverImage ? "center" : "left");
+    const marginTop = isHeading ? (isPartDivider ? 40 : 24) : isCode ? 20 : isBlockquote ? 18 : isTable ? 24 : 0;
+    const marginBottom = `${((16 * lineHeight) / 1.7).toFixed(0)}px`;
+
+    if (isImage) {
+      // ImagePassageBlock's own <figure> is shrink-wrapped specifically so
+      // this text-align has something to position — a block-level figure
+      // would already fill the line regardless of alignment.
+      return (
+        <div
+          key={raw.id}
+          data-passage-id={raw.id}
+          data-passage-type={raw.type}
+          style={{ marginBottom, textAlign }}
+        >
+          <ImagePassageBlock
+            passage={raw}
+            maxWidthPx={isFrontCoverImage ? Math.min(contentWidth, FRONT_COVER_MAX_WIDTH_PX) : undefined}
+          />
+        </div>
+      );
+    }
+
+    if (isHorizontalRule) {
+      return (
+        <div key={raw.id} data-passage-id={raw.id} data-passage-type={raw.type} style={{ marginTop, marginBottom }}>
+          <hr className="border-0 border-t border-[var(--reader-border)]" />
+        </div>
+      );
+    }
+
+    const passageText = (
+      <PassageText
+        passage={raw}
+        notesById={notesById}
+        onNoteClick={onNoteClick}
+        onInternalLinkClick={onInternalLinkClick}
+        annotations={annotations}
+        onNoteMarkerClick={(annotationId) => onNoteMarkerClick(raw.id, annotationId)}
+        activeWordIndex={undefined}
+        justJumpedAnnotationId={justJumpedAnnotationId}
+      />
+    );
+
+    const sharedStyle: React.CSSProperties = {
+      fontFamily: fontFamilyVar,
+      fontWeight: isHeading ? 700 : 400,
+      fontSize: isHeading ? fontSize + headingBump : fontSize,
+      lineHeight: isHeading ? 1.3 : lineHeight,
+      color: "var(--reader-text)",
+      textAlign,
+      ...(isHeading && isPartDivider
+        ? { textTransform: "uppercase", letterSpacing: "0.08em" }
+        : {}),
+    };
+
+    if (isCode) {
+      return (
+        <div
+          key={raw.id}
+          data-passage-id={raw.id}
+          data-passage-type={raw.type}
+          style={{ marginTop, marginBottom }}
+        >
+          <pre
+            className="m-0 overflow-x-auto rounded-xs border border-[var(--reader-border)] bg-[var(--reader-surface-hover)] px-3 py-2.5"
+            style={sharedStyle}
+          >
+            <code className="font-mono whitespace-pre-wrap">
+              {passageText}
+            </code>
+          </pre>
+        </div>
+      );
+    }
+
+    if (raw.type === "table" && raw.table) {
+      const table = raw.table as TableShape;
+      const renderCell = (
+        cell: TableCell,
+        index: number,
+        head = false
+      ) => {
+        const cellStyle = {
+          textAlign: cell.align ?? "left",
+          fontFamily: fontFamilyVar,
+          color: "var(--reader-text)",
+        };
+        // schemaVersion >= 4: cell.marks carries inline formatting/note refs
+        // over cell.text, same vocabulary as passage marks — gated on the
+        // field's own presence (never on schemaVersion itself), so this
+        // renders identically whether the book is v3 (marks always absent,
+        // MarkedText falls back to plain text) or v4.
+        const cellContent = (
+          <MarkedText
+            text={cell.text}
+            marks={cell.marks}
+            notesById={notesById}
+            onNoteClick={onNoteClick}
+            onInternalLinkClick={onInternalLinkClick}
+          />
+        );
+        if (head) {
+          return (
+            <th
+              key={index}
+              rowSpan={cell.rowspan}
+              colSpan={cell.colspan}
+              scope="col"
+              className="border border-[var(--reader-border)] px-3 py-2 align-top font-semibold"
+              style={cellStyle}
+            >
+              {cellContent}
+            </th>
+          );
+        }
+        return (
+          <td
+            key={index}
+            rowSpan={cell.rowspan}
+            colSpan={cell.colspan}
+            className="border border-[var(--reader-border)] px-3 py-2 align-top"
+            style={cellStyle}
+          >
+            {cellContent}
+          </td>
+        );
+      };
+      return (
+        <figure key={raw.id} data-passage-id={raw.id} data-passage-type={raw.type} style={{ marginTop, marginBottom }}>
+          <div className="overflow-x-auto rounded-xs border border-[var(--reader-border)]">
+            <table className="w-full border-collapse text-sm" style={{ color: "var(--reader-text)" }}>
+              {table.caption && (
+                <caption className="caption-bottom px-3 py-2 text-left text-xs text-[var(--reader-text-muted)]">
+                  {table.caption}
+                </caption>
+              )}
+              {table.header && table.header.length > 0 && (
+                <thead className="bg-[var(--reader-surface-hover)]">
+                  {table.header.map((row: TableRow, rowIndex: number) => (
+                    <tr key={rowIndex}>{row.map((cell: TableCell, index: number) => renderCell(cell, index, true))}</tr>
+                  ))}
+                </thead>
+              )}
+              <tbody>
+                {table.rows.map((row: TableRow, rowIndex: number) => (
+                  <tr key={rowIndex}>{row.map((cell: TableCell, index: number) => renderCell(cell, index, false))}</tr>
+                ))}
+              </tbody>
+              {table.footer && table.footer.length > 0 && (
+                <tfoot className="bg-[var(--reader-surface-hover)]">
+                  {table.footer.map((row: TableRow, rowIndex: number) => (
+                    <tr key={rowIndex}>{row.map((cell: TableCell, index: number) => renderCell(cell, index, false))}</tr>
+                  ))}
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </figure>
+      );
+    }
+
+    if (raw.type === "definitionList" && raw.definitions) {
+      const definitions = raw.definitions as DefinitionItem[];
+      return (
+        <div key={raw.id} data-passage-id={raw.id} data-passage-type={raw.type} style={{ marginTop, marginBottom }}>
+          <dl className="m-0 grid gap-3 rounded-xs border border-[var(--reader-border)] bg-[var(--reader-surface)] p-4">
+            {definitions.map((item: DefinitionItem, index: number) => (
+              <div key={`${raw.id}-${index}`} className="grid gap-1">
+                <dt className="font-semibold text-[var(--reader-text)]">{item.term}</dt>
+                {item.definitions.map((definition: string, defIndex: number) => (
+                  <dd key={defIndex} className="m-0 pl-4 text-sm leading-relaxed text-[var(--reader-text)]">
+                    {definition}
+                  </dd>
+                ))}
+              </div>
+            ))}
+          </dl>
+        </div>
+      );
+    }
+
+    if (isBlockquote) {
+      return (
+        <div
+          key={raw.id}
+          data-passage-id={raw.id}
+          data-passage-type={raw.type}
+          style={{ marginTop, marginBottom }}
+        >
+          <blockquote
+            className="m-0 border-l-2 border-[var(--reader-border)] pl-4"
+            style={sharedStyle}
+          >
+            {passageText}
+          </blockquote>
+        </div>
+      );
+    }
+
+    if (asListItem || raw.type === "listItem") {
+      const listLevel = raw.listLevel ?? 1;
+      return (
+        <li
+          key={raw.id}
+          data-passage-id={raw.id}
+          data-passage-type={raw.type}
+          className="m-0"
+          style={{
+            ...sharedStyle,
+            marginTop,
+            marginBottom,
+            marginLeft: `${Math.max(0, listLevel - 1) * 20}px`,
+            listStylePosition: "outside",
+          }}
+        >
+          {passageText}
+        </li>
+      );
+    }
+
+    return (
+      <p
+        key={raw.id}
+        data-passage-id={raw.id}
+        data-passage-type={raw.type}
+        className="m-0 font-serif rounded-xs select-text"
+        // sharedStyle deliberately carries no margin — every other passage
+        // type (code, blockquote, table, list item, ...) applies
+        // marginTop/marginBottom itself on whatever element it renders.
+        // This fallback (plain paragraphs and headings — the two most
+        // common passage types) was the one branch that returned <p>
+        // directly with just sharedStyle and never added its own, so
+        // consecutive paragraphs rendered with zero space between them.
+        style={{ ...sharedStyle, marginTop, marginBottom }}
+      >
+        {passageText}
+      </p>
+    );
+  };
+
+  for (let i = 0; i < section.passages.length; ) {
+    const raw = section.passages[i];
+    if (raw.type === "listItem") {
+      const listStyle = raw.listStyle ?? "unordered";
+      const listLevel = raw.listLevel ?? 1;
+      const items: Passage[] = [];
+      let j = i;
+      while (j < section.passages.length) {
+        const current = section.passages[j];
+        if (current.type !== "listItem") break;
+        if ((current.listStyle ?? "unordered") !== listStyle) break;
+        if ((current.listLevel ?? 1) !== listLevel) break;
+        items.push(current);
+        j++;
+      }
+      if (listStyle === "ordered") {
+        passageNodes.push(
+          <ol
+            key={`${raw.id}-list`}
+            data-passage-type="list"
+            className="m-0 py-0"
+            style={{
+              paddingLeft: 0,
+              marginTop: 0,
+              marginBottom: `${((16 * lineHeight) / 1.7).toFixed(0)}px`,
+            }}
+            start={items[0].listStart}
+          >
+            {items.map((item) => renderPassage(item, true))}
+          </ol>
+        );
+      } else {
+        passageNodes.push(
+          <ul
+            key={`${raw.id}-list`}
+            data-passage-type="list"
+            className="m-0 py-0"
+            style={{
+              paddingLeft: 0,
+              marginTop: 0,
+              marginBottom: `${((16 * lineHeight) / 1.7).toFixed(0)}px`,
+            }}
+          >
+            {items.map((item) => renderPassage(item, true))}
+          </ul>
+        );
+      }
+      i = j;
+      continue;
+    }
+
+    passageNodes.push(renderPassage(raw));
+    i++;
+  }
 
   return (
     <div
@@ -170,88 +491,7 @@ const BookContent = memo(function BookContent({
                   )}
                 </div>
               ))
-            : section.passages.map((raw) => {
-                const annotations = getAnnotations(raw.id);
-                const isHeading = raw.type === "heading";
-                const headingBump = isPartDivider ? 14 : headingFontBump(raw.level);
-
-                const passageText = (
-                  <p
-                    // select-text: pins this paragraph as its own explicit
-                    // selection root (see the .no-callout comment in
-                    // globals.css) — the standard WebKit fix for long-press
-                    // selection ballooning past the tapped word.
-                    className="m-0 font-serif rounded-xs select-text"
-                    style={{
-                      ...(isHeading
-                        ? {
-                            fontFamily: fontFamilyVar,
-                            fontWeight: 700,
-                            fontSize: fontSize + headingBump,
-                            lineHeight: 1.3,
-                            textAlign: isPartDivider ? "center" : "left",
-                            textTransform: isPartDivider ? "uppercase" : "none",
-                            letterSpacing: isPartDivider ? "0.08em" : "normal",
-                            color: "var(--reader-text)",
-                          }
-                        : {
-                            // Separate longhand properties, not the `font`
-                            // shorthand — WebKit/Safari drops the entire
-                            // shorthand declaration when its font-family slot
-                            // is a CSS custom property (var(--font-...)),
-                            // silently falling back to the browser default
-                            // font/size/line-height. That's what made body
-                            // text render at the wrong size with the wrong
-                            // spacing specifically on Safari/iPhone, even
-                            // though headings (already longhand below) were
-                            // unaffected.
-                            fontFamily: fontFamilyVar,
-                            fontWeight: 400,
-                            fontSize,
-                            lineHeight,
-                            color: "var(--reader-text)",
-                          }),
-                    }}
-                  >
-                    <PassageText
-                      passage={raw}
-                      notesById={notesById}
-                      onNoteClick={onNoteClick}
-                      annotations={annotations}
-                      onNoteMarkerClick={(annotationId) => onNoteMarkerClick(raw.id, annotationId)}
-                      // Word-level karaoke highlighting is disabled for now:
-                      // audio is generated as one Kokoro call per passage,
-                      // concatenated into a section-length mp3 (lib/audio/
-                      // mp3.ts) with each chunk's own reported duration used
-                      // to offset the next — real decoded playback drifts
-                      // from that cumulative estimate (mp3 encoder padding/
-                      // delay per chunk), so a highlighted word gets
-                      // increasingly out of step with what's actually
-                      // playing the further into a section you are. Passing
-                      // currentWordIndex through here again is the whole
-                      // fix once audio generation moves to one gapless
-                      // synthesis per section (or timestamps are corrected
-                      // against real decoded chunk durations).
-                      activeWordIndex={undefined}
-                      justJumpedAnnotationId={justJumpedAnnotationId}
-                    />
-                  </p>
-                );
-
-                return (
-                  <div
-                    key={raw.id}
-                    data-passage-id={raw.id}
-                    data-passage-type={raw.type}
-                    style={{
-                      marginTop: isHeading ? (isPartDivider ? 56 : 32) : 0,
-                      marginBottom: `${((24 * lineHeight) / 1.7).toFixed(0)}px`,
-                    }}
-                  >
-                    {raw.type === "image" ? <ImagePassageBlock passage={raw} /> : passageText}
-                  </div>
-                );
-              })}
+            : passageNodes}
         </div>
       </div>
 

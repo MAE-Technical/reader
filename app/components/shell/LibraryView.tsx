@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import CategoryPills from "./CategoryPills";
-import BookCard from "./BookCard";
+import BookListRow from "./BookListRow";
 import SearchableAppPage from "./SearchableAppPage";
 import type { MaterialSummary } from "@/lib/api/types";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
@@ -112,9 +112,9 @@ export default function LibraryView({ materials, initialNextCursor, categories }
         </p>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 sm:gap-6 lg:grid-cols-4">
+          <div className="grid grid-cols-1 shell:grid-cols-2 shell:gap-x-10">
             {items.map((material) => (
-              <BookCard key={material.id} material={material} />
+              <BookListRow key={material.id} material={material} />
             ))}
           </div>
 
@@ -124,7 +124,7 @@ export default function LibraryView({ materials, initialNextCursor, categories }
                 type="button"
                 onClick={loadMore}
                 disabled={isLoadingMore}
-                className="cursor-pointer rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-5 py-2 text-[12px] font-semibold text-[var(--reader-text)] disabled:cursor-not-allowed disabled:opacity-50"
+                className="cursor-pointer rounded-xs border border-[var(--reader-border)] bg-[var(--reader-surface)] px-[22px] py-2.5 text-[12px] font-bold text-[var(--reader-text)] disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isLoadingMore ? "Loading…" : "Load more"}
               </button>

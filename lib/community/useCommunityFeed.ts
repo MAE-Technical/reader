@@ -9,7 +9,8 @@ export type CommunityFeedItem = {
   note: Note;
   material: Pick<
     MaterialSummary,
-    "id" | "slug" | "title" | "author" | "cover" | "thumbnail" | "googleCoverUrl" | "googleThumbnailUrl"
+    | "id" | "slug" | "title" | "author" | "cover" | "thumbnail"
+    | "googleCoverUrl" | "googleThumbnailUrl" | "openlibraryCoverUrl" | "openlibraryThumbnailUrl" | "coverSource"
   >;
   sectionId: string;
   label: string;

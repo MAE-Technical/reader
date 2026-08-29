@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { MOBILE_NAV_ITEMS } from "./navItems";
+import { NAV_ITEMS } from "./navItems";
 import { useReaderOverlayStore } from "@/stores/reader-overlay-store";
 import { useLayoutStore } from "@/stores/layout-store";
 
@@ -52,7 +52,7 @@ export default function AppBottomNav() {
       className="shell:hidden fixed left-0 right-0 bottom-0 z-40 flex items-stretch border-t border-[var(--reader-border)] bg-[var(--reader-surface)] select-none no-callout"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
-      {MOBILE_NAV_ITEMS.map(({ href, label, icon: Icon }) => {
+      {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
         const active = isActive(pathname, href);
         return (
           <Link

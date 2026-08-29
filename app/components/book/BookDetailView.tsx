@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, ChevronRight, Headphones, Play } from "lucide-react";
 import type { MaterialDetail } from "@/lib/materials/detail";
+import { buildTocOutlineRows } from "@/lib/reader/tocOutline";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
 import { useBookCommunityNotes } from "@/lib/materials/useBookCommunityNotes";
@@ -12,6 +13,7 @@ import { resolveBookCoverSrc } from "@/lib/materials/image";
 import BookNoteCard from "./BookNoteCard";
 import ShareButton from "./ShareButton";
 import ReaderLink from "../ReaderLink";
+import UnderlineTabs from "../UnderlineTabs";
 
 type Tab = "outline" | "notes";
 const TAB_OPTIONS: { value: Tab; label: string }[] = [
@@ -28,23 +30,8 @@ const TAB_OPTIONS: { value: Tab; label: string }[] = [
  * never compete for the same accent. */
 function TabBar({ tab, onChange }: { tab: Tab; onChange: (tab: Tab) => void }) {
   return (
-    <div className="mb-6 flex gap-6 border-b border-[var(--reader-border)]">
-      {TAB_OPTIONS.map((opt) => {
-        const active = opt.value === tab;
-        return (
-          <button
-            key={opt.value}
-            onClick={() => onChange(opt.value)}
-            className={`-mb-px cursor-pointer border-b-2 bg-transparent px-0.5 pb-3 text-sm font-semibold transition-colors ${
-              active
-                ? "border-[var(--reader-text)] text-[var(--reader-text)]"
-                : "border-transparent text-[var(--reader-text-subtle)] hover:text-[var(--reader-text-muted)]"
-            }`}
-          >
-            {opt.label}
-          </button>
-        );
-      })}
+    <div className="mb-6 border-b border-[var(--reader-border)]">
+      <UnderlineTabs options={TAB_OPTIONS} selected={tab} onSelect={onChange} />
     </div>
   );
 }
@@ -112,117 +99,56 @@ function CardGrid<T>({
   );
 }
 
-type TocOutlineNode = {
-  title: string | null;
-  section: MaterialDetail["sections"][number] | null;
-  children: TocOutlineNode[];
-};
-
-function hasRenderableTocTitleNode(node: MaterialDetail["tocTitles"][number]): boolean {
-  return (node.title !== null && node.title.trim().length > 0) || node.children.some(hasRenderableTocTitleNode);
-}
-
-function hasRenderableTocTitleNodes(nodes: MaterialDetail["tocTitles"]): boolean {
-  return nodes.some(hasRenderableTocTitleNode);
-}
-
-function mergeTocTrees(
-  titles: MaterialDetail["tocTitles"],
-  sections: MaterialDetail["sections"]
-): TocOutlineNode[] {
-  return titles.map((titleNode, index) => {
-    const section = sections[index] ?? null;
-    return {
-      title: titleNode.title,
-      section,
-      children: mergeTocTrees(titleNode.children, section?.children ?? []),
-    };
-  });
-}
-
-function TocTree({
-  nodes,
-  slug,
-  depth = 0,
-}: {
-  nodes: TocOutlineNode[];
-  slug: string;
-  depth?: number;
-}) {
-  const rendered = nodes
-    .map((node, index) => ({ node, key: `${depth}-${index}` }))
-    .filter(({ node }) => (node.title !== null && node.title.trim().length > 0) || node.children.some(hasRenderableTocTitleNode));
-
-  if (rendered.length === 0) return null;
-
-  return (
-    <div
-      className={
-        depth === 0
-          ? "flex flex-col divide-y divide-[var(--reader-border)]"
-          : "mt-2 flex flex-col divide-y divide-[var(--reader-border)] pl-5"
-      }
-    >
-      {rendered.map(({ node, key }) => (
-        <TocNode key={key} node={node} slug={slug} depth={depth} />
-      ))}
-    </div>
-  );
-}
-
-function TocNode({ node, slug, depth }: { node: TocOutlineNode; slug: string; depth: number }) {
-  const hasTitle = node.title !== null && node.title.trim().length > 0;
-  const hasChildren = node.children.length > 0;
-  const hasLinkTarget = node.section !== null && !hasChildren && hasTitle;
-
-  if (!hasTitle && !hasChildren) return null;
-
-  if (hasChildren) {
-    return (
-      <div className="py-3 first:pt-0">
-        {hasTitle && (
-          <div
-            className="mb-2 text-[13.5px] font-semibold text-[var(--reader-text)]"
-          >
-            {node.title}
-          </div>
-        )}
-        <TocTree nodes={node.children} slug={slug} depth={depth + 1} />
-      </div>
-    );
-  }
-
-  if (!hasLinkTarget || !node.section) {
-    return (
-      <div className="py-2.5 first:pt-0">
-        <span className="truncate text-[13.5px] font-medium text-[var(--reader-text-muted)]">{node.title}</span>
-      </div>
-    );
-  }
-
-  return (
-    <ReaderLink
-      href={`/read/${slug}?section=${node.section.id}`}
-      className="group flex w-full items-center gap-3 px-1 py-2.5 no-underline transition-colors hover:bg-[var(--reader-surface-hover)]"
-    >
-      <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--reader-text-muted)] transition-colors group-hover:text-[var(--reader-text)]">
-        {node.title}
-      </span>
-      <ChevronRight
-        size={14}
-        className="flex-none text-[var(--reader-text-subtle)] transition-colors group-hover:text-[var(--reader-text-muted)] group-hover:translate-x-0.5"
-      />
-    </ReaderLink>
-  );
-}
-
+/**
+ * Every row — including a numbered sub-heading that has both its own
+ * lead-in passages *and* children (e.g. "2.4.1 Some historical myths...",
+ * itself parent to "A.", "B.", ...) — is independently clickable: `isGroup`
+ * only picks the row's typography (a bold section head vs. a plain leaf),
+ * never whether it links anywhere. The link always points at the section's
+ * own id; `/read/[slug]`'s resolveSpineTarget (lib/reader/sections.ts) is
+ * what lands a click on real content — itself if it has passages, otherwise
+ * the nearest one after it — so a pure grouping node with no passages of
+ * its own (a true "Part" divider) still goes somewhere sensible instead of
+ * being inert. This is the same `buildTocOutlineRows` the reader's own
+ * ChaptersDrawer flattens its sidebar from (lib/reader/tocOutline.ts) —
+ * one shared algorithm, so the book-detail outline and the in-reader
+ * drawer can't drift into different notions of the same book's contents.
+ */
 function OutlineTab({ material }: { material: MaterialDetail }) {
-  if (!hasRenderableTocTitleNodes(material.tocTitles)) return null;
-  const outline = mergeTocTrees(material.tocTitles, material.sections);
+  const rows = buildTocOutlineRows(material.sections);
+  if (rows.length === 0) return null;
 
   return (
     <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-4">
-      <TocTree nodes={outline} slug={material.slug} />
+      <div className="flex flex-col divide-y divide-[var(--reader-border)]">
+        {rows.map(({ section, depth, isGroup }) =>
+          isGroup ? (
+            <ReaderLink
+              key={section.id}
+              href={`/read/${material.slug}?section=${section.id}`}
+              style={{ paddingLeft: depth * 20 }}
+              className="block w-full pt-4 pb-1.5 text-[13.5px] font-semibold text-[var(--reader-text)] no-underline first:pt-0 hover:text-brand-500"
+            >
+              {section.label}
+            </ReaderLink>
+          ) : (
+            <ReaderLink
+              key={section.id}
+              href={`/read/${material.slug}?section=${section.id}`}
+              style={{ paddingLeft: depth * 20 }}
+              className="group flex w-full items-center gap-3 py-2.5 pr-1 no-underline transition-colors hover:bg-[var(--reader-surface-hover)]"
+            >
+              <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--reader-text-muted)] transition-colors group-hover:text-[var(--reader-text)]">
+                {section.label}
+              </span>
+              <ChevronRight
+                size={14}
+                className="flex-none text-[var(--reader-text-subtle)] transition-colors group-hover:text-[var(--reader-text-muted)] group-hover:translate-x-0.5"
+              />
+            </ReaderLink>
+          )
+        )}
+      </div>
     </div>
   );
 }
@@ -284,6 +210,45 @@ function MetaLine({ material, hasNarration }: { material: MaterialDetail; hasNar
           {part.node}
         </span>
       ))}
+    </div>
+  );
+}
+
+function BookDescription({ text }: { text: string }) {
+  const [expanded, setExpanded] = useState(false);
+  // Whether line-clamp-6 is actually cutting text is a function of rendered layout
+  // (container width, word lengths, real line breaks) — a character-count guess got
+  // this wrong both ways (a "Show more" with nothing more to show; a long single-line
+  // blurb with no button at all). Measure the real thing instead: scrollHeight only
+  // exceeds clientHeight while the clamp class is genuinely truncating something.
+  const [isTruncated, setIsTruncated] = useState(false);
+  const ref = useRef<HTMLParagraphElement>(null);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    // Measured once while still clamped (expanded starts false) — not re-run on
+    // `expanded` toggles, so the button's presence doesn't flip-flop as the element's
+    // own clamping turns on and off.
+    setIsTruncated(el.scrollHeight > el.clientHeight + 1); // +1: subpixel rounding guard
+  }, [text]);
+
+  return (
+    <div className="mt-4">
+      <p
+        ref={ref}
+        className={`text-sm font-medium leading-6 text-[var(--reader-text-muted)] ${!expanded ? "line-clamp-6" : ""}`}
+      >
+        {text}
+      </p>
+      {isTruncated && (
+        <button
+          onClick={() => setExpanded((v) => !v)}
+          className="mt-1 border-none bg-transparent p-0 text-sm font-semibold text-brand-500 cursor-pointer hover:underline"
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      )}
     </div>
   );
 }
@@ -368,10 +333,10 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
 
           <MetaLine material={material} hasNarration={hasNarration} />
 
-          {material.googleDescription && (
-            <p className="mt-4 text-sm font-medium leading-6 text-[var(--reader-text-muted)]">
-              {material.googleDescription}
-            </p>
+          {/* Google first, OpenLibrary as backup — material.description (first-party)
+              is left out of this cascade for now, it isn't reliably populated. */}
+          {(material.googleDescription ?? material.openlibraryDescription) && (
+            <BookDescription text={(material.googleDescription ?? material.openlibraryDescription)!} />
           )}
 
           {pct > 0 && (

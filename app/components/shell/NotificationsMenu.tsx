@@ -11,7 +11,7 @@ export default function NotificationsMenu() {
         <Popover.Trigger asChild>
           <button
             aria-label="Notifications"
-            className="cursor-pointer flex h-10 w-10 flex-none items-center justify-center rounded-full border border-[var(--reader-border)] bg-[var(--reader-surface)] text-[var(--reader-text)] hover:bg-[var(--reader-surface-hover)]"
+            className="cursor-pointer flex h-10 w-10 flex-none items-center justify-center rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] text-[var(--reader-text)] hover:bg-[var(--reader-surface-hover)]"
           >
             <Bell size={18} />
           </button>

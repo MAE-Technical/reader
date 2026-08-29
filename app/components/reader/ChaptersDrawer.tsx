@@ -100,35 +100,43 @@ export default function ChaptersDrawer({
 
         <div className="om-scroll flex-1 overflow-y-auto px-4 pb-5">
           {sidebarRows.map(({ section, depth, isGroup }) => {
-            const hasContent = section.passages.length > 0;
             const isCurrent = section.id === activeSectionId;
-            if (isGroup) {
-              return (
-                <div
-                  key={section.id}
-                  style={{ paddingLeft: depth * 14 }}
-                  className="pt-4 first:pt-1 pb-1.5 px-2.5 text-[10px] font-bold tracking-wider uppercase text-[var(--reader-text-subtle)]"
-                >
-                  {sectionLabel(section)}
-                </div>
-              );
-            }
+            // Every row is clickable, group headers included — a group
+            // (any section with children) can still carry its own lead-in
+            // passages before its children start (book-document.schema's
+            // "a part is just a Section with children and *usually* no
+            // passages of its own"), and even a pure divider with none of
+            // its own resolves forward to the nearest real content the
+            // same way an empty leaf does (onNavigate -> resolveSpineTarget,
+            // lib/reader/sections.ts). Only the typography below (bold
+            // uppercase vs. a normal chapter row) tracks `isGroup` — never
+            // whether tapping it does anything.
             return (
               <div
                 key={section.id}
                 onClick={() => {
-                  if (hasContent) onNavigate(section.id);
+                  onNavigate(section.id);
                   if (isMobile) onClose();
                 }}
-                style={{ paddingLeft: 10 + depth * 14 }}
-                className={`flex items-center py-3 pr-2.5 rounded-sm mb-0.5 ${
-                  hasContent ? "cursor-pointer" : "cursor-default opacity-50"
-                } ${isCurrent ? "bg-brand-500/10" : "bg-transparent"}`}
+                style={{ paddingLeft: (isGroup ? 0 : 10) + depth * 14 }}
+                className={
+                  isGroup
+                    ? `pt-4 first:pt-1 pb-1.5 px-2.5 cursor-pointer text-[10px] font-bold tracking-wider uppercase ${
+                        isCurrent ? "text-brand-500" : "text-[var(--reader-text-subtle)]"
+                      }`
+                    : `flex items-center py-3 pr-2.5 rounded-sm mb-0.5 cursor-pointer ${
+                        isCurrent ? "bg-brand-500/10" : "bg-transparent"
+                      }`
+                }
               >
                 <span
-                  className={`flex-1 text-sm leading-snug ${
-                    isCurrent ? "font-semibold text-brand-500" : "font-medium text-[var(--reader-text-muted)]"
-                  }`}
+                  className={
+                    isGroup
+                      ? undefined
+                      : `flex-1 text-sm leading-snug ${
+                          isCurrent ? "font-semibold text-brand-500" : "font-medium text-[var(--reader-text-muted)]"
+                        }`
+                  }
                 >
                   {sectionLabel(section)}
                 </span>

@@ -3,14 +3,17 @@
 import { useEffect, useRef } from "react";
 import type { FeedEntry, FeedSectionGroup } from "@/lib/reader/annotationFeed";
 import type { AnnotationFeedFilter } from "@/lib/reader/useBookAnnotationFeed";
-import PillGroup from "../../PillGroup";
+import UnderlineTabs from "../../UnderlineTabs";
 import PanelShell from "./PanelShell";
 import FeedHighlightThread from "./FeedHighlightThread";
 
+// Same two-tab split as book details' own Table of contents/Community notes
+// switch (UnderlineTabs), just this panel's own two views — every entry is
+// exactly one or the other (see AnnotationFeedFilter's own doc comment), so
+// there's no third "All" to combine them back into.
 const FILTER_OPTIONS: { value: AnnotationFeedFilter; label: string }[] = [
-  { value: "notes", label: "Notes" },
-  { value: "highlights", label: "Highlights" },
-  { value: "all", label: "All" },
+  { value: "notes", label: "Public notes" },
+  { value: "highlights", label: "Your highlights" },
 ];
 
 /** A stable DOM id per section group, not a ref — looked up via
@@ -85,8 +88,15 @@ export default function BookAnnotationFeedPanel({
         </div>
       }
       subheader={
-        <div className="px-5 pb-3">
-          <PillGroup options={FILTER_OPTIONS} selected={filter} onSelect={onFilterChange} />
+        // No bottom padding here — UnderlineTabs' own buttons already carry
+        // their usual pb-3 before their (inactive: transparent, active:
+        // colored) border-b, `-mb-px` pulling that border up to sit right
+        // on top of PanelShell's own subheader divider directly below, the
+        // same "shared baseline, active tab's own border overlays it" trick
+        // book details' identical tab bar uses via its own container border
+        // instead (PanelShell already supplies one here).
+        <div className="px-5">
+          <UnderlineTabs options={FILTER_OPTIONS} selected={filter} onSelect={onFilterChange} />
         </div>
       }
     >
@@ -94,9 +104,7 @@ export default function BookAnnotationFeedPanel({
         <p className="mt-4 py-1 font-serif text-sm text-[var(--reader-text-muted)]">
           {filter === "notes"
             ? "No notes in this book yet — add a note to a highlight and it shows up here."
-            : filter === "highlights"
-              ? "You have no private highlights in this book yet."
-              : "No highlights in this book yet — select some text and mark it to start this book's feed."}
+            : "You have no private highlights in this book yet."}
         </p>
       ) : (
         <div className="flex flex-col">

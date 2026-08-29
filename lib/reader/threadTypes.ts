@@ -19,6 +19,13 @@ export type ThreadUIState = {
   toggleMenu: (id: string | null) => void;
   editingId: string | null;
   startEdit: (id: string | null) => void;
+  /** A brief message for a failed optimistic write anywhere in this thread
+   * (create/edit/delete/react) — self-clears after a few seconds (see
+   * useThreadInteraction). `reportError` lets a composer that calls its own
+   * mutation directly (the root "new note" composer, which doesn't go
+   * through `actions.reply`) report a failure the same way. */
+  actionError: string | null;
+  reportError: (message: string) => void;
 };
 
 /** The store-backed mutations a note/reply card can trigger, bundled so

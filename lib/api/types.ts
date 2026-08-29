@@ -2,6 +2,8 @@
 // camelCase JSON shapes every route handler below serializes to. Nothing
 // snake_case ever reaches the client (api-spec.md's Conventions).
 
+import type { CoverSource } from "@/lib/materials/image";
+
 export type AnnotationRange = { passageId: string; start: number; end: number };
 
 export type NoteContent =
@@ -19,6 +21,15 @@ export type MaterialSummary = {
   thumbnail: string | null;
   googleCoverUrl: string | null;
   googleThumbnailUrl: string | null;
+  /** Google's own book blurb — see BookDetailView's `googleDescription ??
+   * openlibraryDescription` cascade, which this mirrors; `description`
+   * above (first-party) is left out of that cascade, it isn't reliably
+   * populated. */
+  googleDescription: string | null;
+  openlibraryCoverUrl: string | null;
+  openlibraryThumbnailUrl: string | null;
+  openlibraryDescription: string | null;
+  coverSource: CoverSource;
   language: string | null;
   publishedYear: number | null;
   pageCountEstimate: number | null;

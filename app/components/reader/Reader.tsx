@@ -14,6 +14,7 @@ import ReaderHeader from "./ReaderHeader";
 import ChaptersDrawer from "./ChaptersDrawer";
 import ChapterNavFooter from "./ChapterNavFooter";
 import SelectionMenu, { type Item } from "./SelectionMenu";
+import MembersOnlyPrompt from "./notes/MembersOnlyPrompt";
 import BackToCurrentButton from "./BackToCurrentButton";
 import Loader from "../Loader";
 import type { BookDocument, Passage, Section } from "@/lib/book/schema";
@@ -29,7 +30,7 @@ import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useAudioStore } from "@/stores/audio-store";
 import { useNarrationStore } from "@/stores/narration-store";
-import { buildSectionsById } from "@/lib/reader/sections";
+import { buildSectionsById, resolveSpineTarget } from "@/lib/reader/sections";
 import { useSectionCarousel } from "@/lib/reader/useSectionCarousel";
 import { useResumeScroll } from "@/lib/reader/useResumeScroll";
 import { useProgressiveText } from "@/lib/reader/useProgressiveText";
@@ -107,6 +108,8 @@ export default function Reader({
     getForPassage: getAnnotations,
     selection,
     notesPanel,
+    overlay,
+    dismissOverlay,
     onTextSelect,
     dismissSelection,
     highlightSelection,
@@ -254,7 +257,7 @@ export default function Reader({
     if (!book.notes.length) return null;
     const isNotesShaped = (s: Section) =>
       s.passages.length === 0 ||
-      (s.passages.length > 1 && s.passages.every((p) => p.type === "heading"));
+      (s.passages.length > 1 && s.passages.every((p: Passage) => p.type === "heading"));
     const titled = orderedSections.find((s) => isNotesShaped(s) && /note/i.test(s.title ?? ""));
     return titled?.id ?? orderedSections.find(isNotesShaped)?.id ?? null;
   }, [orderedSections, book.notes.length]);
@@ -313,6 +316,21 @@ export default function Reader({
     onNavigate: dismissSelection,
     disabled: navDisabled,
   });
+
+  // Every "jump to this section id" caller (chapters drawer, in-book link
+  // marks) goes through this rather than calling goToSection directly — a
+  // target id can name a navigation label (a Part grouping, or a v4
+  // duplicate-TOC leaf with an empty passages array) that was never in
+  // `spine` to begin with, and goToSection's plain sectionIds.indexOf would
+  // just silently no-op on those. resolveSpineTarget walks forward to the
+  // nearest real reading section instead.
+  const navigateToSection = useCallback(
+    (id: string, opts?: { animate?: boolean }) => {
+      const target = resolveSpineTarget(id, sections, book.spine);
+      if (target) goToSection(target, opts);
+    },
+    [sections, book.spine, goToSection]
+  );
 
   const resumeReady = useResumeScroll({
     book,
@@ -451,6 +469,29 @@ export default function Reader({
   const getPassageText = useCallback(
     (passageId: string) => passageLookup.byId.get(passageId)?.text ?? "",
     [passageLookup]
+  );
+  const onInternalLinkClick = useCallback(
+    (sectionId: string, fragmentId?: string) => {
+      // A link mark's sectionId can resolve to a navigation label rather
+      // than real content (e.g. an EPUB TOC entry pointing at a Part
+      // header) — navigateToSection lands on the nearest actual reading
+      // section instead. The in-slide fragment scroll below still targets
+      // the *original* sectionId/fragmentId, since that's only meaningful
+      // when the link did resolve straight to real content; when it
+      // didn't, that querySelector simply finds nothing and the scroll is
+      // skipped, leaving the reader at the top of the section they landed on.
+      navigateToSection(sectionId, { animate: false });
+      requestAnimationFrame(() => {
+        const slide = getSlideEl(sectionId);
+        if (!slide) return;
+        const fragment = fragmentId ? fragmentId.replace(/^#/, "") : "";
+        const target =
+          (fragment ? slide.querySelector(`[data-passage-id="${fragment}"]`) : null) ??
+          slide.querySelector(`[data-passage-id="${sectionId}"]`);
+        target?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    },
+    [navigateToSection, getSlideEl]
   );
   // Same "navigate, then scroll within the freshly-mounted slide a frame
   // later" idiom already used identically by useResumeScroll, the
@@ -661,7 +702,7 @@ export default function Reader({
             activeSectionId={activeSectionForSidebar}
             isMobile={isMobile}
             open={chaptersOpen}
-            onNavigate={(id) => goToSection(id, { animate: false })}
+            onNavigate={(id) => navigateToSection(id, { animate: false })}
             onClose={() => setChaptersOpen(false)}
           />
 
@@ -692,6 +733,7 @@ export default function Reader({
               fontFamilyVar={fontFamilyVar}
               notesById={notesById}
               onNoteClick={onNoteClick}
+              onInternalLinkClick={onInternalLinkClick}
               onTextSelect={onTextSelect}
               onNoteMarkerClick={openNoteMarker}
               justJumpedAnnotationId={justJumpedAnnotationId}
@@ -753,6 +795,34 @@ export default function Reader({
                   ] as Item[]
                 }
                 onDismiss={dismissSelection}
+              />
+            )}
+
+            {/* Replaces the pill above in place — a signed-out highlight
+                attempt (MembersOnlyPrompt, stays up until dismissed) or a
+                failed optimistic highlight create/delete (a brief message,
+                self-clears — see useTextAnnotations' own timer). Never both
+                at once: highlightSelection/deleteSelection always clear
+                `selection` before setting this. */}
+            {overlay && (
+              <SelectionMenu
+                anchor={overlay.anchor}
+                isMobile={isMobile}
+                bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
+                theme={theme}
+                items={[]}
+                override={
+                  overlay.kind === "auth" ? (
+                    <MembersOnlyPrompt action="highlight" onClose={dismissOverlay} />
+                  ) : (
+                    <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3.5">
+                      <p className="m-0 text-[13px] font-medium leading-relaxed text-[var(--reader-text-muted)]">
+                        Couldn&rsquo;t save — check your connection and try again.
+                      </p>
+                    </div>
+                  )
+                }
+                onDismiss={dismissOverlay}
               />
             )}
 
