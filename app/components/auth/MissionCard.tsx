@@ -27,17 +27,17 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
   return (
     <div
       ref={ref}
-      className={`relative overflow-hidden rounded-sm border border-[var(--reader-border)] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--reader-surface)_90%,var(--color-brand-500)_10%),var(--reader-surface)_65%)] p-7 sm:p-9 ${className}`}
+      className={`mb-15 relative overflow-hidden rounded-sm border border-[var(--reader-border)] bg-[linear-gradient(135deg,color-mix(in_srgb,var(--reader-surface)_90%,var(--color-brand-500)_10%),var(--reader-surface)_65%)] p-7 sm:p-9 ${className}`}
     >
       <div className="relative flex flex-col items-start gap-7 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col items-start gap-4">
           <div className="flex flex-col items-start gap-2">
             <h2 className="m-0 max-w-xs font-serif text-2xl font-bold leading-tight text-[var(--reader-text)] sm:text-[28px]">
-              The Young Nigerian Reading Project
+              We are studying to change our world.
             </h2>
-            <p className="m-0 max-w-xs font-literata text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
+            {/* <p className="m-0 max-w-xs font-literata text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
               Free books, honest conversations, and a reading culture built by and for young Nigerians.
-            </p>
+            </p> */}
           </div>
 
           {/* Side by side at every width, each sized to its own label rather

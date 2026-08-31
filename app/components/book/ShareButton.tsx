@@ -8,7 +8,18 @@ import { Check, Share } from "lucide-react";
  * (navigator.share needs no server support, just a title/text/url), a
  * clipboard-copy fallback everywhere else — never a fake/inert button.
  */
-export default function ShareButton({ title, text }: { title: string; text?: string }) {
+export default function ShareButton({
+  title,
+  text,
+  ariaLabel = "Share this book",
+}: {
+  title: string;
+  text?: string;
+  /** Defaults to the original (only) caller's own book-page wording — a
+   * different surface reusing this button (ReaderProfileView) passes its
+   * own instead of every reader hearing "Share this book" for a profile. */
+  ariaLabel?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   const onClick = async () => {
@@ -29,7 +40,7 @@ export default function ShareButton({ title, text }: { title: string; text?: str
   return (
     <button
       onClick={onClick}
-      aria-label="Share this book"
+      aria-label={ariaLabel}
       className="flex flex-none cursor-pointer items-center gap-1.5 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] px-3 py-2 text-xs font-semibold text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface-hover)]"
     >
       {copied ? <Check size={15} /> : <Share size={15} />}

@@ -31,5 +31,10 @@ export function toMaterialSummary(row: MaterialRow): MaterialSummary {
     publishedYear: row.published_year,
     pageCountEstimate: row.page_count_estimate,
     categories: (row.categories as string[] | null) ?? [],
+    // Real values, when wanted, are filled in by the caller after this
+    // (listPublishedMaterials/getMaterialDetail) — see MaterialSummary's own
+    // doc comment on why this isn't a plain materials-row column.
+    currentReaders: [],
+    currentReaderCount: 0,
   };
 }

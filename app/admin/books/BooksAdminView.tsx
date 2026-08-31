@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { resolveBookThumbnailSrc, type CoverSource } from "@/lib/materials/image";
+import { formatTimeAgo } from "@/lib/reader/timeAgo";
 
 type AdminBookStatus = "published" | "unpublished";
 
@@ -33,39 +34,13 @@ export type AdminBookRow = {
   updated_at: string;
 };
 
-const RELATIVE_TIME_UNITS: { unit: Intl.RelativeTimeFormatUnit; ms: number }[] = [
-  { unit: "year", ms: 1000 * 60 * 60 * 24 * 365 },
-  { unit: "month", ms: 1000 * 60 * 60 * 24 * 30 },
-  { unit: "week", ms: 1000 * 60 * 60 * 24 * 7 },
-  { unit: "day", ms: 1000 * 60 * 60 * 24 },
-  { unit: "hour", ms: 1000 * 60 * 60 },
-  { unit: "minute", ms: 1000 * 60 },
-];
-
-const relativeTimeFormatter = new Intl.RelativeTimeFormat("en", { numeric: "auto" });
-
 // Same danger red used for the reader's own "Delete highlight" confirmation
 // (NotesSidebar.tsx/SelectionMenu.tsx) — one color for "this is destructive"
 // across the app.
 const DANGER_COLOR = "#f26b6b";
 
-function capitalize(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
 function formatUpdatedAt(value: string) {
-  const diffMs = new Date(value).getTime() - Date.now();
-  const absDiffMs = Math.abs(diffMs);
-
-  if (absDiffMs < 1000 * 60) return "Just now";
-
-  for (const { unit, ms } of RELATIVE_TIME_UNITS) {
-    if (absDiffMs >= ms) {
-      return capitalize(relativeTimeFormatter.format(Math.round(diffMs / ms), unit));
-    }
-  }
-
-  return capitalize(relativeTimeFormatter.format(Math.round(diffMs / (1000 * 60)), "minute"));
+  return formatTimeAgo(new Date(value).getTime());
 }
 
 export default function BooksAdminView({ books, categories }: { books: AdminBookRow[]; categories: string[] }) {

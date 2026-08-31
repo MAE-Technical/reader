@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
 import type { MaterialSummary } from "@/lib/api/types";
 import BookCover from "@/app/components/shared/BookCover";
+import { PresenceLine } from "@/app/components/shared/CurrentReaders";
 import { resolveBookThumbnailSrc } from "@/lib/materials/image";
 
 /**
@@ -27,6 +28,11 @@ import { resolveBookThumbnailSrc } from "@/lib/materials/image";
  * height (the thumbnail's) and centers title/author/progress within that,
  * rather than pinning them to the top and leaving the tall thumbnail
  * towering over a short text block.
+ *
+ * One wrapping `<Link>` for the whole row: PresenceLine below is
+ * deliberately a plain pulsing-dot + count line, not a set of individual
+ * comrade links (see its own doc comment) — no interactive element inside
+ * the row that a wrapping `<a>` would nest invalidly.
  */
 export default function BookListRow({ material }: { material: MaterialSummary }) {
   const pct = Math.round(useReadingPositionStore((s) => s.progressPercentByMaterial[material.id] ?? 0));
@@ -59,6 +65,7 @@ export default function BookListRow({ material }: { material: MaterialSummary })
             </span>
           </div>
         )}
+        <PresenceLine readers={material.currentReaders} totalCount={material.currentReaderCount} />
       </div>
     </Link>
   );

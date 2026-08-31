@@ -50,7 +50,7 @@ export default function QuoteCard({
       }`}
     >
       {icon && (
-        <span aria-hidden="true" className="select-none font-literata text-[32px] leading-[0.5] text-[var(--reader-text-subtle)]">
+        <span aria-hidden="true" className="select-none font-literata text-[32px] leading-[0.5] text-[var(--reader-quote-subtle)]">
           &ldquo;
         </span>
       )}

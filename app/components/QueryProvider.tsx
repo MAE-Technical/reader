@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useSessionStore } from "@/stores/session-store";
 import { ensureFreshSession } from "@/lib/api/client";
+import { configureDebouncedOnlineManager } from "@/lib/pwa/onlineManager";
 
 // One QueryClient per browser tab, instantiated inside useState (not at
 // module scope) so it's created exactly once per mount and never recreated
@@ -12,6 +13,15 @@ import { ensureFreshSession } from "@/lib/api/client";
 // server.
 export default function QueryProvider({ children }: { children: React.ReactNode }) {
   const [client] = useState(() => new QueryClient());
+
+  // Debounces the online/offline signal every query below reacts to (see
+  // that module's own doc comment) — must run client-side only, hence a
+  // useEffect rather than module scope, since this component's module still
+  // executes during the server render pass. Called once, here, since this
+  // provider is itself mounted exactly once at the app root.
+  useEffect(() => {
+    configureDebouncedOnlineManager();
+  }, []);
 
   // session-store skips automatic persist hydration (see its own doc
   // comment) so the server and the client's first paint agree — rehydrated

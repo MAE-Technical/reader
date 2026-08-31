@@ -1,8 +1,6 @@
-import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { getAuthenticatedReader } from "@/lib/auth/session";
 import { unauthorized, validationError } from "@/lib/api/errors";
-import { getReaderRow } from "@/lib/auth/profile";
-import type { CurrentReadingEntry } from "@/lib/api/types";
+import { saveReaderActivity } from "@/lib/reader/activity";
 
 type Body = {
   materialId?: string;
@@ -21,24 +19,14 @@ export async function PUT(request: Request) {
     return validationError("materialId, sectionId, passageIndex, and progressPercent are required.");
   }
 
-  const row = await getReaderRow(reader.readerId);
-  if (!row) return unauthorized();
-
-  const currentReading = (row.current_reading as Record<string, CurrentReadingEntry> | null) ?? {};
-  const entry: CurrentReadingEntry = {
+  const saved = await saveReaderActivity(reader.readerId, {
     materialId: body.materialId,
     sectionId: body.sectionId,
     passageIndex: body.passageIndex,
     audioTimeMs: body.audioTimeMs ?? null,
     progressPercent: body.progressPercent,
-    updatedAt: new Date().toISOString(),
-  };
+  });
 
-  const { error } = await getSupabaseAdminClient()
-    .from("readers")
-    .update({ current_reading: { ...currentReading, [body.materialId]: entry } })
-    .eq("id", reader.readerId);
-
-  if (error) return validationError("Could not save reading position.");
+  if (!saved) return validationError("Could not save reading position.");
   return new Response(null, { status: 204 });
 }

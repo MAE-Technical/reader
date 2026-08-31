@@ -29,7 +29,6 @@ export type Database = {
           interests: Json;
           survey_read_material_ids: Json;
           onboarding_status: "pending_survey" | "pending_welcome" | "active";
-          current_reading: Json;
           joined_at: string;
           updated_at: string;
         };
@@ -43,7 +42,6 @@ export type Database = {
           interests?: Json;
           survey_read_material_ids?: Json;
           onboarding_status?: "pending_survey" | "pending_welcome" | "active";
-          current_reading?: Json;
           joined_at?: string;
           updated_at?: string;
         };
@@ -126,6 +124,31 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["highlights"]["Insert"]>;
+        Relationships: [];
+      };
+      // One row per (reader, material) — replaces readers.current_reading (a jsonb
+      // map) as of migrations/20260831_reader_activities.sql. "activities", not
+      // "reading_positions": audio_time_ms means this covers listening too.
+      reader_activities: {
+        Row: {
+          reader_id: string;
+          material_id: string;
+          section_id: string;
+          passage_index: number;
+          audio_time_ms: number | null;
+          progress_percent: number;
+          updated_at: string;
+        };
+        Insert: {
+          reader_id: string;
+          material_id: string;
+          section_id: string;
+          passage_index: number;
+          audio_time_ms?: number | null;
+          progress_percent: number;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["reader_activities"]["Insert"]>;
         Relationships: [];
       };
       notes: {

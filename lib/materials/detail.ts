@@ -2,6 +2,8 @@ import { resolveMaterialRow } from "@/lib/materials/resolve";
 import { projectMaterial } from "@/lib/materials/projection";
 import type { TocSection } from "@/lib/api/types";
 import type { CoverSource } from "@/lib/materials/image";
+import { listCurrentReaders } from "@/lib/reader/activity";
+import { CURRENT_READERS_DETAIL_CAP } from "@/lib/reader/constants";
 import { fetchMaterialManifest } from "./manifest";
 
 export class MaterialNotFoundError extends Error {
@@ -33,6 +35,11 @@ export type MaterialDetail = {
   narratorCount: number;
   spine: string[];
   sections: TocSection[];
+  /** See MaterialSummary's own doc comment (lib/api/types.ts) — same shape,
+   * populated below via the same listCurrentReaders batch helper, at
+   * CURRENT_READERS_DETAIL_CAP rather than the list page's smaller cap. */
+  currentReaders: { readerId: string; pseudonym: string; audioTimeMs: number | null; updatedAt: string }[];
+  currentReaderCount: number;
 };
 
 const DETAIL_FIELDS = [
@@ -69,10 +76,12 @@ export async function getMaterialDetail(slug: string): Promise<MaterialDetail> {
   const row = await resolveMaterialRow(slug);
   if (!row) throw new MaterialNotFoundError(slug);
 
-  const [projected, manifest] = await Promise.all([
+  const [projected, manifest, currentReadersByMaterial] = await Promise.all([
     projectMaterial(row, { fields: DETAIL_FIELDS.filter((field) => field !== "spine" && field !== "sections" && field !== "toc_titles") }),
     fetchMaterialManifest(row.slug),
+    listCurrentReaders([row.id], CURRENT_READERS_DETAIL_CAP),
   ]);
+  const currentReaders = currentReadersByMaterial.get(row.id);
 
   return {
     id: row.id,
@@ -96,5 +105,7 @@ export async function getMaterialDetail(slug: string): Promise<MaterialDetail> {
     narratorCount: projected.narratorCount as number,
     spine: manifest.spine,
     sections: manifest.toc as TocSection[],
+    currentReaders: currentReaders?.readers ?? [],
+    currentReaderCount: currentReaders?.totalCount ?? 0,
   };
 }

@@ -1,6 +1,5 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
-import { storagePublicUrl } from "@/lib/storage/config";
-import { parseBookDocument, type BookDocument } from "@/lib/book/schema";
+import { loadBookDocuments } from "@/lib/materials/bookDocuments";
 import { resolveExcerpt } from "./excerpt";
 import { hydrateNotes, type NoteRow } from "./notes";
 import type { AnnotationRange, MaterialSummary, Note } from "@/lib/api/types";
@@ -40,22 +39,7 @@ export async function enrichFeedItems(rows: NoteRow[], callerId: string | undefi
   const { data: materials } = await admin.from("materials").select(`${MATERIAL_SUMMARY_COLUMNS}, json_storage_path`).in("id", materialIds);
   const materialsById = new Map((materials ?? []).map((m) => [m.id, m]));
 
-  const bookByMaterialId = new Map<string, BookDocument>();
-  await Promise.all(
-    materialIds.map(async (id) => {
-      const material = materialsById.get(id);
-      if (!material) return;
-      try {
-        const res = await fetch(storagePublicUrl(material.json_storage_path));
-        if (!res.ok) return;
-        const parsed = parseBookDocument(await res.json());
-        if (parsed.ok) bookByMaterialId.set(id, parsed.data);
-      } catch {
-        // Storage hiccup — this material's items fall back to empty
-        // section/label/excerpt below rather than failing the whole feed.
-      }
-    })
-  );
+  const bookByMaterialId = await loadBookDocuments(materials ?? []);
 
   const { data: replyRows } = rows.length
     ? await admin

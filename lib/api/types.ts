@@ -34,6 +34,21 @@ export type MaterialSummary = {
   publishedYear: number | null;
   pageCountEstimate: number | null;
   categories: string[];
+  /**
+   * Comrades currently reading/listening to this material
+   * (`reader_activities`), most recently active first, capped (lib/reader/
+   * constants.ts's CURRENT_READERS_DISPLAY_CAP for a list page,
+   * CURRENT_READERS_DETAIL_CAP for a single book-detail page) — see
+   * lib/reader/activity.ts's listCurrentReaders. Empty on a MaterialSummary
+   * `toMaterialSummary` built directly (its own safe default) — only
+   * `listPublishedMaterials`/`getMaterialDetail` actually enrich this.
+   * `audioTimeMs` non-null means their most recent activity was listening,
+   * not reading — drives the roster's mode icon.
+   */
+  currentReaders: { readerId: string; pseudonym: string; audioTimeMs: number | null; updatedAt: string }[];
+  /** Real count of active readers — may exceed currentReaders.length once
+   * the display cap kicks in; that gap is exactly the UI's "+N more". */
+  currentReaderCount: number;
 };
 
 export type Note = {
@@ -62,6 +77,12 @@ export type Highlight = {
   updatedAt: string;
 };
 
+/**
+ * One `reader_activities` row (migrations/20260831_reader_activities.sql) — a
+ * reader's position in one material, text and/or audio. Not embedded on
+ * ReaderProfile (nothing read that field; see GET /api/auth/me/continue-reading
+ * for the enriched, sorted view of these).
+ */
 export type CurrentReadingEntry = {
   materialId: string;
   sectionId: string;
@@ -98,7 +119,6 @@ export type ReaderProfile = {
   interests: string[];
   surveyReadMaterialIds: string[];
   onboardingStatus: "pending_survey" | "pending_welcome" | "active";
-  currentReading: Record<string, CurrentReadingEntry>;
   joinedAt: string;
   updatedAt: string;
 };

@@ -9,6 +9,7 @@ import {
 } from "@/lib/api/cursor";
 import type { MaterialSummary } from "@/lib/api/types";
 import type { Database } from "@/lib/supabase/database.types";
+import { listCurrentReaders } from "@/lib/reader/activity";
 import { MATERIAL_SUMMARY_COLUMNS } from "./columns";
 
 type MaterialRow = Database["public"]["Tables"]["materials"]["Row"];
@@ -247,6 +248,31 @@ async function listBySearch(
 }
 
 /**
+ * Fills in `currentReaders`/`currentReaderCount` (left at toMaterialSummary's
+ * empty default) for a finished page of results — one batched
+ * listCurrentReaders call regardless of how many items are on the page. The
+ * single choke point every listPublishedMaterials branch returns through, so
+ * "who's reading this" works the same whether the page came from plain
+ * browse, alphabetical, top, or search.
+ */
+async function withCurrentReaders(
+  page: { items: MaterialSummary[]; nextCursor: string | null }
+): Promise<{ items: MaterialSummary[]; nextCursor: string | null }> {
+  if (page.items.length === 0) return page;
+
+  const byMaterial = await listCurrentReaders(page.items.map((item) => item.id));
+  if (byMaterial.size === 0) return page;
+
+  return {
+    ...page,
+    items: page.items.map((item) => {
+      const entry = byMaterial.get(item.id);
+      return entry ? { ...item, currentReaders: entry.readers, currentReaderCount: entry.totalCount } : item;
+    }),
+  };
+}
+
+/**
  * Shared query behind `GET /api/materials` — factored out so a server
  * component that needs the same published-materials list (the survey
  * wizard's "have you read any of these" picker, the library browse page)
@@ -262,9 +288,9 @@ export async function listPublishedMaterials(
   // listBySearch/relevanceScore), never alphabetical/recent/top. `sort`
   // only matters once there's no query narrowing things down (plain
   // browse).
-  if (opts.search) return listBySearch(opts, limit);
-  if (opts.sort === "alphabetical") return listAlphabetically(opts, limit);
-  if (opts.sort === "top") return listByEngagement(opts, limit);
+  if (opts.search) return withCurrentReaders(await listBySearch(opts, limit));
+  if (opts.sort === "alphabetical") return withCurrentReaders(await listAlphabetically(opts, limit));
+  if (opts.sort === "top") return withCurrentReaders(await listByEngagement(opts, limit));
 
   let query = applyStatusFilter(
     getSupabaseAdminClient()
@@ -288,5 +314,5 @@ export async function listPublishedMaterials(
   const last = page[page.length - 1];
   const nextCursor = hasMore && last ? encodeCursor<Keyset>({ createdAt: last.created_at, id: last.id }) : null;
 
-  return { items: page.map(toMaterialSummary), nextCursor };
+  return withCurrentReaders({ items: page.map(toMaterialSummary), nextCursor });
 }

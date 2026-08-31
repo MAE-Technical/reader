@@ -20,7 +20,7 @@ export default function FeaturedThisWeek() {
   if (!isLoading && (!books || books.length === 0)) return null;
 
   return (
-    <section className="my-15">
+    <section className="mb-15">
       <div className="mb-5">
         <h2 className="m-0 font-serif text-xl font-bold text-[var(--reader-text)]">Featured this week</h2>
       </div>

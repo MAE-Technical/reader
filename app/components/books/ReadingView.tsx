@@ -2,7 +2,7 @@
 
 import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import BookListRow from "@/app/components/shell/BookListRow";
-import MissionCard from "@/app/components/auth/MissionCard";
+import ReadingAuthPrompt from "@/app/components/books/ReadingAuthPrompt";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
 
@@ -10,17 +10,18 @@ export default function ReadingView() {
   const isAuthenticated = useIsAuthenticated();
   const { data: items, isLoading } = useContinueReading();
 
-  // Signed-out readers land here with no reading list to show, which used
-  // to be a single muted "log in to see your list" line — the same recruiting
-  // banner as the home feed replaces it, so the emptiness itself becomes the
-  // nudge to log in or join, not just an aside next to it.
+  // Signed-out readers land here with no reading list to show. Rather than
+  // the same generic "join the movement" pitch the home feed uses,
+  // ReadingAuthPrompt gates a preview of this page's own layout — see its
+  // header comment — so the nudge to log in or join is specific to what's
+  // actually missing: their list.
   if (!isAuthenticated) {
     return (
       <SearchableAppPage>
         <div className="mt-1 mb-7">
           <h1 className="m-0 font-serif text-2xl font-bold text-[var(--reader-text)]">Reading</h1>
         </div>
-        <MissionCard />
+        <ReadingAuthPrompt />
       </SearchableAppPage>
     );
   }

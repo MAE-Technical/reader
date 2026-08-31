@@ -2,20 +2,15 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import { getAuthenticatedReader } from "@/lib/auth/session";
 import { unauthorized } from "@/lib/api/errors";
-import { getReaderRow } from "@/lib/auth/profile";
+import { listReaderActivities } from "@/lib/reader/activity";
 import { toMaterialSummary } from "@/lib/materials/summary";
-import type { CurrentReadingEntry } from "@/lib/api/types";
 import { MATERIAL_SUMMARY_COLUMNS } from "@/lib/materials/columns";
 
 export async function GET(request: Request) {
   const reader = await getAuthenticatedReader(request);
   if (!reader) return unauthorized();
 
-  const row = await getReaderRow(reader.readerId);
-  if (!row) return unauthorized();
-
-  const currentReading = (row.current_reading as Record<string, CurrentReadingEntry> | null) ?? {};
-  const entries = Object.values(currentReading).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const entries = await listReaderActivities(reader.readerId);
   if (entries.length === 0) return NextResponse.json({ items: [] });
 
   const { data: materials } = await getSupabaseAdminClient()

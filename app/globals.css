@@ -184,13 +184,19 @@ body {
      since brand-500 alone (a plain Tailwind text-brand-500 class) loses too
      much contrast once dark theme's background goes literal black. */
   --reader-accent: var(--color-brand-500);
-  /* The quote card's own "sunken" surface — deliberately the warm sand
-     palette (same family as the app shell's cream chrome), not
-     --reader-surface-hover's neutral grey, so a pulled-out excerpt reads
-     as a warm paper-toned object sitting on the page rather than a cold
-     UI panel. Lighter than the page in light theme, a lifted near-black
-     in dark theme (see dark block below) — Substack-restack effect. */
-  --reader-quote-bg: var(--color-sand-75);
+  /* The quote card's own "sunken" surface — a cool near-black, deliberately
+     inverted against the rest of this light theme (dark card, light text)
+     rather than a step down from --reader-surface, so a pulled-out excerpt
+     reads as its own distinct object sitting on the page rather than
+     blending into the surrounding paper tone. --reader-quote-text/-muted/
+     -subtle are this same card's text colors, sized for that dark surface —
+     everywhere else keeps using the plain --reader-text family. Dark theme
+     keeps the near-black sand-900 below unchanged and just points its
+     quote-text trio at the theme's own (already-light) text colors. */
+  --reader-quote-bg: #1f1d1b;
+  --reader-quote-text: #ffffff;
+  --reader-quote-text-muted: rgba(255, 255, 255, 0.68);
+  --reader-quote-subtle: rgba(255, 255, 255, 0.45);
   --reader-active-word-bg: #3d6fa8;
   --reader-active-word-text: #ffffff;
 }
@@ -221,6 +227,9 @@ body {
   --reader-note-accent: var(--color-brand-300);
   --reader-accent: var(--color-brand-300);
   --reader-quote-bg: var(--color-sand-900);
+  --reader-quote-text: var(--reader-text);
+  --reader-quote-text-muted: var(--reader-text-muted);
+  --reader-quote-subtle: var(--reader-text-subtle);
   --reader-active-word-bg: #4a7fbd;
   --reader-active-word-text: #ffffff;
 }

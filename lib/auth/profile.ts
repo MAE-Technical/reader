@@ -1,6 +1,6 @@
 import { getSupabaseAdminClient } from "@/lib/supabase/adminClient";
 import type { Database } from "@/lib/supabase/database.types";
-import type { CurrentReadingEntry, ReaderProfile } from "@/lib/api/types";
+import type { ReaderProfile } from "@/lib/api/types";
 
 type ReaderRow = Database["public"]["Tables"]["readers"]["Row"];
 
@@ -16,7 +16,6 @@ export function toReaderProfile(row: ReaderRow): ReaderProfile {
     interests: (row.interests as string[] | null) ?? [],
     surveyReadMaterialIds: (row.survey_read_material_ids as string[] | null) ?? [],
     onboardingStatus: row.onboarding_status,
-    currentReading: (row.current_reading as Record<string, CurrentReadingEntry> | null) ?? {},
     joinedAt: row.joined_at,
     updatedAt: row.updated_at,
   };

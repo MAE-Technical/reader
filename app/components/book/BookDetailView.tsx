@@ -9,6 +9,7 @@ import { useReadingPositionStore } from "@/stores/reading-position-store";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
 import { useBookCommunityNotes } from "@/lib/materials/useBookCommunityNotes";
 import BookCover from "@/app/components/shared/BookCover";
+import { ReadingNowMetaItem, ReadingRoomModal } from "@/app/components/shared/CurrentReaders";
 import { resolveBookCoverSrc } from "@/lib/materials/image";
 import BookNoteCard from "./BookNoteCard";
 import ShareButton from "./ShareButton";
@@ -178,14 +179,26 @@ function NotesTab({ materialId }: { materialId: string }) {
   );
 }
 
-/** Published year / page count / audiobook availability, as a single
- * dot-separated byline rather than a row of bordered chips — a book's
- * facts read as editorial metadata (the way a magazine masthead or a
- * library catalog card sets them), not as UI controls, which is what a
- * bordered pill implied even with no fill. Audiobook gets a small
- * brand-colored accent (icon + word) as the one deliberate point of color
- * in an otherwise quiet, all-text line — everything else stays plain. */
-function MetaLine({ material, hasNarration }: { material: MaterialDetail; hasNarration: boolean }) {
+/** Published year / page count / audiobook availability / who's reading
+ * this right now, as a single dot-separated byline rather than a row of
+ * bordered chips — a book's facts read as editorial metadata (the way a
+ * magazine masthead or a library catalog card sets them), not as UI
+ * controls, which is what a bordered pill implied even with no fill.
+ * Audiobook and "reading now" each get a small brand-colored accent — the
+ * two deliberate points of color in an otherwise quiet, all-text line;
+ * everything else stays plain. "Reading now" is the one interactive fact
+ * here (see ReadingNowMetaItem) — clicking it is what opens ReadingRoomModal;
+ * that open state is lifted to BookDetailView because the modal itself
+ * renders at the page's own top level, not nested under this line. */
+function MetaLine({
+  material,
+  hasNarration,
+  onOpenReaders,
+}: {
+  material: MaterialDetail;
+  hasNarration: boolean;
+  onOpenReaders: () => void;
+}) {
   const parts: { key: string; node: React.ReactNode }[] = [];
   if (material.publishedYear) parts.push({ key: "year", node: <span>{material.publishedYear}</span> });
   if (material.pageCountEstimate) parts.push({ key: "pages", node: <span>{material.pageCountEstimate} pages</span> });
@@ -200,10 +213,22 @@ function MetaLine({ material, hasNarration }: { material: MaterialDetail; hasNar
       ),
     });
   }
+  if (material.currentReaders.length > 0) {
+    parts.push({
+      key: "reading-now",
+      node: (
+        <ReadingNowMetaItem
+          readers={material.currentReaders}
+          totalCount={material.currentReaderCount}
+          onOpen={onOpenReaders}
+        />
+      ),
+    });
+  }
   if (parts.length === 0) return null;
 
   return (
-    <div className="mt-2.5 flex flex-wrap items-center gap-x-2 text-[13px] font-medium text-[var(--reader-text-subtle)]">
+    <div className="mt-2.5 flex flex-wrap items-center justify-center gap-x-2 text-[13px] font-medium text-[var(--reader-text-subtle)]">
       {parts.map((part, i) => (
         <span key={part.key} className="inline-flex items-center gap-2">
           {i > 0 && <span aria-hidden="true">·</span>}
@@ -234,7 +259,11 @@ function BookDescription({ text }: { text: string }) {
   }, [text]);
 
   return (
-    <div className="mt-4">
+    // text-left: the block itself sits centered with everything else in the
+    // hero (BookDetailView's own wrapping column), but a paragraph read as
+    // centered prose, not the block's position, is the part that's genuinely
+    // harder to read — this stays left-aligned regardless of that ancestor.
+    <div className="mt-4 text-left">
       <p
         ref={ref}
         className={`text-sm font-medium leading-6 text-[var(--reader-text-muted)] ${!expanded ? "line-clamp-6" : ""}`}
@@ -286,6 +315,7 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
   const pct = Math.round(useReadingPositionStore((s) => s.progressPercentByMaterial[material.id] ?? 0));
   const position = useReadingPositionStore((s) => s.positions[material.id]);
   const [tab, setTab] = useState<Tab>("outline");
+  const [readersOpen, setReadersOpen] = useState(false);
 
   const hasNarration = material.narratorCount > 0;
   // `position` is one shared resume record for both reading and listening
@@ -310,28 +340,35 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
         </div>
       </div>
 
-      <div className="mb-8 flex flex-col items-start gap-5 shell:flex-row shell:items-center shell:gap-9">
-        {/* A compact, contained thumbnail rather than a full-bleed hero —
-            edge-to-edge previously made the cover roughly half the screen
-            and put it visibly out of step with everything else on the
-            page, since the back row and all the text below sit
-            flush left inside the normal page padding while the cover
-            escaped it via negative margins. No auto margin here either,
-            for the same reason: the cover is the container's first flex
-            item, so it lines up flush left with everything below it
-            instead of floating centered on its own. */}
+      <div className="mb-8 flex flex-col items-center gap-5">
+        {/* One full-width column at every breakpoint now, not a side-by-side
+            split above `shell:` — a two-column hero read fine narrow but
+            put the cover and a wide text column awkwardly far apart once
+            the page had real width to work with. Centering the cover on
+            its own line, with everything else stacked at full width below
+            it (title through the CTAs), reads as one deliberate column
+            instead of two columns fighting for the same row. */}
         <BookCover
           src={resolveBookCoverSrc(material)}
           alt={material.title}
-          className="aspect-[2/3] w-48 shell:w-48 flex-none shadow-lg"
+          className="aspect-[2/3] w-48 shell:w-56 flex-none shadow-lg"
         />
-        <div className="min-w-0 flex-1">
+        {/* max-w-lg, not the cover's own w-56 — a book's title/description
+            need noticeably more measure than the cover to read as text, so
+            this column is deliberately wider than the image sitting above
+            it, just still narrower than the page (and centered within it)
+            rather than stretching to the full shell width the two-column
+            layout used to fill. text-center here is the one shared switch
+            for title/author/metadata — BookDescription opts itself back to
+            text-left (see its own comment): a centered *block* reads fine,
+            centered *prose* doesn't. */}
+        <div className="mx-auto w-full max-w-lg min-w-0 text-center">
           <h1 className="font-serif text-2xl font-semibold leading-tight text-[var(--reader-text)] shell:text-4xl">
             {material.title}
           </h1>
-          <div className="mt-2 text-base font-medium text-[var(--reader-text-muted)]">{material.author}</div>
+          <div className="mt-2 text-sm font-medium text-[var(--reader-text-muted)]">{material.author}</div>
 
-          <MetaLine material={material} hasNarration={hasNarration} />
+          <MetaLine material={material} hasNarration={hasNarration} onOpenReaders={() => setReadersOpen(true)} />
 
           {/* Google first, OpenLibrary as backup — material.description (first-party)
               is left out of this cascade for now, it isn't reliably populated. */}
@@ -340,21 +377,21 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
           )}
 
           {pct > 0 && (
-            <div className="mt-4 flex items-center gap-3">
+            <div className="mt-4 flex items-center justify-center gap-3">
               {/* --reader-surface is literally the same value as --reader-bg
                   in both themes (see globals.css) — invisible as a track
                   color now that this hero sits directly on the page
                   background rather than its own tinted panel.
                   --reader-surface-hover is the token actually built to read
                   as a filled element against a flat bg in either theme. */}
-              <div className="h-1 max-w-64 flex-1 overflow-hidden rounded-full bg-[var(--reader-surface-hover)]">
+              <div className="h-1 flex-1 overflow-hidden rounded-full bg-[var(--reader-surface-hover)]">
                 <div className="h-full rounded-full bg-brand-500" style={{ width: `${pct}%` }} />
               </div>
               <span className="flex-none text-xs font-semibold text-[var(--reader-text-muted)]">{pct}% complete</span>
             </div>
           )}
 
-          <div className="mt-5 flex flex-col gap-3 shell:flex-row">
+          <div className="mt-5 flex flex-col gap-3 shell:flex-row shell:justify-center">
             <ReaderLink
               href={`/read/${material.slug}`}
               className="rounded-sm bg-brand-500 px-6 py-2.5 text-center text-sm font-semibold text-white no-underline shell:w-auto hover:bg-brand-600"
@@ -382,6 +419,20 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
           </div>
         </div>
       </div>
+
+      {/* A modal (SearchModal's own chrome), not an inline section pushed
+          into the hero above — only mounted at all once the "reading now"
+          fact in MetaLine is clicked open (see CurrentReaders.tsx's own
+          doc comment on why this moved off the page's own flow). */}
+      {readersOpen && (
+        <div className="fixed inset-0 z-50">
+          <ReadingRoomModal
+            readers={material.currentReaders}
+            totalCount={material.currentReaderCount}
+            onClose={() => setReadersOpen(false)}
+          />
+        </div>
+      )}
 
       <TabBar tab={tab} onChange={setTab} />
 
