@@ -1,7 +1,14 @@
 import { BookOpen, Home, Library, User } from "lucide-react";
-import type { ComponentType } from "react";
+import type { ComponentType, SVGProps } from "react";
 
-export type NavItem = { href: string; label: string; icon: ComponentType<{ size?: number }> };
+// `size`/`strokeWidth`/`className` (SVGProps covers the rest) — lucide's own
+// icon props, widened from just `{ size }` now that AppBottomNav also varies
+// strokeWidth and className per active state.
+export type NavItem = {
+  href: string;
+  label: string;
+  icon: ComponentType<SVGProps<SVGSVGElement> & { size?: number; strokeWidth?: number | string }>;
+};
 
 // Shared by AppSidebar (desktop) and AppBottomNav (mobile) so destinations,
 // icons and order never drift between the two navigation surfaces. Reading
