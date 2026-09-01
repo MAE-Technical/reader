@@ -20,30 +20,41 @@ type Props = {
 /**
  * Floating trigger for the book-wide notes/highlights feed — moved out of
  * the header (previously a header icon button) to cut header clutter.
- * No border (a lone ring here read as clutter of its own against the
- * badge) — just a soft shadow to lift it off the page, same "subtle, not a
- * call to action" intent as before.
+ *
+ * One style for every screen size (Tailwind handles the one place sizing
+ * actually needs to flex — see `sm:` below — rather than a hand-maintained
+ * `isMobile` branch): bottom-right, the same corner every other floating
+ * reader control already treats as the thumb-reachable "utility" spot.
+ *
+ * The count sits *inside* the button rather than as a badge sticker
+ * overlapping the icon's corner — icon and number side by side in one
+ * small pill, tight together (2px gap) so it reads as one compact figure
+ * rather than two things sharing a shape. Hairline `--reader-border` ring,
+ * no shadow. Collapses to a plain circle when there's nothing to count yet
+ * (no dangling empty pill). `env(safe-area-inset-bottom)` keeps it clear of
+ * the home indicator on notched phones — a no-op everywhere else.
  */
 export default function NotesFeedFab({ count, onClick, visible, bottomOffsetPx }: Props) {
+  const shownCount = count > 99 ? "99+" : count;
+  const hasCount = count > 0;
+
   return (
     <div
-      style={{ bottom: bottomOffsetPx + 16, right: 16 }}
+      style={{ bottom: bottomOffsetPx + 16, right: 16, paddingBottom: "env(safe-area-inset-bottom)" }}
       className={`fixed z-40 transition-[transform,opacity] duration-200 ease-out ${
         visible ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0 pointer-events-none"
       }`}
     >
-        <button
-          onClick={onClick}
-          aria-label="All notes in this book"
-          className="relative w-11 h-11 rounded-full bg-[var(--reader-surface)] text-[var(--reader-text-muted)] flex items-center justify-center cursor-pointer shadow-sm transition-colors hover:text-[var(--reader-text)]"
-        >
-          <MessageCircle size={18} />
-          {count > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-4.5 min-w-4.5 items-center justify-center rounded-full bg-brand-500 px-1 text-[9px] font-bold leading-none text-white ring-2 ring-[var(--reader-surface)]">
-              {count > 99 ? "99+" : count}
-            </span>
-          )}
-        </button>
+      <button
+        onClick={onClick}
+        aria-label="All notes in this book"
+        className={`h-10 sm:h-11 ${hasCount ? "px-3 gap-0.5" : "w-10 sm:w-11 justify-center"} rounded-full bg-[var(--reader-surface)] text-[var(--reader-text-muted)] flex items-center cursor-pointer border border-[var(--reader-border)] transition-colors hover:text-[var(--reader-text)]`}
+      >
+        <MessageCircle size={18} />
+        {hasCount && (
+          <span className="text-[12px] font-semibold leading-none tabular-nums">{shownCount}</span>
+        )}
+      </button>
     </div>
   );
 }

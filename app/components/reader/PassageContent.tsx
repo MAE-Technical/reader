@@ -235,16 +235,16 @@ function NoteGlyph({ count }: { count: number }) {
         alignItems: "baseline",
         position: "relative",
         top: -1,
-        marginLeft: 3,
+        marginLeft: 5,
         color: "var(--reader-text-muted)",
       }}
       className="select-none"
     >
-      <MessageCircle size={12} strokeWidth={1.75} />
+      <MessageCircle size={12} strokeWidth={2.5} />
       {count > 1 && (
         <span
-          style={{ fontSize: 9, fontWeight: 600, position: "relative", top: -3, marginLeft: 1 }}
-          className="font-sans leading-none"
+          style={{ fontSize: 9, fontWeight: 700, position: "relative", top: -6, marginLeft: 1 }}
+          className="leading-none"
         >
           {count}
         </span>
@@ -383,26 +383,36 @@ export const PassageText = memo(function PassageText({
             key={i}
             data-annotation-id={local.id}
             onClick={handleClick}
-            className={[clickable ? "cursor-pointer" : "", isJustJumped ? "reader-jump-flash" : ""]
-              .filter(Boolean)
-              .join(" ")}
-            style={
-              // The reader's own note implies a mark on the text itself,
-              // same as an explicit highlight — they shouldn't have to also
-              // hit Highlight separately just to see where their own note
-              // is anchored. Someone else's public note on this same span
-              // never washes the text on this reader's behalf (see
-              // showWash above) — it's signalled by the glyph alone.
-              showWash
-                ? {
-                    background: "var(--reader-highlight)",
-                    borderRadius: 2,
-                    padding: "0 1px",
-                  }
-                : undefined
-            }
+            className={clickable ? "cursor-pointer" : ""}
           >
-            {children}
+            {/* The wash (and its jump-flash ring) belongs to the marked
+             * text alone — it used to sit on this same outer span as the
+             * glyph below, so the glyph's icon and count picked up the
+             * highlight background and flash ring too, reading as if
+             * they'd been highlighted themselves. Scoping both to an inner
+             * span around just `children` keeps the outer span as a plain
+             * click hit-area (data-annotation-id, handleClick) without
+             * painting anything onto the glyph sitting outside it. */}
+            <span
+              className={isJustJumped ? "reader-jump-flash" : ""}
+              style={
+                // The reader's own note implies a mark on the text itself,
+                // same as an explicit highlight — they shouldn't have to also
+                // hit Highlight separately just to see where their own note
+                // is anchored. Someone else's public note on this same span
+                // never washes the text on this reader's behalf (see
+                // showWash above) — it's signalled by the glyph alone.
+                showWash
+                  ? {
+                      background: "var(--reader-highlight)",
+                      borderRadius: 2,
+                      padding: "0 1px",
+                    }
+                  : undefined
+              }
+            >
+              {children}
+            </span>
             {local.isTail && local.noteCount > 0 && <NoteGlyph count={local.noteCount} />}
           </span>
         );
@@ -461,7 +471,14 @@ export function MarkedText({
  * column width (tuned for line length, not for a portrait cover image) on
  * wide reading panes, while ordinary in-book images stay unregulated. */
 export function ImagePassageBlock({ passage, maxWidthPx }: { passage: Passage; maxWidthPx?: number }) {
-  const capStyle = maxWidthPx !== undefined ? { maxWidth: maxWidthPx } : undefined;
+  // min(), not a bare px value: a plain inline `maxWidth: 340` always wins
+  // over the `max-w-full` class below (inline styles beat classes
+  // regardless of specificity), so on a phone narrow enough that 340px is
+  // *more* than the actual padded column width, the fixed number used to
+  // win and the cover overflowed past the edge instead of shrinking to
+  // fit. min(340px, 100%) always yields whichever is actually smaller, so
+  // the cap only ever tightens the fit, never widens it past the column.
+  const capStyle = maxWidthPx !== undefined ? { maxWidth: `min(${maxWidthPx}px, 100%)` } : undefined;
   return (
     <figure className="my-6 mx-0 inline-block max-w-full" style={capStyle}>
       {passage.src ? (

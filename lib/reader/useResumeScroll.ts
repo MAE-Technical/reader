@@ -53,7 +53,15 @@ function resolveInitialSectionId(
  *
  * `targetPassageId` (the home community feed's deep links) narrows either
  * source further to one specific passage within the section, instead of
- * always landing on the section's first passage.
+ * always landing on the section's first passage. `targetPassageIndex` is
+ * the same idea for the book-detail page's own "Resume reading" button
+ * (BookDetailView.tsx): it already has this reader's real `reader_activities`
+ * row in hand (via useContinueReading) the moment it renders that button, so
+ * it hands the exact `sectionId`/`passageIndex` straight through the URL
+ * (`?section=&passageIndex=`) instead of asking this hook to reconstruct the
+ * same thing from a local mirror that may not agree with the server. When
+ * present, it takes over step 2 entirely (see below) — there's nothing left
+ * to reconcile in step 3 either, since the server value *is* the target.
  *
  * Returns whether the resume attempt (successful or not — an unsaved book
  * has nothing to resume) has finished, so a caller can hold off revealing
@@ -69,6 +77,7 @@ export function useResumeScroll({
   getSlideEl,
   targetSectionId,
   targetPassageId,
+  targetPassageIndex,
   serverPositionReady,
 }: {
   book: BookDocument;
@@ -83,6 +92,9 @@ export function useResumeScroll({
   getSlideEl: (id: string) => HTMLDivElement | undefined;
   targetSectionId?: string;
   targetPassageId?: string;
+  /** ?passageIndex=<n> — see this hook's own doc comment above. Only ever
+   * meaningful alongside targetSectionId; ignored on its own. */
+  targetPassageIndex?: number;
   /** Whether GET /continue-reading has had its chance to correct this
    * device's local mirror yet (Reader.tsx) — see the reconciliation effect
    * below for why this matters as much as `hasHydrated` does. */
@@ -126,7 +138,11 @@ export function useResumeScroll({
     const stored = targetSectionId
       ? (() => {
           const resolved = resolveSpineTarget(targetSectionId, book.sections, book.spine);
-          return resolved ? { sectionId: resolved, passageIndex: 0 } : null;
+          // targetPassageIndex (Resume reading's own ?passageIndex=) takes
+          // this straight to the reader's real saved passage; a plain
+          // ?section= chapter link (ToC, search) has none, so it still
+          // lands on the section's first passage same as before.
+          return resolved ? { sectionId: resolved, passageIndex: targetPassageIndex ?? 0 } : null;
         })()
       : (readLocalPositionSync(materialId) ?? null);
 
@@ -156,7 +172,7 @@ export function useResumeScroll({
     const raf = requestAnimationFrame(() => setInitialScrollDone(true));
     return () => cancelAnimationFrame(raf);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [book.id, materialId, activeSectionId, targetSectionId, targetPassageId]);
+  }, [book.id, materialId, activeSectionId, targetSectionId, targetPassageId, targetPassageIndex]);
 
   // Step 3 — reconciliation against a fresher position from another
   // device, the one thing step 1/2's synchronous local reads can't see.

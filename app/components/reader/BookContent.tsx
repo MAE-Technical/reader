@@ -15,10 +15,15 @@ function headingFontBump(level: number | undefined): number {
 
 // The reading column's width (`contentWidth`) is tuned for text line length,
 // not for a portrait cover image — full-width there reads as bloated on a
-// wide pane. Front-matter cover images alone get capped below that, down to
-// whichever is smaller; nothing else about their sizing is touched (see
-// ImagePassageBlock's own comment), and every other image in the book still
-// renders at the full column width exactly as its own dimensions call for.
+// wide pane. Front-matter cover images alone get capped below that; every
+// other image in the book still renders at the full column width exactly
+// as its own dimensions call for. This is just the *cap* — ImagePassageBlock
+// itself resolves it against the actual rendered column width (which is
+// already bounded by contentWidth through its own ancestor, and by the real
+// viewport on any screen narrower than that) via a CSS `min()`, so a
+// contentWidth or screen narrower than 340 shrinks the cover to fit rather
+// than this constant overriding it. No JS-side `Math.min` against
+// contentWidth needed here as a result — see ImagePassageBlock's comment.
 const FRONT_COVER_MAX_WIDTH_PX = 340;
 
 type BookContentProps = {
@@ -133,7 +138,7 @@ const BookContent = memo(function BookContent({
         >
           <ImagePassageBlock
             passage={raw}
-            maxWidthPx={isFrontCoverImage ? Math.min(contentWidth, FRONT_COVER_MAX_WIDTH_PX) : undefined}
+            maxWidthPx={isFrontCoverImage ? FRONT_COVER_MAX_WIDTH_PX : undefined}
           />
         </div>
       );

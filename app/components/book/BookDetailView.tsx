@@ -6,6 +6,8 @@ import { ArrowLeft, ChevronRight, Headphones, Play } from "lucide-react";
 import type { MaterialDetail } from "@/lib/materials/detail";
 import { buildTocOutlineRows } from "@/lib/reader/tocOutline";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
+import { useSessionStore } from "@/stores/session-store";
+import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useContinueReading } from "@/lib/auth/useContinueReading";
 import { useBookCommunityNotes } from "@/lib/materials/useBookCommunityNotes";
 import BookCover from "@/app/components/shared/BookCover";
@@ -115,20 +117,26 @@ function CardGrid<T>({
  * one shared algorithm, so the book-detail outline and the in-reader
  * drawer can't drift into different notions of the same book's contents.
  */
-function OutlineTab({ material }: { material: MaterialDetail }) {
+function OutlineTab({ material, currentSectionId }: { material: MaterialDetail; currentSectionId?: string }) {
   const rows = buildTocOutlineRows(material.sections);
   if (rows.length === 0) return null;
 
   return (
     <div className="rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-4">
       <div className="flex flex-col divide-y divide-[var(--reader-border)]">
-        {rows.map(({ section, depth, isGroup }) =>
-          isGroup ? (
+        {rows.map(({ section, depth, isGroup }) => {
+          // Exact match only — reader_activities.section_id is always one
+          // real spine entry (never a pure grouping label with no passages
+          // of its own), so there's no walk-forward-to-the-nearest-real-
+          // section to do here the way resolveSpineTarget does for a click;
+          // this is just "is this the row the reader's own position names."
+          const isCurrent = section.id === currentSectionId;
+          return isGroup ? (
             <ReaderLink
               key={section.id}
               href={`/read/${material.slug}?section=${section.id}`}
               style={{ paddingLeft: depth * 20 }}
-              className="block w-full pt-4 pb-1.5 text-[13.5px] font-semibold text-[var(--reader-text)] no-underline first:pt-0 hover:text-brand-500"
+              className={`block w-full pt-4 pb-1.5 text-[13.5px] font-semibold no-underline first:pt-0 hover:text-brand-500 ${isCurrent ? "text-brand-500" : "text-[var(--reader-text)]"}`}
             >
               {section.label}
             </ReaderLink>
@@ -137,18 +145,25 @@ function OutlineTab({ material }: { material: MaterialDetail }) {
               key={section.id}
               href={`/read/${material.slug}?section=${section.id}`}
               style={{ paddingLeft: depth * 20 }}
-              className="group flex w-full items-center gap-3 py-2.5 pr-1 no-underline transition-colors hover:bg-[var(--reader-surface-hover)]"
+              className={`group flex w-full items-center gap-3 py-2.5 pr-1 no-underline transition-colors hover:bg-[var(--reader-surface-hover)]`}
             >
-              <span className="min-w-0 flex-1 truncate text-[13.5px] font-medium text-[var(--reader-text-muted)] transition-colors group-hover:text-[var(--reader-text)]">
+              <span
+                className={`min-w-0 flex-1 truncate text-[13.5px] font-medium transition-colors group-hover:text-[var(--reader-text)] ${isCurrent ? "font-semibold text-brand-500" : "text-[var(--reader-text-muted)]"}`}
+              >
                 {section.label}
               </span>
+              {isCurrent && (
+                <span className="flex-none rounded-full bg-brand-500/10 px-2 py-0.5 text-[11px] font-semibold text-brand-500">
+                  Reading
+                </span>
+              )}
               <ChevronRight
                 size={14}
                 className="flex-none text-[var(--reader-text-subtle)] transition-colors group-hover:text-[var(--reader-text-muted)] group-hover:translate-x-0.5"
               />
             </ReaderLink>
-          )
-        )}
+          );
+        })}
       </div>
     </div>
   );
@@ -310,10 +325,32 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
   // Ensures the position mirror is populated even for a reader who lands
   // straight on this page (a shared link, a search-engine hit) without ever
   // visiting /home first — see useContinueReading's own hydration effect.
-  // The returned list itself isn't needed here, only its side effect.
-  useContinueReading();
+  const continueReadingQuery = useContinueReading();
   const pct = Math.round(useReadingPositionStore((s) => s.progressPercentByMaterial[material.id] ?? 0));
   const position = useReadingPositionStore((s) => s.positions[material.id]);
+  const sessionHasHydrated = useSessionStore((s) => s.hasHydrated);
+  const isAuthenticated = useIsAuthenticated();
+  // Same "has the real server position had its chance to correct the local
+  // mirror yet" gate Reader.tsx's own serverPositionReady uses. Without it,
+  // a reader could click "Resume reading" against whatever this device's
+  // local store already happened to hold (right after login, before
+  // GET /continue-reading has actually landed) — exactly the stale-mirror
+  // race useResumeScroll's URL-based handoff exists to avoid; gating the
+  // CTA on this closes it off at the source instead of at the destination.
+  const positionReady = sessionHasHydrated && (!isAuthenticated || continueReadingQuery.isFetched);
+  // Hands the reader's own real reader_activities row straight through the
+  // URL (?section=&passageIndex=) rather than making the reader page ask
+  // this device's local mirror to reconstruct it — that mirror is exactly
+  // what could be stale/out of sync with the server, which is what used to
+  // land "Resume reading" on the right chapter but its very first passage
+  // instead of the one actually saved. See useResumeScroll's own doc
+  // comment. Falls back to a plain link (section-only default local resume)
+  // whenever there's genuinely nothing to resume yet, or the store hasn't
+  // resolved a position for this material.
+  const resumeHref =
+    pct > 0 && position
+      ? `/read/${material.slug}?section=${position.sectionId}&passageIndex=${position.passageIndex}`
+      : `/read/${material.slug}`;
   const [tab, setTab] = useState<Tab>("outline");
   const [readersOpen, setReadersOpen] = useState(false);
 
@@ -376,7 +413,23 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
             <BookDescription text={(material.googleDescription ?? material.openlibraryDescription)!} />
           )}
 
-          {pct > 0 && (
+          {/* Neither the progress bar nor the CTA below commits to a real
+              number/label until positionReady — showing a stale/default
+              "Start reading" (or the wrong % complete) for the instant
+              before GET /continue-reading lands would be as misleading as
+              the wrong-passage bug this whole flow exists to avoid, just
+              one step earlier. A skeleton pulse in the same footprint below
+              is a deliberately brief, layout-stable stand-in — this only
+              shows at all when a real position is plausible (pct or a
+              locally-hydrated position already say so) rather than every
+              page load. */}
+          {!positionReady && (pct > 0 || position) && (
+            <div className="mt-4 flex items-center justify-center gap-3">
+              <div className="h-1 flex-1 animate-pulse overflow-hidden rounded-full bg-[var(--reader-surface-hover)]" />
+              <span className="flex-none text-xs font-semibold text-transparent">0% complete</span>
+            </div>
+          )}
+          {positionReady && pct > 0 && (
             <div className="mt-4 flex items-center justify-center gap-3">
               {/* --reader-surface is literally the same value as --reader-bg
                   in both themes (see globals.css) — invisible as a track
@@ -392,12 +445,25 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
           )}
 
           <div className="mt-5 flex flex-col gap-3 shell:flex-row shell:justify-center">
-            <ReaderLink
-              href={`/read/${material.slug}`}
-              className="rounded-sm bg-brand-500 px-6 py-2.5 text-center text-sm font-semibold text-white no-underline shell:w-auto hover:bg-brand-600"
-            >
-              {pct > 0 ? "Resume reading" : "Start reading"}
-            </ReaderLink>
+            {positionReady ? (
+              <ReaderLink
+                href={resumeHref}
+                className="rounded-sm bg-brand-500 px-6 py-2.5 text-center text-sm font-semibold text-white no-underline shell:w-auto hover:bg-brand-600"
+              >
+                {pct > 0 ? "Resume reading" : "Start reading"}
+              </ReaderLink>
+            ) : (
+              // Same footprint as the real CTA, deliberately non-navigable —
+              // a click here before the server position lands is exactly
+              // the click that could otherwise walk off with a stale/
+              // inaccurate URL (see positionReady's own comment above).
+              <div
+                aria-hidden="true"
+                className="animate-pulse rounded-sm bg-[var(--reader-surface-hover)] px-6 py-2.5 text-center text-sm font-semibold text-transparent shell:w-auto"
+              >
+                Resume reading
+              </div>
+            )}
 
             {hasNarration && (
               // ?listen=1 rather than calling openBook(book) directly —
@@ -436,7 +502,15 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
 
       <TabBar tab={tab} onChange={setTab} />
 
-      {tab === "outline" ? <OutlineTab material={material} /> : <NotesTab materialId={material.id} />}
+      {tab === "outline" ? (
+        // Only once positionReady — same reasoning as the CTA/progress bar
+        // above: a locally-stale position highlighting the wrong chapter
+        // for a moment is exactly the kind of "confidently wrong" this page
+        // is trying to stop doing.
+        <OutlineTab material={material} currentSectionId={positionReady ? position?.sectionId : undefined} />
+      ) : (
+        <NotesTab materialId={material.id} />
+      )}
     </div>
   );
 }

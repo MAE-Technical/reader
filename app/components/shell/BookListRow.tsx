@@ -6,6 +6,7 @@ import type { MaterialSummary } from "@/lib/api/types";
 import BookCover from "@/app/components/shared/BookCover";
 import { PresenceLine } from "@/app/components/shared/CurrentReaders";
 import { resolveBookThumbnailSrc } from "@/lib/materials/image";
+import ReaderLink from "@/app/components/ReaderLink";
 
 /**
  * List-row book tile — Claude Design "Library catalogue listing" project,
@@ -29,20 +30,37 @@ import { resolveBookThumbnailSrc } from "@/lib/materials/image";
  * rather than pinning them to the top and leaving the tall thumbnail
  * towering over a short text block.
  *
- * One wrapping `<Link>` for the whole row: PresenceLine below is
- * deliberately a plain pulsing-dot + count line, not a set of individual
- * comrade links (see its own doc comment) — no interactive element inside
- * the row that a wrapping `<a>` would nest invalidly.
+ * One wrapping link for the whole row: PresenceLine below is deliberately a
+ * plain pulsing-dot + count line, not a set of individual comrade links (see
+ * its own doc comment) — no interactive element inside the row that a
+ * wrapping `<a>` would nest invalidly.
  */
-export default function BookListRow({ material }: { material: MaterialSummary }) {
+export default function BookListRow({
+  material,
+  resumeTarget,
+}: {
+  material: MaterialSummary;
+  /** Reading page only (ReadingView) — every row there is already this
+   * reader's own real reader_activities entry (GET /continue-reading), so
+   * the row skips book-detail entirely and goes straight into the reader at
+   * that exact section/passage, the same URL-based handoff
+   * BookDetailView's own "Resume reading" and ContinueReadingItemCard use
+   * (see useResumeScroll's doc comment for why the URL, not a client store
+   * read on arrival, is what carries this). Absent everywhere else (the
+   * Library catalogue) — those rows are for *browsing*, where the detail
+   * page's blurb/outline/CTA is still the right landing spot, most of them
+   * not even started yet. */
+  resumeTarget?: { sectionId: string; passageIndex: number };
+}) {
   const pct = Math.round(useReadingPositionStore((s) => s.progressPercentByMaterial[material.id] ?? 0));
   const showProgress = pct > 0;
+  const href = resumeTarget
+    ? `/read/${material.slug}?section=${resumeTarget.sectionId}&passageIndex=${resumeTarget.passageIndex}`
+    : `/book/${material.slug}`;
+  const className = "group flex min-w-0 gap-4 border-b border-[var(--reader-border)] py-4 no-underline";
 
-  return (
-    <Link
-      href={`/book/${material.slug}`}
-      className="group flex min-w-0 gap-4 border-b border-[var(--reader-border)] py-4 no-underline"
-    >
+  const content = (
+    <>
       <div className="relative h-28 w-20 flex-none overflow-hidden rounded-xs">
         <BookCover src={resolveBookThumbnailSrc(material)} alt={material.title} className="h-full w-full" iconSize={22} />
         <div className="absolute inset-0 bg-[rgba(190,64,13,0.16)] mix-blend-multiply" />
@@ -67,6 +85,21 @@ export default function BookListRow({ material }: { material: MaterialSummary })
         )}
         <PresenceLine readers={material.currentReaders} totalCount={material.currentReaderCount} />
       </div>
+    </>
+  );
+
+  // ReaderLink (a plain <a>, never next/link's <Link>) once this is headed
+  // into /read/[slug] — the (.)read/[slug] modal interception fires for ANY
+  // client-side Link navigation there regardless of origin (see ReaderLink's
+  // own doc comment), which would otherwise pop this up as an overlay on top
+  // of the Reading page instead of the real standalone reader.
+  return resumeTarget ? (
+    <ReaderLink href={href} className={className}>
+      {content}
+    </ReaderLink>
+  ) : (
+    <Link href={href} className={className}>
+      {content}
     </Link>
   );
 }

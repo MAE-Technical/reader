@@ -36,6 +36,65 @@ export type Position = {
 const SYNC_DEBOUNCE_MS = 1500;
 const pendingSyncTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
+/**
+ * The actual network write, shared by the debounced path below and
+ * `flushPendingSyncs`. Reads fresh from the store at call time, not
+ * whatever value was current when the caller decided to sync — a rapid run
+ * of scroll events can reschedule the debounce repeatedly, so only the last
+ * position by the time this actually runs should ever go out.
+ *
+ * `keepalive` lets the request survive the page actually unloading
+ * (`fetch`'s own teardown-safe flag, same thing `navigator.sendBeacon` is
+ * for, but this needs a PUT with an Authorization header, not sendBeacon's
+ * fire-and-forget POST) — used by the pagehide/hidden flush below, where
+ * there's no guarantee an ordinary in-flight fetch gets to finish. Goes
+ * straight through the browser's own `fetch`, not `apiFetch`: a page
+ * that's already being torn down can't afford `apiFetch`'s
+ * `ensureFreshSession` refresh round trip, and a request made with a
+ * slightly stale token that 401s here is no worse than the request never
+ * having been sent at all, which is the status quo this is replacing.
+ */
+function syncPositionNow(materialId: string, opts: { keepalive?: boolean } = {}) {
+  const session = useSessionStore.getState().session;
+  if (!session || !isSessionValid(session)) return;
+  const position = useReadingPositionStore.getState().positions[materialId];
+  if (!position) return;
+  const progressPercent = useReadingPositionStore.getState().progressPercentByMaterial[materialId] ?? 0;
+
+  if (opts.keepalive) {
+    fetch("/api/auth/me/reading-position", {
+      method: "PUT",
+      keepalive: true,
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${session.accessToken}` },
+      body: JSON.stringify({
+        materialId,
+        sectionId: position.sectionId,
+        passageIndex: position.passageIndex,
+        audioTimeMs: position.audioTimeMs,
+        progressPercent,
+      }),
+    }).catch(() => {}); // best-effort, and nothing can await this during teardown anyway
+    return;
+  }
+
+  apiFetch<void>("/auth/me/reading-position", {
+    method: "PUT",
+    json: {
+      materialId,
+      sectionId: position.sectionId,
+      passageIndex: position.passageIndex,
+      audioTimeMs: position.audioTimeMs,
+      progressPercent,
+    },
+  }).catch((err) => {
+    // A dropped position sync isn't worth surfacing to the reader —
+    // the local mirror (this store) already has it, so nothing is lost
+    // on this device; it just won't have followed them anywhere else
+    // yet. Logged for visibility, same as other best-effort syncs.
+    if (!(err instanceof ApiError)) console.error("reading-position sync failed", err);
+  });
+}
+
 function scheduleRemoteSync(materialId: string) {
   const session = useSessionStore.getState().session;
   if (!isSessionValid(session)) return; // no readers row to write to yet — see plan.md's "State-layer groundwork"
@@ -46,31 +105,50 @@ function scheduleRemoteSync(materialId: string) {
     materialId,
     setTimeout(() => {
       pendingSyncTimers.delete(materialId);
-      // Reads fresh from the store at flush time, not whatever value was
-      // current when this timer was scheduled — a rapid run of scroll
-      // events reschedules this same timer repeatedly, so only the last
-      // position by the time it actually fires should ever go out.
-      const position = useReadingPositionStore.getState().positions[materialId];
-      if (!position) return;
-      const progressPercent = useReadingPositionStore.getState().progressPercentByMaterial[materialId] ?? 0;
-      apiFetch<void>("/auth/me/reading-position", {
-        method: "PUT",
-        json: {
-          materialId,
-          sectionId: position.sectionId,
-          passageIndex: position.passageIndex,
-          audioTimeMs: position.audioTimeMs,
-          progressPercent,
-        },
-      }).catch((err) => {
-        // A dropped position sync isn't worth surfacing to the reader —
-        // the local mirror (this store) already has it, so nothing is lost
-        // on this device; it just won't have followed them anywhere else
-        // yet. Logged for visibility, same as other best-effort syncs.
-        if (!(err instanceof ApiError)) console.error("reading-position sync failed", err);
-      });
+      syncPositionNow(materialId);
     }, SYNC_DEBOUNCE_MS)
   );
+}
+
+/**
+ * Flushes every debounced write still waiting on its `SYNC_DEBOUNCE_MS`
+ * timer, immediately and `keepalive`, instead of leaving it to fire later.
+ *
+ * Without this, `reader_activities` on the server routinely lagged behind
+ * `localStorage`: `useReadingProgress`'s own `visibilitychange` handler
+ * (tab backgrounded) only ever wrote to *this* store, which just restarts
+ * the same 1500ms debounce rather than syncing anything — and a real tab
+ * close, or a mobile OS suspending a backgrounded tab's timers, routinely
+ * won that race, permanently dropping the last write. The DB row was then
+ * stuck at whatever *did* land last (typically passageIndex 0, from the
+ * write a genuine section-change makes the moment a chapter is entered),
+ * which is exactly what made a fresh session/device resume mid-chapter at
+ * the top instead of wherever the reader had actually scrolled to.
+ *
+ * Registered once, at module scope, below — this store (localStorage reads/
+ * writes, `window`/`document` listeners) is only ever imported client-side.
+ */
+export function flushPendingSyncs() {
+  for (const materialId of pendingSyncTimers.keys()) {
+    const timer = pendingSyncTimers.get(materialId);
+    if (timer) clearTimeout(timer);
+    pendingSyncTimers.delete(materialId);
+    syncPositionNow(materialId, { keepalive: true });
+  }
+}
+
+if (typeof window !== "undefined") {
+  // pagehide: the real "reader is leaving" signal (tab close, real
+  // navigation away, app backgrounded on iOS) — fires reliably where
+  // beforeunload doesn't (bfcache navigations, mobile Safari).
+  window.addEventListener("pagehide", flushPendingSyncs);
+  // visibilitychange: catches the same "backgrounded" case *before* the
+  // OS gets a chance to suspend this tab's timers entirely (the actual
+  // failure mode on iOS — a background tab's own setTimeout can simply
+  // never fire), which is earlier than pagehide is guaranteed to run.
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") flushPendingSyncs();
+  });
 }
 
 type ReadingPositionState = {

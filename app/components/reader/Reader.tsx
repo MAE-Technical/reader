@@ -49,6 +49,7 @@ export default function Reader({
   eagerSectionIds,
   targetSectionId,
   targetPassageId,
+  targetPassageIndex,
   targetNoteId,
   autoListen,
   onClose,
@@ -63,14 +64,21 @@ export default function Reader({
    * everything else starts with blanked-out passage text (see
    * toBookDocument.ts), backfilled by useProgressiveText below. */
   eagerSectionIds: string[];
-  /** ?section=<id> from the book-detail page's chapter links — see
-   * useResumeScroll's own doc comment for why this never touches the saved
-   * resume position. */
+  /** ?section=<id> — either a chapter link (ToC/search, first-passage
+   * default) or, paired with targetPassageIndex, the book-detail page's own
+   * "Resume reading" button. See useResumeScroll's own doc comment. */
   targetSectionId?: string;
   /** ?passage=<id> — the home community feed's deep links, narrowing
    * targetSectionId down to one specific passage instead of that
    * section's first one. */
   targetPassageId?: string;
+  /** ?passageIndex=<n> — BookDetailView's "Resume reading" button, paired
+   * with targetSectionId. Sourced straight from this reader's own
+   * `reader_activities` row (via useContinueReading, already in hand by the
+   * time that button renders) rather than asking this device's local mirror
+   * to reconstruct the same thing — see useResumeScroll's own doc comment
+   * for why that reconstruction is what used to go wrong. */
+  targetPassageIndex?: number;
   /** ?note=<annotationId> — paired with targetPassageId, opens that
    * specific annotation's thread once the reader has landed, the same as
    * clicking its inline marker would (see the deep-link effect below). */
@@ -359,6 +367,7 @@ export default function Reader({
     getSlideEl,
     targetSectionId,
     targetPassageId,
+    targetPassageIndex,
     serverPositionReady,
   });
 

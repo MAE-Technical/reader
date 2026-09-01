@@ -8,11 +8,16 @@ import { resolveBookThumbnailSrc } from "@/lib/materials/image";
  * retired in favor of a proper Reading nav item, and the Reading page
  * itself (ReadingView) moved to BookListRow. */
 export default function ContinueReadingItemCard({ item }: { item: ContinueReadingItem }) {
-  const { material, progressPercent } = item;
+  const { material, progressPercent, sectionId, passageIndex } = item;
 
   return (
     <ReaderLink
-      href={`/read/${material.slug}`}
+      // Straight from this reader's own reader_activities row (this whole
+      // rail is GET /continue-reading's own response) — see
+      // BookDetailView.tsx's matching resumeHref and useResumeScroll's own
+      // doc comment for why the URL, not this device's local mirror, is
+      // what a resume link should hand off.
+      href={`/read/${material.slug}?section=${sectionId}&passageIndex=${passageIndex}`}
       className="flex w-60 flex-none gap-3 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface)] p-3 no-underline md:w-70"
     >
       <BookCover src={resolveBookThumbnailSrc(material)} alt={material.title} className="h-20 w-17 flex-none rounded-sm border border-[var(--reader-border)]" />

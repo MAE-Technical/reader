@@ -18,6 +18,22 @@ function isActive(pathname: string, href: string) {
  * rendered height, published below) rather than the other way around, same
  * as e.g. Spotify's mini player sitting above its tab bar rather than
  * covering or displacing it.
+ *
+ * One continuous glass surface rather than a flat opaque strip: a
+ * translucent, blurred background with rounded top corners lifts it off
+ * the page edge without detaching it from the edge entirely (safe-area
+ * continuity stays intact — this is still `bottom-0`, just no longer
+ * reading as a hard-edged toolbar bolted on).
+ *
+ * The active tab carries no background wash at all (an earlier pass tried
+ * a sliding accent-tinted capsule behind it — too heavy a signal for four
+ * quiet, always-visible destinations). Instead: full accent color plus a
+ * touch more stroke weight on the icon, and one small dot above it —
+ * the same "quiet signal, not a call to action" register NotesFeedFab's
+ * own count dot already settled on. The dot is always in the DOM (opacity/
+ * scale transitions, not a mount/unmount) so switching tabs never jumps
+ * layout, and every tab's icon+label baseline stays fixed regardless of
+ * which one is active.
  */
 export default function AppBottomNav() {
   const pathname = usePathname();
@@ -49,8 +65,8 @@ export default function AppBottomNav() {
   return (
     <nav
       ref={navRef}
-      className="shell:hidden fixed left-0 right-0 bottom-0 z-40 flex items-stretch border-t border-[var(--reader-border)] bg-[var(--reader-surface)] select-none no-callout"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      className="shell:hidden fixed left-0 right-0 bottom-0 z-40 flex items-stretch select-none no-callout rounded-t-2xl border-t border-[var(--reader-border)] bg-[var(--reader-surface)]/85 backdrop-blur-xl backdrop-saturate-150 shadow-[0_-8px_24px_-16px_rgba(0,0,0,0.3)]"
     >
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
         const active = isActive(pathname, href);
@@ -60,11 +76,21 @@ export default function AppBottomNav() {
             href={href}
             onClick={onNavClick}
             style={{ touchAction: "manipulation" }}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 no-underline text-xs font-semibold transition-[color,transform] duration-100 active:scale-95 active:text-brand-500 ${
-              active ? "text-brand-500" : "text-[var(--reader-text-muted)]"
+            className={`relative flex-1 flex flex-col items-center justify-center gap-1 py-2.5 no-underline text-[11px] font-semibold transition-colors duration-150 active:scale-95 ${
+              active ? "text-[var(--reader-accent)]" : "text-[var(--reader-text-muted)]"
             }`}
           >
-            <Icon size={20} />
+            <span
+              aria-hidden
+              className={`absolute top-1 h-1 w-1 rounded-full bg-[var(--reader-accent)] transition-[opacity,transform] duration-150 ${
+                active ? "opacity-100 scale-100" : "opacity-0 scale-0"
+              }`}
+            />
+            <Icon
+              size={20}
+              strokeWidth={active ? 2.25 : 1.75}
+              className="transition-[stroke-width] duration-150"
+            />
             {label}
           </Link>
         );

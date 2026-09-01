@@ -48,9 +48,20 @@ export default function ReadingView() {
         // the Library catalogue — every item here is already in progress,
         // so BookListRow's own progress bar (fed by the same
         // reading-position-store useContinueReading just populated) shows
-        // on every row without any special-casing.
+        // on every row without any special-casing. resumeTarget is what
+        // additionally sends each row straight into the reader at this
+        // reader's own real section/passage instead of the book-detail page
+        // — every item here already carries its own reader_activities
+        // sectionId/passageIndex straight from GET /continue-reading, no
+        // client-store read needed.
         <div className="grid grid-cols-1 shell:grid-cols-2 shell:gap-x-10">
-          {items.map((item) => <BookListRow key={item.material.id} material={item.material} />)}
+          {items.map((item) => (
+            <BookListRow
+              key={item.material.id}
+              material={item.material}
+              resumeTarget={{ sectionId: item.sectionId, passageIndex: item.passageIndex }}
+            />
+          ))}
         </div>
       )}
     </SearchableAppPage>
