@@ -2,31 +2,46 @@
 
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import type { Section } from "@/lib/book/schema";
-import { sectionLabel } from "@/lib/reader/sectionHeading";
 
 type Props = {
   prevSection: Section | undefined;
   nextSection: Section | undefined;
   onPrev: () => void;
   onNext: () => void;
-  /** Only surfaces once the reader has actually reached the bottom of the
-   * current section — unobtrusive the rest of the time, the same
-   * "chrome only when the reader signals for it" idea as the header. A
-   * floating overlay (not a flex sibling), so hiding it doesn't reflow the
-   * reading column underneath — mirrors how the header floats above content
-   * rather than pushing it down. */
+  /** Same "chrome only when the reader signals for it" idea as the header:
+   * true once the reader scrolls up, clicks inside the page, or actually
+   * reaches the bottom of the current section (Reader.tsx's footerVisible).
+   * A floating overlay (not a flex sibling), so hiding it doesn't reflow
+   * the reading column underneath — mirrors how the header floats above
+   * content rather than pushing it down. */
   visible: boolean;
   /** Pushed up above the fixed "now playing" bar when one is active. */
   bottomOffsetPx: number;
 };
 
+const buttonClass =
+  "group min-h-16 flex-1 min-w-0 flex items-center gap-2 border-none bg-transparent cursor-pointer px-5 py-3 text-[13px] font-semibold text-[var(--reader-text-muted)] transition-colors hover:text-[var(--reader-text)]";
+const chevronClass = "flex-none transition-transform duration-150";
+
 /**
  * Always-visible-when-relevant chapter navigation — replaces the old
  * invisible full-height edge-hover buttons (removed entirely; swipe on
  * mobile and this footer/keyboard on desktop are now the only page-turn
- * affordances). Real chapter titles, generous tap targets (min-h-16, well
- * over the ~44px minimum), and a clear label/title split for legibility on
- * mobile.
+ * affordances).
+ *
+ * Deliberately just "Previous"/"Next", not the target section's title:
+ * real chapter titles ran long enough on some books to wrap, truncate
+ * mid-word, or otherwise read as noise in a control whose whole job is a
+ * one-glance affordance — the destination is already one tap away in the
+ * chapters outline for anyone who wants to know it first. Nudging chevrons
+ * (translate on hover) point where each side leads instead.
+ *
+ * The two sides are two independent flex-1 buttons rather than a fixed
+ * split, so a section with only one neighbor (the very first or last in
+ * the book) hands its full width to that one button instead of leaving a
+ * dead, borderless placeholder half — and the hairline divider between
+ * them is rendered only when both buttons exist, so there's never a
+ * dividing line with nothing on one side of it.
  */
 export default function ChapterNavFooter({
   prevSection,
@@ -49,48 +64,23 @@ export default function ChapterNavFooter({
         visible ? "translate-y-0 opacity-100" : "translate-y-full opacity-0 pointer-events-none"
       }`}
     >
-      {prevSection ? (
+      {prevSection && (
         <button
           onClick={onPrev}
-          className="group min-h-16 flex-1 min-w-0 flex items-center gap-2.5 border-none border-r border-r-[var(--reader-border)] bg-transparent cursor-pointer text-left px-4 py-3"
+          className={`${buttonClass} justify-start ${
+            nextSection ? "border-r border-r-[var(--reader-border)]" : ""
+          }`}
         >
-          <ChevronLeft
-            size={18}
-            className="flex-none text-[var(--reader-text-muted)] transition-colors group-hover:text-[var(--reader-text)]"
-          />
-          <div className="min-w-0">
-            <div className="text-[10.5px] font-semibold tracking-wide uppercase text-[var(--reader-text-muted)]">
-              Previous
-            </div>
-            <div className="truncate text-[13px] font-semibold text-[var(--reader-text)] mt-0.5">
-              {sectionLabel(prevSection) ?? "Previous"}
-            </div>
-          </div>
+          <ChevronLeft size={18} className={`${chevronClass} group-hover:-translate-x-0.5`} />
+          Previous
         </button>
-      ) : (
-        <div className="flex-1 border-r border-[var(--reader-border)]" />
       )}
 
-      {nextSection ? (
-        <button
-          onClick={onNext}
-          className="group min-h-16 flex-1 min-w-0 flex items-center justify-end gap-2.5 border-none bg-transparent cursor-pointer text-right px-4 py-3"
-        >
-          <div className="min-w-0">
-            <div className="text-[10.5px] font-semibold tracking-wide uppercase text-[var(--reader-text-muted)]">
-              Next
-            </div>
-            <div className="truncate text-[13px] font-semibold text-[var(--reader-text)] mt-0.5">
-              {sectionLabel(nextSection) ?? "Next"}
-            </div>
-          </div>
-          <ChevronRight
-            size={18}
-            className="flex-none text-[var(--reader-text-muted)] transition-colors group-hover:text-[var(--reader-text)]"
-          />
+      {nextSection && (
+        <button onClick={onNext} className={`${buttonClass} justify-end`}>
+          Next
+          <ChevronRight size={18} className={`${chevronClass} group-hover:translate-x-0.5`} />
         </button>
-      ) : (
-        <div className="flex-1" />
       )}
     </div>
   );

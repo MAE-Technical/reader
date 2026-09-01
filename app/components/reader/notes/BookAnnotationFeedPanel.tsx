@@ -78,9 +78,9 @@ export default function BookAnnotationFeedPanel({
       onClose={onClose}
       title={
         <div className="flex min-w-0 flex-col gap-0.5">
-          <span className="truncate font-serif font-semibold text-base text-[var(--reader-text)]">
+          {/* <span className="truncate font-serif font-semibold text-base text-[var(--reader-text)]">
             Notes & highlights
-          </span>
+          </span> */}
           <span className="text-xs font-medium text-[var(--reader-text-muted)]">
             {totalNoteCount} {totalNoteCount === 1 ? "note" : "notes"}
             {passageCount > 0 && ` · ${passageCount} ${passageCount === 1 ? "highlight" : "highlights"}`}

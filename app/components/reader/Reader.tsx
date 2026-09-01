@@ -11,6 +11,7 @@ import ShareQuoteModal from "./ShareQuoteModal";
 import type { NoteLookup } from "./PassageContent";
 import BookContent from "./BookContent";
 import ReaderHeader from "./ReaderHeader";
+import NotesFeedFab from "./NotesFeedFab";
 import ChaptersDrawer from "./ChaptersDrawer";
 import ChapterNavFooter from "./ChapterNavFooter";
 import SelectionMenu, { type Item } from "./SelectionMenu";
@@ -27,6 +28,7 @@ import {
   useReaderStore,
 } from "@/stores/reader-store";
 import { useReadingPositionStore } from "@/stores/reading-position-store";
+import { useSessionStore, isSessionValid } from "@/stores/session-store";
 import { useLayoutStore } from "@/stores/layout-store";
 import { useAudioStore } from "@/stores/audio-store";
 import { useNarrationStore } from "@/stores/narration-store";
@@ -121,7 +123,6 @@ export default function Reader({
   } = useTextAnnotations(materialId);
 
   const theme = useReaderStore((s) => s.theme);
-  const setTheme = useReaderStore((s) => s.setTheme);
   const fontSizeScale = useReaderStore((s) => s.fontSizeScale);
   const fontFamily = useReaderStore((s) => s.fontFamily);
   const lineSpacingScale = useReaderStore((s) => s.lineSpacingScale);
@@ -167,9 +168,25 @@ export default function Reader({
 
   // Seeds reading-position-store's local mirror from the server (see
   // useContinueReading's own doc comment) for a reader who opened this book
-  // directly rather than via the home feed's Continue Reading rail — the
-  // returned list itself isn't used here, only the hydration side effect.
-  useContinueReading();
+  // directly rather than via the home feed's Continue Reading rail. Its
+  // `isFetched` (below, via serverPositionReady) is what useResumeScroll
+  // actually waits on — the hydration side effect alone isn't enough on a
+  // device/browser with no local write of its own for this book yet (a
+  // second device, a fresh profile, cleared site data): without waiting for
+  // this to land too, resume would already have committed to "nothing to
+  // resume" off the still-empty local store before this request ever
+  // arrived, the same class of race hasHydrated below guards against for
+  // the local store itself.
+  const continueReadingQuery = useContinueReading();
+  const sessionHasHydrated = useSessionStore((s) => s.hasHydrated);
+  const session = useSessionStore((s) => s.session);
+  const isAuthenticated = sessionHasHydrated && isSessionValid(session);
+  // False (i.e. "keep waiting") until we can actually say one way or the
+  // other whether there's server data to fold in: either this device
+  // confirmed there's no reader session at all to fetch one for, or the
+  // fetch itself has completed (success or failure — a dropped request
+  // shouldn't hold the reader open forever; local data is still there).
+  const serverPositionReady = sessionHasHydrated && (!isAuthenticated || continueReadingQuery.isFetched);
 
   const fontSize = fontSizePxFromScale(fontSizeScale);
   const lineHeight = lineHeightFromScale(lineSpacingScale);
@@ -337,10 +354,12 @@ export default function Reader({
     materialId,
     sectionsById,
     orderedSections,
+    activeSectionId,
     goTo,
     getSlideEl,
     targetSectionId,
     targetPassageId,
+    serverPositionReady,
   });
 
   // Whichever section the reader actually lands on (server's own eager
@@ -404,6 +423,7 @@ export default function Reader({
     activeSectionId,
     activeSection: sectionsById.get(activeSectionId),
     getSlideEl,
+    resumeReady,
   });
 
   // Podcast-style auto-advance (spec.md): the narration engine (global,
@@ -619,8 +639,21 @@ export default function Reader({
   // whatever visibility plain scrolling would already have produced.
   // notesPanelKeepsHeader is the one exception to "notes panel open ⇒ hide
   // header" — see openNoteMarker's own comment.
-  const chromeVisible =
-    !chromeHidden && !chaptersOpen && !(notesPanel && !notesPanelKeepsHeader) && !noteFeed.open;
+  // Shared by both header and footer: any of these panels being open takes
+  // over the chrome regardless of scroll state, so neither bar should show
+  // (or be forced onto the screen by, e.g., ChapterNavFooter's own
+  // reached-the-bottom trigger below) while one is up.
+  const chromeOverlaysOpen =
+    chaptersOpen || (notesPanel && !notesPanelKeepsHeader) || noteFeed.open;
+  const chromeVisible = !chromeHidden && !chromeOverlaysOpen;
+  // ChapterNavFooter's own visibility: same scroll-up/click trigger as the
+  // header (chromeVisible), OR'd with "reached the bottom of this section"
+  // — so the nav still surfaces on its own right when there's actually
+  // somewhere to go next, even if the reader scrolled straight down without
+  // ever triggering the header's reveal. atBottom is deliberately not
+  // gated on chromeHidden (only on the overlays) so that arriving at the
+  // bottom always shows it regardless of scroll direction.
+  const footerVisible = !chromeOverlaysOpen && (!chromeHidden || atBottom);
   const railInsetPx = isMobile ? 12 : 16;
   // Bumped from the old single-line top bar to fit a book-title +
   // current-section subtitle now that the icon rail has merged into it.
@@ -667,26 +700,12 @@ export default function Reader({
           topBarHeightPx={topBarHeightPx}
           railInsetPx={railInsetPx}
           onClose={onClose}
-          bookSlug={book.slug}
-          bookTitle={book.metadata.title}
-          bookAuthor={book.metadata.author}
-          chaptersOpen={chaptersOpen}
-          onToggleChapters={() => setChaptersOpen((o) => !o)}
           hasNarration={hasNarration}
           isListen={isListen}
           onListen={() => openBook(book, materialId)}
-          noteFeedCount={noteFeed.totalNoteCount}
-          onToggleNoteFeed={() => {
-            if (noteFeed.open) noteFeed.close();
-            else {
-              closeNotesPanel();
-              noteFeed.openFeed();
-            }
-          }}
           onToggleSearch={() => setSearchOpen((o) => !o)}
-          theme={theme}
-          onToggleTheme={() => setTheme(theme === "light" ? "dark" : "light")}
-          scrollPct={scrollPct}
+          activeSection={orderedSections[activeIndex]}
+          onToggleChapters={() => setChaptersOpen((o) => !o)}
         />
 
         {/* Chapters drawer, content column, and notes panel live side by
@@ -706,13 +725,14 @@ export default function Reader({
             onClose={() => setChaptersOpen(false)}
           />
 
-          {/* Content column */}
-          <div
-            className={`flex-1 min-w-0 h-full flex flex-col relative transition-opacity duration-300 ${
-              isMobile && chaptersOpen ? "opacity-50" : "opacity-100"
-            }`}
-            style={{ background: "var(--reader-bg)" }}
-          >
+          {/* Content column — no dimming while the chapters sheet is open
+              (that opacity dip was a leftover from the old full-screen
+              slide-in outline, which made sense to shadow the reader
+              behind it; the outline is a partial bottom sheet now,
+              specifically so the reader stays visible/scrollable behind
+              it — same as the notes panel, which never dimmed this
+              either). */}
+          <div className="flex-1 min-w-0 h-full flex flex-col relative" style={{ background: "var(--reader-bg)" }}>
             <BookContent
               book={book}
               activeIndex={activeIndex}
@@ -749,7 +769,7 @@ export default function Reader({
               // SelectionMenu.tsx), and would otherwise land directly on
               // top of this one if the reader selects text right at the
               // end of a section.
-              visible={atBottom && !selection}
+              visible={footerVisible && !selection}
               bottomOffsetPx={anyPlayerActive ? playerHeight : 0}
             />
 
@@ -923,6 +943,27 @@ export default function Reader({
       {currentPlayingPassageId && awayFromNarration && (
         <BackToCurrentButton bottom={playerHeight + 16} direction={nudgeDirection} onClick={jumpToNarration} />
       )}
+
+      <NotesFeedFab
+        count={noteFeed.totalNoteCount}
+        onClick={() => {
+          if (noteFeed.open) noteFeed.close();
+          else {
+            closeNotesPanel();
+            noteFeed.openFeed();
+          }
+        }}
+        // Same lifecycle as ChapterNavFooter itself, not an independent
+        // always-on FAB — see NotesFeedFab's own doc comment.
+        visible={footerVisible && !selection}
+        // Stacks above the player bar when one's active, and above
+        // ChapterNavFooter's own height (same rough constant Reader.tsx
+        // already assumes for its bottom content padding, see
+        // contentBottomPad above) — the footer is always showing whenever
+        // this is (same `visible` condition above), so the FAB always sits
+        // above it, never on top of the Next/Previous tap targets.
+        bottomOffsetPx={(anyPlayerActive ? playerHeight : 0) + (isMobile ? 80 : 72)}
+      />
 
       {/* Masks the reader until theme/font/position (hydrated) and scroll
           position (resumeReady) all reflect real saved state, so nothing

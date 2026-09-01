@@ -45,6 +45,7 @@ export function useReadingProgress({
   activeSectionId,
   activeSection,
   getSlideEl,
+  resumeReady,
 }: {
   book: BookDocument;
   materialId: string;
@@ -52,6 +53,20 @@ export function useReadingProgress({
   activeSectionId: string | undefined;
   activeSection: Section | undefined;
   getSlideEl: (id: string) => HTMLDivElement | undefined;
+  /** Whether useResumeScroll has finished landing the reader on their real
+   * saved section/passage (Reader.tsx) — this hook has to stay off until
+   * then. useResumeScroll's own `goTo` (jumping the carousel off its
+   * SSR-safe default onto the real saved section) is itself a section
+   * *change* exactly like a genuine reader navigation is, and the
+   * section-change branch below can't yet tell the two apart while the
+   * position store is still mid-hydration: it was reading `getPosition` as
+   * empty, defaulting to `passageIndex: 0`, and writing that back with a
+   * fresh timestamp — a wrong local value that then looked *newer* than
+   * the real saved position, permanently blocking the correct one from
+   * ever being applied. Waiting for resume to actually finish is what
+   * keeps that resume-triggered jump from ever reaching this hook as a
+   * "navigation" at all. */
+  resumeReady: boolean;
 }) {
   const getPosition = useReadingPositionStore((s) => s.getPosition);
   const setPosition = useReadingPositionStore((s) => s.setPosition);
@@ -63,8 +78,24 @@ export function useReadingProgress({
     [progressShape]
   );
 
+  // Kept in sync every render (not read as an effect dependency below) —
+  // `activeSection` is a fresh object identity every time useProgressiveText
+  // swaps in more real prose (most notably its one-time "rest of the book"
+  // background load, which lands moments after the reader arrives, right
+  // when they're first settling in to read). Depending on the object itself
+  // was tearing the effect below down and rebuilding it — including the
+  // scroll listener and, critically, cancelling any pending debounced write
+  // via the cleanup fn — every time that happened, which routinely ate the
+  // very first scroll-settle write of a session. computePassageIndex reads
+  // this ref at call time instead, so it always sees current passages
+  // without needing `activeSection` itself in the dependency array.
+  const activeSectionRef = useRef(activeSection);
   useEffect(() => {
-    if (mode !== "read" || !activeSectionId || !activeSection) return;
+    activeSectionRef.current = activeSection;
+  }, [activeSection]);
+
+  useEffect(() => {
+    if (mode !== "read" || !activeSectionId || !activeSectionRef.current || !resumeReady) return;
 
     const previous = previousSectionRef.current;
     previousSectionRef.current = activeSectionId;
@@ -82,6 +113,8 @@ export function useReadingProgress({
     if (!el) return;
 
     const computePassageIndex = (): number | undefined => {
+      const section = activeSectionRef.current;
+      if (!section) return undefined;
       const passageEls = el.querySelectorAll<HTMLElement>("[data-passage-id]");
       const containerTop = el.getBoundingClientRect().top;
       let lastId: string | undefined;
@@ -90,14 +123,14 @@ export function useReadingProgress({
         // The first passage not yet fully scrolled past the viewport's top
         // edge — i.e. whatever's showing right at the top right now.
         if (p.getBoundingClientRect().bottom > containerTop + 8) {
-          const idx = activeSection.passages.findIndex((pg) => pg.id === p.dataset.passageId);
+          const idx = section.passages.findIndex((pg) => pg.id === p.dataset.passageId);
           return idx >= 0 ? idx : undefined;
         }
       }
       // Scrolled past every passage (e.g. resting on the "next chapter"
       // footer) — the last one is still the honest resume point, rather
       // than silently leaving whatever passageIndex was tracked earlier.
-      const idx = lastId ? activeSection.passages.findIndex((pg) => pg.id === lastId) : -1;
+      const idx = lastId ? section.passages.findIndex((pg) => pg.id === lastId) : -1;
       return idx >= 0 ? idx : undefined;
     };
 
@@ -135,5 +168,7 @@ export function useReadingProgress({
       el.removeEventListener("scroll", onScroll);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
-  }, [book.id, materialId, mode, activeSectionId, activeSection, getSlideEl, getPosition, setPosition, progressPercentFor]);
+    // activeSection deliberately excluded — see activeSectionRef's own
+    // comment above; depending on it here is exactly the bug being fixed.
+  }, [book.id, materialId, mode, activeSectionId, resumeReady, getSlideEl, getPosition, setPosition, progressPercentFor]);
 }

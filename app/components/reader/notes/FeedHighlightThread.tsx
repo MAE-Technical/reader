@@ -70,7 +70,7 @@ export default function FeedHighlightThread({
       {expandedIds.size === 0 && ui.activeComposerFor === null && ui.editingId === null && (
         <NoteComposer
           initialText=""
-          placeholder="Add to the discourse…"
+          placeholder="Add your thoughts"
           startCollapsed
           showMemberPrompt
           action="note"

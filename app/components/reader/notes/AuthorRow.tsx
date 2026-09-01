@@ -1,8 +1,10 @@
 "use client";
 
 import type { ReactNode } from "react";
+import Link from "next/link";
 import { avatarColor, avatarInitial, comradeName } from "@/lib/reader/authorDisplay";
 import { formatShortTimeAgo } from "@/lib/reader/timeAgo";
+import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 
 /** Avatar + pseudonym + relative time — the identity row every note and
  * reply leads with. Reads correctly with today's single hardcoded author
@@ -26,24 +28,28 @@ export default function AuthorRow({
 }) {
   const small = size === "small";
   const displayName = comradeName(name);
+  const profileHref = `/@${pseudonymToSlug(name)}`;
   return (
     <div className="flex items-center gap-2">
-      <span
-        style={{ background: avatarColor(displayName) }}
-        className={`flex flex-none items-center justify-center rounded-sm font-bold text-white ${
-          small ? "h-4 w-4 text-[10px]" : "h-5 w-5 text-xs"
-        }`}
-      >
-        {avatarInitial(displayName)}
-      </span>
-      <div className="flex items-baseline gap-1.5">
+      <Link href={profileHref} className="flex flex-none no-underline">
         <span
-          className={`font-bold capitalize text-[var(--reader-text)] ${
+          style={{ background: avatarColor(displayName) }}
+          className={`flex flex-none items-center justify-center rounded-sm font-bold text-white ${
+            small ? "h-4 w-4 text-[10px]" : "h-5 w-5 text-xs"
+          }`}
+        >
+          {avatarInitial(displayName)}
+        </span>
+      </Link>
+      <div className="flex items-baseline gap-1.5">
+        <Link
+          href={profileHref}
+          className={`font-bold capitalize text-[var(--reader-text)] no-underline hover:underline ${
             small ? "text-[11px]" : "text-xs"
           }`}
         >
           {displayName}
-        </span>
+        </Link>
         <span
           className={`font-medium text-[var(--reader-text-muted)] ${
             small ? "text-[10px]" : "text-[11px]"

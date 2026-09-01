@@ -1,9 +1,11 @@
 "use client";
 
 import { EllipsisVertical } from "lucide-react";
+import Link from "next/link";
 import type { Note } from "@/lib/api/types";
 import { useIsOwnNote } from "@/lib/reader/currentAuthor";
 import { comradeName } from "@/lib/reader/authorDisplay";
+import { pseudonymToSlug } from "@/lib/reader/profileSlug";
 import AuthorRow from "./AuthorRow";
 import NoteContent from "./NoteContent";
 import ReactionButton from "./ReactionButton";
@@ -44,34 +46,39 @@ export default function ReplyEntry({
         savedAt={Date.parse(reply.updatedAt)}
         size="small"
         menu={
-          <div className="relative ml-auto flex-none">
-            <button
-              onClick={() => ui.toggleMenu(isMenuOpen ? null : reply.id)}
-              className="flex items-center bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0.5"
-            >
-              <EllipsisVertical size={14} />
-            </button>
-            {isMenuOpen && (
-              <EntryMenu
-                isOwn={own}
-                isTextEntry={reply.content.kind === "text"}
-                onEdit={() => {
-                  ui.startEdit(reply.id);
-                  ui.toggleMenu(null);
-                }}
-                onDelete={() => {
-                  actions.delete(reply.id);
-                  ui.toggleMenu(null);
-                }}
-                onClose={() => ui.toggleMenu(null)}
-              />
-            )}
-          </div>
+          own ? (
+            <div className="relative ml-auto flex-none">
+              <button
+                onClick={() => ui.toggleMenu(isMenuOpen ? null : reply.id)}
+                className="flex items-center bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0.5"
+              >
+                <EllipsisVertical size={14} />
+              </button>
+              {isMenuOpen && (
+                <EntryMenu
+                  isOwn={own}
+                  isTextEntry={reply.content.kind === "text"}
+                  onEdit={() => {
+                    ui.startEdit(reply.id);
+                    ui.toggleMenu(null);
+                  }}
+                  onDelete={() => {
+                    actions.delete(reply.id);
+                    ui.toggleMenu(null);
+                  }}
+                  onClose={() => ui.toggleMenu(null)}
+                />
+              )}
+            </div>
+          ) : undefined
         }
       />
       {replyingToName && (
         <div className="w-fit font-serif italic text-[12px] text-[var(--reader-text-muted)]">
-          — in reply to {comradeName(replyingToName)}
+          — in reply to{" "}
+          <Link href={`/@${pseudonymToSlug(replyingToName)}`} className="text-[var(--reader-text-muted)] hover:underline">
+            {comradeName(replyingToName)}
+          </Link>
         </div>
       )}
       {isEditing ? (

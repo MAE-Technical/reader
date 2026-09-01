@@ -47,6 +47,7 @@ export function useContinueReading() {
         passageIndex: item.passageIndex,
         audioTimeMs: item.audioTimeMs,
         progressPercent: item.progressPercent,
+        updatedAt: item.updatedAt,
       }))
     );
   }, [items]);

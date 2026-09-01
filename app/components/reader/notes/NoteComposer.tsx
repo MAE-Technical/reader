@@ -221,7 +221,7 @@ export default function NoteComposer({
         <input
           onFocus={() => setExpanded(true)}
           placeholder={placeholder}
-          className="flex-1 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface-hover)] px-3.5 py-2 text-[14px] font-medium text-[var(--reader-text)] outline-none placeholder:text-[var(--reader-text-muted)]"
+          className="flex-1 rounded-sm border border-[var(--reader-border)] bg-[var(--reader-surface-hover)] px-3.5 py-2 text-[13px] font-medium text-[var(--reader-text)] outline-none placeholder:text-[var(--reader-text-muted)]"
         />
         <button
           onClick={handlePillMic}
@@ -302,7 +302,7 @@ export default function NoteComposer({
           onBlur={() => setIsFocused(false)}
           placeholder={placeholder}
           rows={1}
-          className="om-scroll w-full resize-none border-none outline-none bg-transparent text-[14px] font-medium text-[var(--reader-text)] placeholder:text-[var(--reader-text-muted)]"
+          className="om-scroll w-full resize-none border-none outline-none bg-transparent text-[13px] font-medium text-[var(--reader-text)] placeholder:text-[var(--reader-text-muted)]"
           style={{ maxHeight: MAX_COMPOSER_TEXTAREA_HEIGHT, overflowY: "auto" }}
         />
       )}

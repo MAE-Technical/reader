@@ -1,11 +1,10 @@
 "use client";
 
 import { useMemo } from "react";
-import { X } from "lucide-react";
 import type { BookDocument } from "@/lib/book/schema";
 import { buildOutlineRows } from "@/lib/reader/outline";
 import { sectionLabel } from "@/lib/reader/sectionHeading";
-import Tooltip from "./Tooltip";
+import PanelShell from "./notes/PanelShell";
 
 type Props = {
   book: BookDocument;
@@ -23,6 +22,13 @@ type Props = {
   onClose: () => void;
 };
 
+/**
+ * Same panel shell the notes panel and book-wide feed use (PanelShell) —
+ * docked left (`side="left"`) instead of their right, so it keeps pushing
+ * in from the same side it already occupied as a flex sibling below. Gets
+ * the mobile drag-to-near-full-page sheet behavior for free from the shell
+ * rather than the old bespoke full-screen slide.
+ */
 export default function ChaptersDrawer({
   book,
   scrollPct,
@@ -34,33 +40,40 @@ export default function ChaptersDrawer({
 }: Props) {
   const sidebarRows = useMemo(() => buildOutlineRows(book.sections), [book.sections]);
 
-  // Mobile vs desktop layout is decided in pure CSS (the shell:
-  // breakpoint below, matching useSectionCarousel's isMobile threshold) —
-  // deliberately NOT branched on the isMobile prop the way it briefly was.
-  // isMobile starts false on every render (SSR-safe) and only flips to its
-  // real value in an effect after mount, so an isMobile-gated className
-  // swap here caused a one-frame jump from "no transform" straight into
-  // "fixed inset-0 + mid-transition transform" — the drawer flashed full
-  // screen and slid itself away, reading as "open by default" on load. A
-  // media-query breakpoint is correct from the very first paint, no flip.
+  // Mobile vs desktop layout is decided in pure CSS (the shell: breakpoint
+  // below, matching useSectionCarousel's isMobile threshold) — deliberately
+  // NOT branched on the isMobile prop for the outer wrapper's own show/hide,
+  // for the same SSR-safety reason this file has always used it: isMobile
+  // starts false on every render (SSR-safe) and only flips to its real
+  // value in an effect after mount, so a JS-gated className swap here would
+  // flash the wrong layout for a frame. PanelShell's own panelType prop
+  // (isMobile-gated below) is fine to compute from the JS value, though —
+  // it only ever matters once this is actually open, which can't happen
+  // before hydration (open starts false and only flips via a user click).
   return (
     <div
-      className={`fixed inset-0 z-[70] overflow-hidden transition-transform duration-300 ease-out ${
-        open ? "translate-x-0" : "-translate-x-full pointer-events-none"
+      // pointer-events-none is unconditional here (not just while closed) —
+      // on mobile this box is `fixed inset-0`, but PanelShell's own "sheet"
+      // variant only visually covers 50-96% of that height (see PanelShell's
+      // own pointer-events comment); leaving this wrapper at the default
+      // pointer-events:auto when open meant it silently ate every touch/
+      // scroll across the *entire* screen, including the reader content
+      // still visible above the sheet, blocking scroll there entirely.
+      // PanelShell's inner panel box carries its own pointer-events-auto,
+      // same as the notes panel's equivalent wrapper in Reader.tsx already
+      // does — this now matches that.
+      className={`fixed inset-0 z-[70] overflow-hidden select-none no-callout pointer-events-none transition-transform duration-300 ease-out ${
+        open ? "translate-x-0" : "-translate-x-full"
       } shell:static shell:inset-auto shell:z-auto shell:h-full shell:max-w-[82vw] shell:flex-none shell:translate-x-0 shell:pointer-events-auto shell:transition-[width] shell:duration-300 shell:ease-out ${
-        open ? "shell:w-[288px]" : "shell:w-0"
+        open ? "shell:w-95" : "shell:w-0"
       }`}
     >
-      <div
-        // z-[60] clears both the header (z-20) and the fixed "now playing"
-        // bar (z-50) — safe to just stack on top of the header rather than
-        // reserve space below it, since Reader.tsx hides the header outright
-        // for as long as the outline is open. Below the desktop breakpoint
-        // the outer fixed wrapper is already z-[70], clearing all of that
-        // on its own.
-        className="relative h-full w-full shell:w-[288px] shell:z-[60] shell:max-w-[82vw] bg-[var(--reader-surface)] shell:border-r shell:border-[var(--reader-border)] flex flex-col overflow-hidden box-border select-none no-callout"
-      >
-        <div className="flex items-start justify-between gap-2 px-5 pt-6 pb-4 flex-none">
+      <PanelShell
+        side="left"
+        panelType={isMobile ? "sheet" : "side"}
+        onClose={onClose}
+        bodyClassName="om-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-4 pb-5"
+        title={
           <div className="flex items-start gap-3 min-w-0">
             <img
               src={book.metadata.cover}
@@ -68,9 +81,9 @@ export default function ChaptersDrawer({
               className="w-11 h-16 object-cover rounded-xs flex-none shadow-sm"
             />
             <div className="min-w-0 pt-0.5">
-              <div className="text-sm font-semibold font-serif text-[var(--reader-text)] leading-tight">
+              <span className="block truncate font-serif font-semibold text-base text-[var(--reader-text)]">
                 {book.metadata.title}
-              </div>
+              </span>
               <div className="text-xs text-[var(--reader-text-muted)] mt-0.5 truncate">
                 {book.metadata.author}
               </div>
@@ -81,70 +94,59 @@ export default function ChaptersDrawer({
                     style={{ width: `${Math.round(scrollPct * 100)}%` }}
                   />
                 </div>
-                <span className="text-[10.5px] font-medium text-[var(--reader-text-muted)] whitespace-nowrap">
+                <span className="text-[12px] font-medium text-[var(--reader-text-muted)] whitespace-nowrap">
                   {Math.round(scrollPct * 100)}% complete
                 </span>
               </div>
             </div>
           </div>
-          <Tooltip label="Close" side="bottom">
-            <button
-              onClick={onClose}
-              aria-label="Close table of contents"
-              className="w-7 h-7 rounded-md flex items-center justify-center flex-none border-none bg-transparent cursor-pointer text-[var(--reader-text-muted)] hover:bg-[var(--reader-surface-hover)]"
+        }
+      >
+        {sidebarRows.map(({ section, depth, isGroup }) => {
+          const isCurrent = section.id === activeSectionId;
+          // Every row is clickable, group headers included — a group
+          // (any section with children) can still carry its own lead-in
+          // passages before its children start (book-document.schema's
+          // "a part is just a Section with children and *usually* no
+          // passages of its own"), and even a pure divider with none of
+          // its own resolves forward to the nearest real content the
+          // same way an empty leaf does (onNavigate -> resolveSpineTarget,
+          // lib/reader/sections.ts). Only the typography below (bold
+          // uppercase vs. a normal chapter row) tracks `isGroup` — never
+          // whether tapping it does anything.
+          return (
+            <div
+              key={section.id}
+              onClick={() => {
+                onNavigate(section.id);
+                if (isMobile) onClose();
+              }}
+              style={{ paddingLeft: (isGroup ? 0 : 10) + depth * 14 }}
+              className={
+                isGroup
+                  ? `pt-4 first:pt-1 pb-1.5 px-2.5 cursor-pointer text-[10px] font-bold tracking-wider uppercase ${
+                      isCurrent ? "text-brand-500" : "text-[var(--reader-text-subtle)]"
+                    }`
+                  : `flex items-center py-3 pr-2.5 rounded-sm mb-0.5 cursor-pointer ${
+                      isCurrent ? "bg-brand-500/10" : "bg-transparent"
+                    }`
+              }
             >
-              <X size={15} />
-            </button>
-          </Tooltip>
-        </div>
-
-        <div className="om-scroll flex-1 overflow-y-auto px-4 pb-5">
-          {sidebarRows.map(({ section, depth, isGroup }) => {
-            const isCurrent = section.id === activeSectionId;
-            // Every row is clickable, group headers included — a group
-            // (any section with children) can still carry its own lead-in
-            // passages before its children start (book-document.schema's
-            // "a part is just a Section with children and *usually* no
-            // passages of its own"), and even a pure divider with none of
-            // its own resolves forward to the nearest real content the
-            // same way an empty leaf does (onNavigate -> resolveSpineTarget,
-            // lib/reader/sections.ts). Only the typography below (bold
-            // uppercase vs. a normal chapter row) tracks `isGroup` — never
-            // whether tapping it does anything.
-            return (
-              <div
-                key={section.id}
-                onClick={() => {
-                  onNavigate(section.id);
-                  if (isMobile) onClose();
-                }}
-                style={{ paddingLeft: (isGroup ? 0 : 10) + depth * 14 }}
+              <span
                 className={
                   isGroup
-                    ? `pt-4 first:pt-1 pb-1.5 px-2.5 cursor-pointer text-[10px] font-bold tracking-wider uppercase ${
-                        isCurrent ? "text-brand-500" : "text-[var(--reader-text-subtle)]"
-                      }`
-                    : `flex items-center py-3 pr-2.5 rounded-sm mb-0.5 cursor-pointer ${
-                        isCurrent ? "bg-brand-500/10" : "bg-transparent"
+                    ? undefined
+                    : `flex-1 text-sm leading-snug ${
+                        isCurrent ? "font-semibold text-brand-500" : "font-medium text-[var(--reader-text-muted)]"
                       }`
                 }
               >
-                <span
-                  className={
-                    isGroup
-                      ? undefined
-                      : `flex-1 text-sm leading-snug ${
-                          isCurrent ? "font-semibold text-brand-500" : "font-medium text-[var(--reader-text-muted)]"
-                        }`
-                  }
-                >
-                  {sectionLabel(section)}
-                </span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+                {sectionLabel(section)}
+              </span>
+            </div>
+          );
+        })}
+      </PanelShell>
     </div>
   );
 }

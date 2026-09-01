@@ -54,8 +54,19 @@ export function useSectionCarousel({
 }) {
   const total = sectionIds.length;
 
+  // Always 0 on first render, on *both* server and client — this is what a
+  // server-rendered page has to start on regardless of any saved position
+  // (it never sees this reader's Bearer token, so it has no way to know
+  // one), and the client's first hydration pass has to render identically
+  // or React throws the whole tree away and regenerates it from scratch
+  // (a real, user-visible failure this hook briefly had while a resume
+  // target was being read into this as a lazy initializer — that ran during
+  // the very render hydration compares against). Landing on the real saved
+  // section is Reader.tsx's job now, via a `useLayoutEffect` `goTo` call
+  // that runs strictly after hydration has already committed — see its own
+  // comment for why that's still flash-free despite not being here.
   const [activeIndex, setActiveIndex] = useState(0);
-  const activeIndexRef = useRef(0);
+  const activeIndexRef = useRef(activeIndex);
   useEffect(() => {
     activeIndexRef.current = activeIndex;
   }, [activeIndex]);

@@ -138,10 +138,10 @@ export function ReadingRoomModal({ readers, totalCount, onClose }: Props & { onC
                 <span className="min-w-0 flex-1 truncate text-[12px] font-semibold text-[var(--reader-text)]">
                   {displayName}
                 </span>
-                <span className="flex flex-none items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-[var(--reader-text-subtle)]">
+                {/* <span className="flex flex-none items-center gap-1.5 whitespace-nowrap text-[11px] font-medium text-[var(--reader-text-subtle)]">
                   <ModeIcon size={14} />
                   {formatTimeAgo(new Date(r.updatedAt).getTime())}
-                </span>
+                </span> */}
               </Link>
             );
           })}

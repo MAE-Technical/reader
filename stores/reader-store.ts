@@ -109,7 +109,7 @@ export const READER_PREF_DEFAULTS = {
   // FontFamily values above stay defined for when it's re-enabled.
   fontFamily: "literata" as FontFamily,
   theme: "light" as Theme,
-  lineSpacingScale: 50,
+  lineSpacingScale: 60,
   contentWidthScale: 60,
 };
 
@@ -143,7 +143,7 @@ export const useReaderStore = create<ReaderState>()(
     }),
     {
       name: "ominira-reader-prefs",
-      version: 3,
+      version: 4,
       // v0: flat light/sepia/dark. v1: briefly an 8-variant light/dark
       // system (white/sepia/paper/dawn, carbon/black/winter/forest). v2:
       // scaled back to just light/dark — collapse anything from either
@@ -152,7 +152,12 @@ export const useReaderStore = create<ReaderState>()(
       // no longer accepts. v3: fontSize/lineSpacing/margins (a raw px
       // number plus two named-option unions) collapsed into one shared
       // 10-100 "scale" shape per control — each old value maps onto the
-      // nearest scale stop in its control's new CSS range.
+      // nearest scale stop in its control's new CSS range. v4: the type/
+      // layout config menu (size, spacing, width, family) is shelved along
+      // with ReaderSettingsMenu — force those four back to
+      // READER_PREF_DEFAULTS for anyone who'd nudged them via that UI,
+      // since there's no control left to change them back. theme is left
+      // alone; it's still live via the header's plain sun/moon toggle.
       migrate: (persisted, version) => {
         const state = persisted as {
           theme?: string;
@@ -173,6 +178,12 @@ export const useReaderStore = create<ReaderState>()(
           delete state.fontSize;
           delete state.lineSpacing;
           delete state.margins;
+        }
+        if (version < 4) {
+          state.fontSizeScale = READER_PREF_DEFAULTS.fontSizeScale;
+          state.fontFamily = READER_PREF_DEFAULTS.fontFamily;
+          state.lineSpacingScale = READER_PREF_DEFAULTS.lineSpacingScale;
+          state.contentWidthScale = READER_PREF_DEFAULTS.contentWidthScale;
         }
         // Cast: `state` is typed narrowly above just for the fields this
         // migration touches, but at runtime it carries every persisted

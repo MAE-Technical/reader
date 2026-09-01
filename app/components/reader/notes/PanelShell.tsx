@@ -20,14 +20,23 @@ const SHEET_HEIGHT_DRAG_MAX = 0.97;
 
 export default function PanelShell({
   panelType,
+  side = "right",
   title,
   onBack,
   headerMenu,
   subheader,
+  bodyClassName = "om-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5",
   onClose,
   children,
 }: {
   panelType?: "side" | "sheet";
+  /** Which edge the desktop "side" variant docks against — "right" (the
+   * default, matching today's only two callers: the notes panel and the
+   * book-wide feed) or "left" (the chapters outline, so it can push in from
+   * the same side it already occupies as a flex sibling in Reader.tsx).
+   * Mobile's "sheet" variant is unaffected — a bottom sheet has no left/
+   * right to pick between. */
+  side?: "left" | "right";
   /** A plain string for a simple title (the note panel), or any composed
    * block (e.g. a title + subtitle stack) for a panel that needs more —
    * ReactNode rather than a dedicated `subtitle` prop, so this stays the
@@ -44,6 +53,13 @@ export default function PanelShell({
    * book feed's browse bar (prev/next + jump). Stays visible while the
    * body beneath it scrolls, unlike anything passed as `children`. */
   subheader?: ReactNode;
+  /** Overrides the scrollable body's own className — default is a padded
+   * `flex flex-col gap-3.5` stack, right for every existing caller's list-
+   * of-cards content. The chapters outline's rows manage their own spacing
+   * already, so it opts out of the flex/gap wrapping (and uses a tighter
+   * horizontal pad) via this instead of PanelShell growing a layout prop
+   * per caller. */
+  bodyClassName?: string;
   onClose: () => void;
   children: React.ReactNode;
 }) {
@@ -108,7 +124,7 @@ export default function PanelShell({
     // it. pointer-events-auto on the actual panel box below restores it.
     <div
       className={`w-full h-full min-h-dvh box-border relative flex overflow-hidden pointer-events-none ${
-        isSheet ? "justify-center items-end" : "justify-end items-stretch"
+        isSheet ? "justify-center items-end" : side === "left" ? "justify-start items-stretch" : "justify-end items-stretch"
       }`}
     >
       <div
@@ -169,9 +185,7 @@ export default function PanelShell({
             {subheader}
           </div>
         )}
-        <div className="om-scroll flex-1 min-h-0 overflow-y-auto overscroll-y-contain px-5 pb-10 flex flex-col gap-3.5">
-          {children}
-        </div>
+        <div className={bodyClassName}>{children}</div>
       </div>
     </div>
   );

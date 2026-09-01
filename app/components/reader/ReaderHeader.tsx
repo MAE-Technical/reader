@@ -1,9 +1,11 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { ArrowLeft, BookOpen, MessageCircle, Moon, Play, Search, Sun, X } from "lucide-react";
+import { ArrowLeft, Moon, Play, Search, Sun, X } from "lucide-react";
+import type { Section } from "@/lib/book/schema";
+import { useReaderStore } from "@/stores/reader-store";
 import Tooltip from "./Tooltip";
-import type { Theme } from "@/stores/reader-store";
+import ChapterPill from "./ChapterPill";
 
 type Props = {
   visible: boolean;
@@ -19,11 +21,6 @@ type Props = {
    * overlay is always X and a standalone page is always back, regardless
    * of viewport. */
   onClose?: () => void;
-  bookSlug: string;
-  bookTitle: string;
-  bookAuthor: string;
-  chaptersOpen: boolean;
-  onToggleChapters: () => void;
   /** No listen button at all when the book has no narrator — not even a
    * disabled one, per product decision: there's nothing for it to do. */
   hasNarration: boolean;
@@ -35,52 +32,47 @@ type Props = {
    * closing the player (its own X) is what brings it back. */
   isListen: boolean;
   onListen: () => void;
-  /** Total notes+replies across the whole book — the badge on the button
-   * below. Zero hides the badge, not the button (the feed is still worth
-   * opening at zero, e.g. to see it's empty). */
-  noteFeedCount: number;
-  onToggleNoteFeed: () => void;
   onToggleSearch: () => void;
-  theme: Theme;
-  onToggleTheme: () => void;
-  /** Reading progress (0-1) — rendered inline next to the author rather
-   * than as its own row, so the header stays a single compact line. */
-  scrollPct: number;
+  /** Current chapter/section, rendered as a ChapterPill between the back
+   * button and the icon cluster — see ChapterPill's own doc comment for
+   * why the outline no longer has a dedicated icon. */
+  activeSection: Section | undefined;
+  onToggleChapters: () => void;
 };
 
 const iconButtonClass =
   "w-9 h-9 rounded-md border-none bg-transparent cursor-pointer flex items-center justify-center flex-none text-[var(--reader-text)] transition-colors hover:bg-[var(--reader-surface-hover)]";
 
 /**
- * Header — back arrow and outline/chapters toggle on the left, beside a
- * book-title / author block; listen, the book-wide notes feed, search, and
- * theme clustered on the right. A solid, theme-appropriate surface with a
- * hairline bottom border
- * (replacing the old transparent floating bar). Shows on mouse-move/click,
- * hides on a second click or on scroll — same lifecycle as before.
+ * Header — back arrow, the current-chapter pill (opens the outline — see
+ * ChapterPill), and (right) listen, search, and a theme switch. Deliberately
+ * thin: the old outline icon, book title/author block, and notes-feed
+ * button are gone — notes moved to the floating NotesFeedFab. The fuller
+ * type/layout config menu (font size, spacing, width, family) that used to
+ * live behind a "Settings" popover here is shelved for now in favor of this
+ * plain sun/moon toggle, same as it was before that popover existed — those
+ * settings stay at their defaults until a proper settings module replaces
+ * this. Same show/hide-on-scroll/click lifecycle as before — the chapter
+ * pill lives inside this bar now (not an independent overlay) specifically
+ * so it shares that lifecycle rather than staying on screen through it, per
+ * reader feedback that a persistent element undercut the distraction-free
+ * reading experience.
  */
 export default function ReaderHeader({
   visible,
   topBarHeightPx,
   railInsetPx,
   onClose,
-  bookSlug,
-  bookTitle,
-  bookAuthor,
-  chaptersOpen,
-  onToggleChapters,
   hasNarration,
   isListen,
   onListen,
-  noteFeedCount,
-  onToggleNoteFeed,
   onToggleSearch,
-  theme,
-  onToggleTheme,
-  scrollPct,
+  activeSection,
+  onToggleChapters,
 }: Props) {
   const router = useRouter();
-  const pct = Math.round(scrollPct * 100);
+  const theme = useReaderStore((s) => s.theme);
+  const setTheme = useReaderStore((s) => s.setTheme);
 
   return (
     <div
@@ -89,78 +81,43 @@ export default function ReaderHeader({
       // to be selectable text — same reasoning as the .no-callout comment
       // in globals.css (an explicit boundary, not an inherited guess, is
       // what keeps Safari's long-press selection from getting confused).
-      className={`absolute top-0 left-0 right-0 z-20 flex items-center gap-2 box-border border-b border-[var(--reader-border)] bg-[var(--reader-surface)] transition-[transform,opacity] duration-200 ease-out select-none no-callout ${
+      className={`absolute top-0 left-0 right-0 z-20 flex items-center justify-between gap-2 box-border border-b border-[var(--reader-border)] bg-[var(--reader-surface)] transition-[transform,opacity] duration-200 ease-out select-none no-callout ${
         visible ? "translate-y-0 opacity-100" : "-translate-y-full opacity-0 pointer-events-none"
       }`}
     >
-      {onClose ? (
-        <Tooltip label="Close" side="bottom" align="start">
-          <button
-            onClick={onClose}
-            aria-label="Close"
-            className="w-9 h-9 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] flex items-center justify-center text-[var(--reader-text)] flex-none cursor-pointer"
-          >
-            <X size={18} />
-          </button>
-        </Tooltip>
-      ) : (
-        <Tooltip label="Back" side="bottom" align="start">
-          <button
-            onClick={() => router.back()}
-            aria-label="Back"
-            className="w-9 h-9 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] flex items-center justify-center text-[var(--reader-text)] no-underline flex-none"
-          >
-            <ArrowLeft size={18} />
-          </button>
-        </Tooltip>
-      )}
+      {/* Back/close + the chapter pill are one group here (not two direct
+          flex children of the justify-between row) so this still lays out
+          correctly whether or not ChapterPill has anything to show (it
+          renders null with no active section) — justify-between only ever
+          sees this group and the icon cluster below, not a 2-vs-3-children
+          reshuffle. */}
+      <div className="flex items-center gap-2 md:gap-3 min-w-0 flex-1">
+        {onClose ? (
+          <Tooltip label="Close" side="bottom" align="start">
+            <button
+              onClick={onClose}
+              aria-label="Close"
+              className="w-9 h-9 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] flex items-center justify-center text-[var(--reader-text)] flex-none cursor-pointer"
+            >
+              <X size={18} />
+            </button>
+          </Tooltip>
+        ) : (
+          <Tooltip label="Back" side="bottom" align="start">
+            <button
+              onClick={() => router.back()}
+              aria-label="Back"
+              className="w-9 h-9 rounded-md border border-[var(--reader-border)] bg-[var(--reader-surface)] flex items-center justify-center text-[var(--reader-text)] no-underline flex-none"
+            >
+              <ArrowLeft size={18} />
+            </button>
+          </Tooltip>
+        )}
 
-      <button
-        onClick={onToggleChapters}
-        title="Chapters"
-        className="min-w-0 flex-1 flex items-center gap-2 border-none bg-transparent cursor-pointer text-left"
-      >
-        <span
-          className={`w-9 h-9 rounded-md flex items-center justify-center flex-none ${
-            chaptersOpen ? "bg-brand-500/10 text-brand-500" : "text-[var(--reader-text)]"
-          }`}
-        >
-          <BookOpen size={18} />
-        </span>
+        <ChapterPill section={activeSection} onClick={onToggleChapters} />
+      </div>
 
-        {/* Title/author/progress hidden below sm — mobile keeps just the
-            outline icon here, since the same info is the first thing shown
-            once the (now full-screen) outline panel opens. */}
-        <div className="hidden sm:flex min-w-0 sm:max-w-20 md:max-w-120 flex-col justify-center leading-tight">
-          <div className="font-serif text-sm font-semibold text-[var(--reader-text)] truncate">{bookTitle}</div>
-          <div className="flex items-center gap-1.5 min-w-0">
-            {bookAuthor && (
-              <span className="text-xs text-[var(--reader-text-muted)] truncate">{bookAuthor}</span>
-            )}
-            <span className="text-[var(--reader-text-subtle)] flex-none">·</span>
-            <div className="w-8 h-[3px] rounded-full bg-[var(--reader-surface-hover)] overflow-hidden flex-none">
-              <div className="h-full bg-brand-500 rounded-full" style={{ width: `${pct}%` }} />
-            </div>
-            <span className="text-[10px] font-medium text-[var(--reader-text-muted)] flex-none whitespace-nowrap">
-              {pct}%
-            </span>
-          </div>
-        </div>
-      </button>
-
-      
-      <div className="flex items-center gap-3.5">
-        <Tooltip label="Notes & highlights" side="bottom">
-          <button onClick={onToggleNoteFeed} aria-label="All notes in this book" className={`${iconButtonClass} relative`}>
-            <MessageCircle size={16} />
-            {noteFeedCount > 0 && (
-              <span className="absolute top-0.5 right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-brand-500 px-0.5 text-[9px] font-bold leading-none text-white">
-                {noteFeedCount > 99 ? "99+" : noteFeedCount}
-              </span>
-            )}
-          </button>
-        </Tooltip>
-
+      <div className="flex items-center gap-1.5 md:gap-2 flex-none">
         {hasNarration && !isListen && (
           <Tooltip label="Listen to this book" side="bottom">
             <button onClick={onListen} aria-label="Listen to this book" className={iconButtonClass}>
@@ -177,7 +134,7 @@ export default function ReaderHeader({
 
         <Tooltip label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"} side="bottom" align="end">
           <button
-            onClick={onToggleTheme}
+            onClick={() => setTheme(theme === "light" ? "dark" : "light")}
             aria-label={theme === "light" ? "Switch to dark theme" : "Switch to light theme"}
             className={iconButtonClass}
           >

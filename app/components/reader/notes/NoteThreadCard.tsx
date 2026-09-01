@@ -76,29 +76,31 @@ export default function NoteThreadCard({
           name={note.author.pseudonym}
           savedAt={Date.parse(note.updatedAt)}
           menu={
-            <div className="relative ml-auto flex-none">
-              <button
-                onClick={() => ui.toggleMenu(isMenuOpen ? null : note.id)}
-                className="flex items-center bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0.5"
-              >
-                <EllipsisVertical size={15} />
-              </button>
-              {isMenuOpen && (
-                <EntryMenu
-                  isOwn={own}
-                  isTextEntry={note.content.kind === "text"}
-                  onEdit={() => {
-                    ui.startEdit(note.id);
-                    ui.toggleMenu(null);
-                  }}
-                  onDelete={() => {
-                    actions.delete(note.id);
-                    ui.toggleMenu(null);
-                  }}
-                  onClose={() => ui.toggleMenu(null)}
-                />
-              )}
-            </div>
+            own ? (
+              <div className="relative ml-auto flex-none">
+                <button
+                  onClick={() => ui.toggleMenu(isMenuOpen ? null : note.id)}
+                  className="flex items-center bg-transparent border-none cursor-pointer text-[var(--reader-text-muted)] p-0.5"
+                >
+                  <EllipsisVertical size={15} />
+                </button>
+                {isMenuOpen && (
+                  <EntryMenu
+                    isOwn={own}
+                    isTextEntry={note.content.kind === "text"}
+                    onEdit={() => {
+                      ui.startEdit(note.id);
+                      ui.toggleMenu(null);
+                    }}
+                    onDelete={() => {
+                      actions.delete(note.id);
+                      ui.toggleMenu(null);
+                    }}
+                    onClose={() => ui.toggleMenu(null)}
+                  />
+                )}
+              </div>
+            ) : undefined
           }
         />
         {isEditing ? (
