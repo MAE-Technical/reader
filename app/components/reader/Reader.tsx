@@ -790,6 +790,7 @@ export default function Reader({
                 — Highlight/Note/Copy/Delete; clicking an existing mark
                 instead (PassageContent's onNoteMarkerClick) just opens its
                 thread directly, no menu. */}
+                
             {selection && (
               <SelectionMenu
                 anchor={selection.anchor}
