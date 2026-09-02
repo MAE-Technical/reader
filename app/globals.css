@@ -258,6 +258,20 @@ body {
   border-radius: 3px;
 }
 
+/* Hides the native scrollbar on a horizontally-scrolling row (CategoryPills)
+   without disabling scrolling itself — a finger-swipe still scrolls the
+   track fine, this only removes the OS's own scrollbar chrome, which read
+   as visual noise sitting right under the pills on mobile. The row gets its
+   own left/right arrow buttons (CategoryPills.tsx) as the discoverable "there's
+   more" affordance instead. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+
 /* Plays once whenever BookContent remounts a new active section
    (key={section.id}) — a page turn is a plain React remount now, not a
    translated/sliding DOM, so this quick opacity fade is the entire "page

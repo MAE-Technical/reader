@@ -33,12 +33,12 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
       <div className="relative flex flex-col items-start gap-7 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex flex-col items-start gap-4">
           <div className="flex flex-col items-start gap-2">
-            <h2 className="m-0 max-w-xs capitalize font-serif text-2xl font-bold leading-tight text-[var(--reader-text)] sm:text-[28px]">
-              We are studying to change our world.
+            <h2 className="m-0 max-w-full font-serif text-xl font-bold leading-tight text-[var(--reader-text)] sm:text-2xl">
+              Online Library for Pan-Africanists.
             </h2>
-            {/* <p className="m-0 max-w-xs font-literata text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
-              Free books, honest conversations, and a reading culture built by and for young Nigerians.
-            </p> */}
+            <p className="m-0 max-w-sm font-literata text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
+              We study to change our world. Join us on this journey.
+            </p>
           </div>
 
           {/* Side by side at every width, each sized to its own label rather
@@ -46,7 +46,7 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
               caption's CTAs, not a form. */}
           <div className="flex flex-row flex-wrap gap-3">
             <AuthButton variant="solid" fullWidth={false} onClick={() => router.push("/auth/signup")}>
-              Join the movement
+              Join us
             </AuthButton>
             <AuthButton variant="outline" fullWidth={false} onClick={() => router.push("/auth/login")}>
               Log in

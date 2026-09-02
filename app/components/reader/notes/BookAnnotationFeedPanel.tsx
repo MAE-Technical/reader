@@ -103,8 +103,8 @@ export default function BookAnnotationFeedPanel({
       {groups.length === 0 ? (
         <p className="mt-4 py-1 font-serif text-sm text-[var(--reader-text-muted)]">
           {filter === "notes"
-            ? "No notes in this book yet — add a note to a highlight and it shows up here."
-            : "You have no private highlights in this book yet."}
+            ? "No notes in this book"
+            : "You have no private highlights in this book"}
         </p>
       ) : (
         <div className="flex flex-col">

@@ -38,7 +38,7 @@ export default function ChapterPill({ section, onClick }: Props) {
       // long titles) is what keeps the hover background to just the text
       // + chevron instead of ballooning across the header's whole
       // remaining width.
-      className="max-w-40 sm:max-w-60 min-w-0 flex items-center gap-1 rounded-md px-2 py-1.5 -ml-1 cursor-pointer text-left transition-colors hover:bg-[var(--reader-surface-hover)]"
+      className="min-w-0 sm:max-w-60 md:max-w-80 flex items-center gap-1 rounded-sm px-2 py-1.5 -ml-1 cursor-pointer text-left transition-colors hover:bg-[var(--reader-surface-hover)]"
     >
       <span className="truncate text-[13px] font-semibold text-[var(--reader-text)]">{label}</span>
       <ChevronDown size={14} className="flex-none text-[var(--reader-text-muted)]" />

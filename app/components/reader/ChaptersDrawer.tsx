@@ -117,10 +117,12 @@ export default function ChaptersDrawer({
           return (
             <div
               key={section.id}
-              onClick={() => {
-                onNavigate(section.id);
-                if (isMobile) onClose();
-              }}
+              // Navigates only — the drawer stays open (state preserved)
+              // until the reader explicitly closes it. Used to also close
+              // on mobile after every tap, which meant jumping between a
+              // few chapters back-to-back required reopening the drawer
+              // each time.
+              onClick={() => onNavigate(section.id)}
               style={{ paddingLeft: (isGroup ? 0 : 10) + depth * 14 }}
               className={
                 isGroup

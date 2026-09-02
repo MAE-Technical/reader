@@ -1,7 +1,7 @@
 "use client";
 
 import { useLayoutEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { ArrowLeft, ChevronRight, Headphones, Play } from "lucide-react";
 import type { MaterialDetail } from "@/lib/materials/detail";
 import { buildTocOutlineRows } from "@/lib/reader/tocOutline";
@@ -361,17 +361,19 @@ export default function BookDetailView({ material }: { material: MaterialDetail 
   // when playback starts), so its presence is what actually distinguishes
   // "has listened before" from "has only ever read this book."
   const hasListened = position?.audioTimeMs !== undefined;
+  const router = useRouter();
 
   return (
     <div className="pb-12 shell:mx-auto shell:max-w-4xl">
       <div className="flex items-center gap-3 py-3.5">
-        <Link
-          href="/library"
-          aria-label="Back to library"
-          className="flex h-9 w-9 flex-none items-center justify-center rounded-md border border-[var(--reader-border)] text-[var(--reader-text)] no-underline transition-colors hover:bg-[var(--reader-surface-hover)]"
+        <button
+          type="button"
+          onClick={() => router.back()}
+          aria-label="Back"
+          className="flex h-9 w-9 flex-none items-center justify-center rounded-md border border-[var(--reader-border)] text-[var(--reader-text)] cursor-pointer transition-colors hover:bg-[var(--reader-surface-hover)]"
         >
           <ArrowLeft size={18} />
-        </Link>
+        </button>
         <div className="ml-auto">
           <ShareButton title={material.title} text={`${material.title} by ${material.author}`} />
         </div>

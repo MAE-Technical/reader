@@ -208,10 +208,20 @@ export function useSectionCarousel({
   // signal (did the reader drag far enough, mostly horizontally, to mean
   // "turn the page"), never a rendering transform. next()/prev() do the
   // rest via the plain state-driven remount above.
+  //
+  // Deliberately disabled outright on mobile (isMobile check below in both
+  // handlers), not just narrowed to touch/pen pointers — on mobile, page
+  // turning is the chapters drawer and the bottom nav only. This also
+  // closes a real bug the touch/pen narrowing alone didn't: the chapters
+  // drawer's mobile sheet only covers part of the screen, and the empty
+  // space above it is pointer-events-none so a touch that lands just off
+  // the sheet's small drag handle passes through to the book content
+  // underneath — with swipe detection live there, that stray touch got
+  // read as a page-turn swipe instead of doing nothing.
   const touchStart = useRef<{ x: number; y: number } | null>(null);
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (disabled) return;
+      if (disabled || isMobile) return;
       // Swipe-to-turn-page is a touch/pen gesture only — a mouse's own
       // click-and-drag is how a reader selects text, and treating that as
       // a swipe candidate too is what made an ordinary selection attempt
@@ -224,13 +234,13 @@ export function useSectionCarousel({
       if (e.pointerType !== "touch" && e.pointerType !== "pen") return;
       touchStart.current = { x: e.clientX, y: e.clientY };
     },
-    [disabled]
+    [disabled, isMobile]
   );
   const onPointerUp = useCallback(
     (e: React.PointerEvent) => {
       const start = touchStart.current;
       touchStart.current = null;
-      if (disabled || !start) return;
+      if (disabled || isMobile || !start) return;
       // A drag that produced an active text selection was a highlight
       // gesture, not a page-turn swipe — leave it alone.
       const sel = window.getSelection();
@@ -241,7 +251,7 @@ export function useSectionCarousel({
       if (dx < 0) next();
       else prev();
     },
-    [disabled, next, prev]
+    [disabled, isMobile, next, prev]
   );
 
   return {

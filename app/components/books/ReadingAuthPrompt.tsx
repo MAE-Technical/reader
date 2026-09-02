@@ -60,7 +60,7 @@ export default function ReadingAuthPrompt() {
 
         <div className="flex flex-row flex-wrap justify-center gap-3">
           <AuthButton variant="solid" fullWidth={false} onClick={() => router.push("/auth/signup")}>
-            Join the movement
+            Join us
           </AuthButton>
           <AuthButton variant="outline" fullWidth={false} onClick={() => router.push("/auth/login")}>
             Log in

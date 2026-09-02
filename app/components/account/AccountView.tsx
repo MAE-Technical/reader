@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ChevronRight } from "lucide-react";
-import AppHeader from "@/app/components/shell/AppHeader";
+import SearchableAppPage from "@/app/components/shell/SearchableAppPage";
 import Loader from "@/app/components/Loader";
 import ThemeToggle from "@/app/components/shell/ThemeToggle";
 import { useInstallBannerStore } from "@/stores/install-banner-store";
@@ -115,9 +115,7 @@ export default function AccountView() {
   }, []);
 
   return (
-    <div className="pb-10">
-      <AppHeader />
-
+    <SearchableAppPage>
       <h1 className="mt-1 mb-6 font-serif text-2xl font-semibold text-[var(--reader-text)]">Account</h1>
 
       {isAuthenticated && !reader ? (
@@ -238,6 +236,6 @@ export default function AccountView() {
           </div>
         </>
       )}
-    </div>
+    </SearchableAppPage>
   );
 }

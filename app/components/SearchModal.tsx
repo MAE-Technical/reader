@@ -120,10 +120,11 @@ export default function SearchModal({ book, onNavigate, onClose }: Props) {
               {results.map((r) => (
                 <div
                   key={r.passageId}
-                  onClick={() => {
-                    onNavigate?.(r.sectionId, r.passageId);
-                    onClose?.();
-                  }}
+                  // Navigates without closing the modal — a reader jumping
+                  // between several passages shouldn't have to reopen
+                  // search after every click; Close/Cancel (or the X) is
+                  // still right there for when they're actually done.
+                  onClick={() => onNavigate?.(r.sectionId, r.passageId)}
                   className="py-3 border-b border-[var(--reader-border)] cursor-pointer"
                 >
                   {/* Stacked on mobile (each of title/author/section gets
@@ -159,7 +160,9 @@ export default function SearchModal({ book, onNavigate, onClose }: Props) {
                     <Link
                       key={material.id}
                       href={`/book/${material.slug}`}
-                      onClick={() => onClose?.()}
+                      // Left open on click, same as the book-scoped branch
+                      // above — a reader browsing several results in a row
+                      // shouldn't lose the search each time.
                       className="flex items-center gap-3 py-3 border-b border-[var(--reader-border)] no-underline"
                     >
                       <BookCover src={resolveBookThumbnailSrc(material)} alt={material.title} className="h-14 w-11 flex-none rounded-sm border border-[var(--reader-border)]" />

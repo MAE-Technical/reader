@@ -282,7 +282,7 @@ async function withCurrentReaders(
 export async function listPublishedMaterials(
   opts: ListMaterialsOptions = {}
 ): Promise<{ items: MaterialSummary[]; nextCursor: string | null }> {
-  const limit = Math.min(Math.max(opts.limit ?? 24, 1), 100);
+  const limit = Math.min(Math.max(opts.limit ?? 50, 1), 100);
 
   // A query in flight always wins over `sort` — relevance-ranked (see
   // listBySearch/relevanceScore), never alphabetical/recent/top. `sort`
