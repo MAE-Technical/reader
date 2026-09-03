@@ -24,6 +24,11 @@ type LayoutState = {
    */
   readerPanelOpen: boolean;
   setReaderPanelOpen: (open: boolean) => void;
+  /** HomeInstallBanner's own rendered height, when it's showing (0
+   * otherwise) — AppShell reads this to push page content down below it,
+   * the same trick bottomNavHeight plays at the other edge. */
+  topBarHeight: number;
+  setTopBarHeight: (px: number) => void;
 };
 
 export const useLayoutStore = create<LayoutState>((set) => ({
@@ -31,4 +36,6 @@ export const useLayoutStore = create<LayoutState>((set) => ({
   setBottomNavHeight: (bottomNavHeight) => set({ bottomNavHeight }),
   readerPanelOpen: false,
   setReaderPanelOpen: (readerPanelOpen) => set({ readerPanelOpen }),
+  topBarHeight: 0,
+  setTopBarHeight: (topBarHeight) => set({ topBarHeight }),
 }));

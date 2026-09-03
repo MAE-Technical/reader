@@ -34,10 +34,10 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
         <div className="flex flex-col items-start gap-4">
           <div className="flex flex-col items-start gap-2">
             <h2 className="m-0 max-w-full font-serif text-xl font-bold leading-tight text-[var(--reader-text)] sm:text-2xl">
-              Online Library for Pan-Africanists.
+              Online space for revolutionary Pan-Africanists to study as a collective.
             </h2>
-            <p className="m-0 max-w-sm font-literata text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
-              We study to change our world. Join us on this journey.
+            <p className="m-0 font-literata text-[13px] leading-snug text-[var(--reader-text-muted)] sm:text-sm">
+              We are studying to change our world. Become a part of this project.
             </p>
           </div>
 

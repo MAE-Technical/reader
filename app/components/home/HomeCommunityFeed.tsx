@@ -36,8 +36,8 @@ export default function HomeCommunityFeed() {
   return (
     <SearchableAppPage>
 
-      <HomeAuthBanner />
       <HomeInstallBanner />
+      <HomeAuthBanner />
 
       <FeaturedThisWeek />
 

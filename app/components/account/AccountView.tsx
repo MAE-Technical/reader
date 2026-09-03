@@ -9,6 +9,7 @@ import Loader from "@/app/components/Loader";
 import ThemeToggle from "@/app/components/shell/ThemeToggle";
 import { useInstallBannerStore } from "@/stores/install-banner-store";
 import { useInstallPrompt } from "@/lib/pwa/useInstallPrompt";
+import InstallModal from "@/app/components/pwa/InstallModal";
 import { useIsAuthenticated } from "@/lib/auth/useIsAuthenticated";
 import { useProfile } from "@/lib/auth/useProfile";
 import { useLogout } from "@/lib/auth/useLogout";
@@ -22,33 +23,19 @@ function handleFor(name: string): string {
 
 const APP_VERSION = "0.1.0";
 
-const ACCORDION: Record<"ios" | "other", { label: string; body: string }> = {
-  ios: {
-    label: "iOS (Safari)",
-    body: "Share icon → Add to Home Screen → Add. Full walkthrough on the home feed's install card.",
-  },
-  other: {
-    label: "Chrome (or other browsers)",
-    body: "Menu (⋮) → Install Ominira, or tap Install above if the prompt already appeared.",
-  },
-};
-
 /** The calm, always-there install option — no dismiss/cooldown, unlike
- * HomeInstallBanner's assertive feed banner. An explicit iOS/Chrome
- * accordion (rather than auto-detecting one platform) since a reader
- * browsing Account at their leisure might want to check either set of
- * steps — each just points back at the fuller walkthrough (HomeInstallBanner
- * on the feed) rather than repeating the numbered steps itself.
+ * HomeInstallBanner's assertive top bar. Same InstallModal that banner
+ * opens for the manual iOS/Android walkthrough, rather than a second,
+ * duplicated set of instructions living here.
  */
 function AccountInstallCard() {
-  const [open, setOpen] = useState<"ios" | "other" | null>(null);
-  const { canPrompt, promptInstall, platform, isInstalled } = useInstallPrompt();
+  const [modalOpen, setModalOpen] = useState(false);
+  const { canPrompt, promptInstall, isInstalled } = useInstallPrompt();
   const hasHydrated = useInstallBannerStore((s) => s.hasHydrated);
 
   if (!hasHydrated || isInstalled) return null;
 
-  const primaryLabel = canPrompt ? "Install Ominira" : platform === "ios" ? "Add to Home Screen" : "How to install";
-  const onPrimaryClick = canPrompt ? promptInstall : () => setOpen(platform === "ios" ? "ios" : "other");
+  const onPrimaryClick = canPrompt ? promptInstall : () => setModalOpen(true);
 
   return (
     <div className="mb-6 rounded-md border border-[var(--reader-border)] p-4">
@@ -66,28 +53,10 @@ function AccountInstallCard() {
         onClick={onPrimaryClick}
         className="w-full cursor-pointer rounded-md border border-transparent bg-[var(--reader-accent)] px-3 py-2.5 text-[15px] font-semibold text-white transition-colors hover:opacity-90"
       >
-        {primaryLabel}
+        Install Ominira
       </button>
 
-      <div className="mt-3.5 flex flex-col gap-0.5 border-t border-[var(--reader-border)] pt-3">
-        {(["ios", "other"] as const).map((key) => (
-          <div key={key}>
-            <button
-              type="button"
-              onClick={() => setOpen((s) => (s === key ? null : key))}
-              className="flex w-full cursor-pointer items-center justify-between rounded-sm border-none bg-transparent px-0.5 py-2 text-[13px] font-medium text-[var(--reader-text)]"
-            >
-              {ACCORDION[key].label}
-              <ChevronRight size={15} className="text-[var(--reader-text-subtle)]" />
-            </button>
-            {open === key && (
-              <p className="m-0 pb-2 pl-0.5 pt-0.5 text-sm font-normal leading-relaxed text-[var(--reader-text-muted)]">
-                {ACCORDION[key].body}
-              </p>
-            )}
-          </div>
-        ))}
-      </div>
+      <InstallModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
   );
 }
