@@ -64,11 +64,12 @@ const MissionCard = forwardRef<HTMLDivElement, { className?: string }>(function 
             className="h-20 w-20 flex-none rounded-sm object-cover object-[48%_20%] grayscale contrast-110 sm:h-24 sm:w-24"
           />
           <div>
-            <blockquote className="m-0 font-serif text-sm font-semibold italic leading-snug text-[var(--reader-text)]">
-              &ldquo;The most potent weapon in the hands of the oppressor is the mind of the oppressed.&rdquo;
+            <blockquote className="m-0 font-serif text-[13px] font-semibold italic leading-snug text-[var(--reader-text)]">
+              {/* &ldquo;The most potent weapon in the hands of the oppressor is the mind of the oppressed.&rdquo; */}
+              &ldquo; Every African has a responsibility to understand the neocolonial system and work for its overthrow. &rdquo;
             </blockquote>
             <p className="m-0 mt-1.5 text-[10px] font-semibold uppercase tracking-[0.1em] text-[var(--reader-text-muted)]">
-              Steve Biko
+              Walter Rodney
             </p>
           </div>
         </div>

@@ -8,9 +8,9 @@ const APP_SHELL = [
   "/icons/icon-192.png",
   "/icons/icon-512.png",
   "/images/splash/light-accent.svg",
-  "/images/splash/light-illustration.svg",
+  "/images/splash/light-illustration-new.svg",
   "/images/splash/dark-accent.svg",
-  "/images/splash/dark-illustration.svg",
+  "/images/splash/dark-illustration-new.svg",
 ];
 
 self.addEventListener("install", (event) => {

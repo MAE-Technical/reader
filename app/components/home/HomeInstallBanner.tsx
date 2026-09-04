@@ -93,7 +93,7 @@ export default function HomeInstallBanner() {
       >
         <img src="/icons/icon-192.png" alt="" className="h-7 w-7 flex-none rounded-xs object-cover object-[center_20%]" />
         <span className="min-w-0 flex-1 text-[13px] font-bold leading-snug text-white">
-          Install the Ominira app on your smartphone, tablet or desktop computer
+          Install the Ominira app on your phone, tablet or desktop computer
         </span>
         <button
           type="button"

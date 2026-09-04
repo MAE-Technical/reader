@@ -31,7 +31,7 @@ export default function SplashArtwork({
         />
       )}
       <Image
-        src={`/images/splash/${assetTheme}-illustration.svg`}
+        src={`/images/splash/${assetTheme}-illustration-new.svg`}
         alt=""
         width={340}
         height={347}
